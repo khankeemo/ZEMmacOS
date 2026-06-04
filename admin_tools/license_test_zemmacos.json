@@ -1,0 +1,10 @@
+{
+  "customer_name": "Test User",
+  "customer_email": "test@example.com",
+  "license_key": "OI8923KHI630EPP805S4UFI9",
+  "expiry_date": "2027-05-25",
+  "plan": "Professional",
+  "status": "active",
+  "source": "zem_api_test",
+  "generated_at": "2026-05-25T19:32:13.562003"
+}

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# Build files
+build/
+dist/
+installer_output/
+
+# Logs
+logs/
+*.log
+
+# Secrets
+.env
+*.key
+*.db
+google_service.json
+
+# OS
+.DS_Store
+Thumbs.db
