@@ -8,7 +8,6 @@ from safe_console import SafeConsole
 
 # Get base directory for dynamic imports
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(BASE_DIR, "zem_license"))
 
 
 class ZEMmacOSUI:
@@ -273,7 +272,7 @@ class ZEMmacOSUI:
         Called after startup and after any license changes.
         """
         # Ensure we have fresh service instance
-        from zem_license.license_service import get_license_service, reload_license_service
+        from integration.wsd_license import get_license_service, reload_license_service
         
         if self.license_service is None:
             # License service not set yet - try to get fresh instance
@@ -317,7 +316,7 @@ class ZEMmacOSUI:
         Force refresh badge from the source.
         Called by manual refresh button.
         """
-        from zem_license.license_service import get_license_service, reload_license_service
+        from integration.wsd_license import get_license_service, reload_license_service
         
         # Update badge with "Refreshing..." state
         if hasattr(self, 'license_badge_label') and self.license_badge_label.winfo_exists():

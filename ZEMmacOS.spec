@@ -16,6 +16,9 @@ a = Analysis(
         ('config.json', '.'),
         ('public/images', 'public/images'),
         ('help', 'help'),
+        # WSD SDK - config and manifest
+        ('ZEMmacOS/wsd_sdk/config', 'ZEMmacOS/wsd_sdk/config'),
+        ('ZEMmacOS/wsd_sdk/manifest.json', 'ZEMmacOS/wsd_sdk/'),
     ],
     # CRITICAL: Hidden imports for PyInstaller to include these modules
     hiddenimports=[
@@ -42,9 +45,16 @@ a = Analysis(
         'gib_macos_wrapper',
         'idm_downloader',
         'cleaner',
-        'hardware_id',
         'main_ui',
         'gibMacOS',
+        # WSD SDK modules
+        'wsd_sdk',
+        'wsd_sdk.client',
+        'wsd_sdk.license_engine',
+        'wsd_sdk.hardware',
+        'wsd_sdk.crypto',
+        # Integration layer
+        'integration.wsd_license',
         # Scripts subfolder modules
         'Scripts.run',
         'Scripts.utils',

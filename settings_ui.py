@@ -303,7 +303,7 @@ class SettingsUI:
 
     def _open_license_modal(self):
         """Open license manager modal with ZEM License API activation"""
-        from zem_license.license_service import get_license_service
+        from integration.wsd_license import get_license_service
 
         # Destroy existing modal if any
         if self._current_modal is not None:
@@ -811,7 +811,7 @@ class SettingsUI:
 
     def _start_trial_and_close(self, modal, refresh_callback):
         """Start trial mode and refresh UI"""
-        from zem_license.license_service import get_license_service
+        from integration.wsd_license import get_license_service
         
         license_service = get_license_service()
         result = license_service.start_trial()
@@ -829,7 +829,7 @@ class SettingsUI:
 
     def _refresh_license_status_modal(self, modal, refresh_callback):
         """Force refresh license status from API"""
-        from zem_license.license_service import get_license_service
+        from integration.wsd_license import get_license_service
         
         license_service = get_license_service()
         # FIXED: removed force_google parameter
@@ -846,7 +846,7 @@ class SettingsUI:
 
     def _clear_license_cache(self, modal, refresh_callback):
         """Clear local license cache"""
-        from zem_license.license_service import get_license_service
+        from integration.wsd_license import get_license_service
         
         if messagebox.askyesno("Confirm", "Clear local license cache?\n\nThis will not affect your license on the server, but may require re-activation if offline."):
             license_service = get_license_service()
@@ -864,7 +864,7 @@ class SettingsUI:
 
     def _show_hardware_id(self, modal, refresh_callback):
         """Show current hardware ID"""
-        from zem_license.license_service import get_license_service
+        from integration.wsd_license import get_license_service
         
         license_service = get_license_service()
         hwid = license_service.get_hardware_id()
@@ -924,7 +924,7 @@ class SettingsUI:
 
     def _copy_hardware_id_modal(self, modal, refresh_callback):
         """Copy hardware ID to clipboard directly"""
-        from zem_license.license_service import get_license_service
+        from integration.wsd_license import get_license_service
         
         license_service = get_license_service()
         hwid = license_service.get_hardware_id()

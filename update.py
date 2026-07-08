@@ -274,8 +274,8 @@ class AppStatus:
             - type: str - 'licensed', 'trial', 'expired', 'required', 'error'
         """
         try:
-            # Use LicenseService as primary source
-            from zem_license.license_service import get_license_service
+            # Use WSD LicenseService as primary source
+            from integration.wsd_license import get_license_service
             
             service = get_license_service()
             status = service.check_license()
@@ -322,61 +322,6 @@ class AppStatus:
                         "type": "required"
                     }
                     
-        except ImportError:
-            # Fallback to license_manager if LicenseService unavailable
-            try:
-                from zem_license.license_manager import get_license_status as get_real_status
-                
-                real_status = get_real_status()
-                
-                if real_status.get("is_valid"):
-                    if real_status.get("is_trial"):
-                        days = real_status.get("days_remaining", 0)
-                        return {
-                            "text": f"Trial • {days} Days Left",
-                            "color_key": "warning",
-                            "is_valid": True,
-                            "type": "trial"
-                        }
-                    else:
-                        days = real_status.get("days_left", 0)
-                        if days <= 7:
-                            return {
-                                "text": f"License • {days} Days Left",
-                                "color_key": "warning",
-                                "is_valid": True,
-                                "type": "licensed"
-                            }
-                        else:
-                            return {
-                                "text": "Licensed • Active",
-                                "color_key": "success",
-                                "is_valid": True,
-                                "type": "licensed"
-                            }
-                else:
-                    error_type = real_status.get("error_type", "missing")
-                    if error_type == "expired":
-                        return {
-                            "text": "License Expired",
-                            "color_key": "error",
-                            "is_valid": False,
-                            "type": "expired"
-                        }
-                    else:
-                        return {
-                            "text": "License Required",
-                            "color_key": "error",
-                            "is_valid": False,
-                            "type": "required"
-                        }
-            except Exception:
-                return {
-                    "text": "License Error",
-                    "color_key": "error",
-                    "is_valid": False,
-                    "type": "error"
-                }
         except Exception:
             return {
                 "text": "License Error",

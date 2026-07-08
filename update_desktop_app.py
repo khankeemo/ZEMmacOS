@@ -12,10 +12,10 @@ import json
 
 # Paths to update
 DESKTOP_APP_PATHS = [
-    "zem_license/api_client.py",
-    "zem_license/api_config.py",
-    "zem_license/license_manager.py",
-    "zem_license/license_service.py",
+    "integration/wsd_license.py",
+    "ZEMmacOS/wsd_sdk/__init__.py",
+    "ZEMmacOS/wsd_sdk/client.py",
+    "ZEMmacOS/wsd_sdk/license_engine.py",
 ]
 
 NEW_API_URL = "https://zem-license-api.onrender.com"  # Change to your Render URL
@@ -72,7 +72,7 @@ def update_file(filepath):
 
 def create_new_config():
     """Create a new API config file if needed"""
-    config_path = os.path.join(os.path.dirname(__file__), "zem_license", "api_config_new.py")
+    config_path = os.path.join(os.path.dirname(__file__), "ZEMmacOS", "wsd_sdk", "config", "api_config_new.py")
     
     config_content = f'''"""
 ZEM License API Configuration

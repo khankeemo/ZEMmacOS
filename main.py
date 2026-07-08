@@ -18,7 +18,7 @@ from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 
 # Import LicenseService for startup validation
-from zem_license.license_service import (
+from integration.wsd_license import (
     get_license_service,
     can_start_download,
     reload_license_service,
@@ -47,7 +47,7 @@ def show_activation_modal(parent_window=None, forced_mode=False) -> bool:
         True: Activation successful
         False: User closed modal (caller should exit if forced_mode)
     """
-    from zem_license.license_service import get_license_service
+    from integration.wsd_license import get_license_service
     from settings_ui import LicenseModal
 
     modal = tk.Toplevel(parent_window) if parent_window else tk.Tk()
