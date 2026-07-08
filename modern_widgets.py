@@ -199,3 +199,149 @@ class ThemeToggle(tk.Canvas):
     def toggle(self):
         self._is_dark = not self._is_dark
         self._draw()
+
+
+class DebugConsole(tk.Frame):
+    """Collapsible developer debug log panel"""
+
+    LEVEL_COLORS = {
+        "INFO": "#0071e3",
+        "SUCCESS": "#34c759",
+        "WARNING": "#ff9f0a",
+        "ERROR": "#ff3b30",
+        "DEBUG": "#86868b",
+        "NETWORK": "#af52de",
+        "DOWNLOAD": "#ff6482",
+        "SYSTEM": "#5ac8fa",
+    }
+
+    CAT_COLORS = {
+        "APP": "#5ac8fa",
+        "CATALOGUE": "#ff9f0a",
+        "NETWORK": "#af52de",
+        "DOWNLOAD": "#ff6482",
+        "RESUME": "#34c759",
+        "PERFORMANCE": "#0071e3",
+    }
+
+    def __init__(self, parent, colors, height=140, **kwargs):
+        super().__init__(parent, bg=colors.get("card_bg", "#ffffff"), **kwargs)
+        self._colors = colors
+        self._paused = False
+        self._autoscroll = True
+        self._collapsed = False
+        self._full_height = height
+
+        header = tk.Frame(self, bg=colors.get("content_bg", "#f5f5f7"))
+        header.pack(fill=tk.X)
+        self._collapse_btn = tk.Button(header, text="\u25bc Debug Console",
+                                       command=self._toggle_collapse,
+                                       font=("SF Pro Text", 9, "bold"),
+                                       fg=colors.get("muted", "#86868b"),
+                                       bg=colors.get("content_bg", "#f5f5f7"),
+                                       bd=0, anchor="w", padx=10, pady=4, cursor="hand2")
+        self._collapse_btn.pack(side=tk.LEFT)
+
+        ctrl_frame = tk.Frame(header, bg=colors.get("content_bg", "#f5f5f7"))
+        ctrl_frame.pack(side=tk.RIGHT, padx=4)
+        for text, cmd in [
+            ("Copy", self.copy),
+            ("Clear", self.clear),
+            ("Export", self.export),
+            ("Pause", self._toggle_pause),
+            ("Auto", self._toggle_autoscroll),
+        ]:
+            tk.Button(ctrl_frame, text=text, command=cmd,
+                      font=("SF Pro Text", 8), fg=colors.get("text", "#1d1d1f"),
+                      bg=colors.get("btn_secondary_bg", "#e5e5ea"),
+                      bd=1, relief=tk.FLAT, padx=8, pady=1, cursor="hand2"
+                      ).pack(side=tk.LEFT, padx=2)
+
+        self._log_frame = tk.Frame(self, bg=colors.get("card_bg", "#ffffff"))
+        self._log_frame.pack(fill=tk.BOTH, expand=True)
+
+        self._log_text = tk.Text(
+            self._log_frame,
+            font=("SF Mono", 9),
+            bg=colors.get("input_bg", "#ffffff"),
+            fg=colors.get("text", "#1d1d1f"),
+            bd=0, relief=tk.FLAT, height=6,
+            wrap=tk.WORD, state=tk.DISABLED,
+        )
+        scrollbar = tk.Scrollbar(self._log_frame, orient=tk.VERTICAL,
+                                 command=self._log_text.yview)
+        self._log_text.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self._log_text.pack(fill=tk.BOTH, expand=True)
+
+        for name, clr in self.LEVEL_COLORS.items():
+            self._log_text.tag_config(f"level_{name}", foreground=clr, font=("SF Mono", 9, "bold"))
+        for name, clr in self.CAT_COLORS.items():
+            self._log_text.tag_config(f"cat_{name}", foreground=clr)
+        self._log_text.tag_config("timestamp", foreground="#888888")
+        self._log_text.tag_config("detail", foreground="#6e6e73")
+
+    def log(self, category, level, message, detail=None):
+        if self._paused:
+            return
+        from datetime import datetime
+        ts = datetime.now().strftime("%H:%M:%S")
+        level_key = level.upper() if level.upper() in self.LEVEL_COLORS else "INFO"
+        cat_key = category.upper() if category.upper() in self.CAT_COLORS else "APP"
+        self._log_text.configure(state=tk.NORMAL)
+        self._log_text.insert(tk.END, f"[{ts}] ", "timestamp")
+        self._log_text.insert(tk.END, f"[{cat_key}] ", f"cat_{cat_key}")
+        self._log_text.insert(tk.END, f"[{level_key}] ", f"level_{level_key}")
+        self._log_text.insert(tk.END, f"{message}\n")
+        if detail:
+            self._log_text.insert(tk.END, f"  {detail}\n", "detail")
+        if self._autoscroll:
+            self._log_text.see(tk.END)
+        self._log_text.configure(state=tk.DISABLED)
+
+    def clear(self):
+        self._log_text.configure(state=tk.NORMAL)
+        self._log_text.delete(1.0, tk.END)
+        self._log_text.configure(state=tk.DISABLED)
+
+    def copy(self):
+        self._log_text.configure(state=tk.NORMAL)
+        try:
+            content = self._log_text.get(1.0, tk.END)
+            self.clipboard_clear()
+            self.clipboard_append(content)
+        except:
+            pass
+        self._log_text.configure(state=tk.DISABLED)
+
+    def export(self):
+        from tkinter import filedialog, messagebox
+        path = filedialog.asksaveasfilename(
+            defaultextension=".log",
+            filetypes=[("Log files", "*.log"), ("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        if path:
+            try:
+                self._log_text.configure(state=tk.NORMAL)
+                content = self._log_text.get(1.0, tk.END)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                self._log_text.configure(state=tk.DISABLED)
+                messagebox.showinfo("Export", f"Log saved to:\n{path}")
+            except Exception as e:
+                messagebox.showerror("Export Error", str(e))
+
+    def _toggle_pause(self):
+        self._paused = not self._paused
+
+    def _toggle_autoscroll(self):
+        self._autoscroll = not self._autoscroll
+
+    def _toggle_collapse(self):
+        self._collapsed = not self._collapsed
+        if self._collapsed:
+            self._log_frame.pack_forget()
+            self._collapse_btn.config(text="\u25b6 Debug Console")
+        else:
+            self._log_frame.pack(fill=tk.BOTH, expand=True)
+            self._collapse_btn.config(text="\u25bc Debug Console")

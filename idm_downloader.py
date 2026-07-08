@@ -74,7 +74,7 @@ class IDMDownloader:
             return False, False, -1
         except Exception as e:
             self._send_log(f"URL check failed: {e}", "error")
-            return False, False, -1
+            raise
 
     # -----------------------------------------------------------------
     # SEGMENT DOWNLOAD
@@ -127,7 +127,7 @@ class IDMDownloader:
             return True, bytes_written
         except Exception as e:
             self._send_log(f"Segment {segment_id} error: {e}", "error")
-            return False, 0
+            raise
 
     # -----------------------------------------------------------------
     # MAIN DOWNLOAD METHOD
@@ -175,7 +175,7 @@ class IDMDownloader:
             # Get file size
             valid, supports_range, content_length = self._check_url(url, headers)
             if not valid:
-                raise Exception("URL is not accessible")
+                raise Exception("URL returned invalid response")
             
             total_size = int(content_length) if content_length != -1 else -1
             

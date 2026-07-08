@@ -5,7 +5,7 @@ import sys
 import time
 from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
-from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle
+from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -229,6 +229,167 @@ class ZEMmacOSUI:
         self.root.after(50, lambda: fade_in(toast, 0))
         self.root.after(duration, lambda: fade_out(toast, 300))
 
+    # ---- Network Recovery Dialog ----
+
+    def _show_network_dialog(self, retry_count, on_pause_callback=None, on_retry_now_callback=None):
+        if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
+            self._update_network_dialog(retry_count)
+            return
+        c = self.colors
+        d = tk.Toplevel(self.root)
+        d.title("Internet Connection Lost")
+        d.configure(bg=c["card_bg"])
+        d.resizable(False, False)
+        d.attributes("-topmost", True)
+        d.protocol("WM_DELETE_WINDOW", lambda: None)
+        d.transient(self.root)
+        d.grab_set()
+        self._net_dialog = d
+        self._net_countdown_value = 30
+
+        frame = tk.Frame(d, bg=c["card_bg"], padx=32, pady=24)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="\u26a0  Internet Connection Lost",
+                 font=("SF Pro Display", 16, "bold"),
+                 fg=c["error"], bg=c["card_bg"]).pack(anchor=tk.W, pady=(0, 8))
+
+        msg = ("Connection to the download server has been interrupted.\n"
+               "The application will retry automatically every 30 seconds.")
+        tk.Label(frame, text=msg, font=("SF Pro Text", 11),
+                 fg=c["text"], bg=c["card_bg"], justify=tk.LEFT).pack(anchor=tk.W, pady=(0, 12))
+
+        self._net_retry_label = tk.Label(frame, text=f"Retry {retry_count} / 10",
+                                          font=("SF Pro Text", 12, "bold"),
+                                          fg=c["accent"], bg=c["card_bg"])
+        self._net_retry_label.pack(anchor=tk.W, pady=(0, 2))
+
+        self._net_countdown_label = tk.Label(frame, text="Next retry in: 30s",
+                                              font=("SF Pro Text", 10),
+                                              fg=c["muted"], bg=c["card_bg"])
+        self._net_countdown_label.pack(anchor=tk.W, pady=(0, 4))
+
+        self._net_hint_label = tk.Label(frame, text="Reconnect to the internet.\nThe download will automatically continue if the connection is restored.",
+                                         font=("SF Pro Text", 10),
+                                         fg=c["muted"], bg=c["card_bg"], justify=tk.LEFT)
+        self._net_hint_label.pack(anchor=tk.W, pady=(0, 16))
+
+        btn_frame = tk.Frame(frame, bg=c["card_bg"])
+        btn_frame.pack(fill=tk.X)
+
+        self._net_retry_now_btn = tk.Button(btn_frame, text="Retry Now",
+                                            font=("SF Pro Text", 10, "bold"),
+                                            fg="white", bg=c["accent"],
+                                            activebackground=c["accent_hover"],
+                                            bd=0, padx=20, pady=8, cursor="hand2",
+                                            command=lambda: self._on_retry_now(on_retry_now_callback, on_pause_callback))
+        self._net_retry_now_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        self._net_pause_btn = tk.Button(btn_frame, text="Pause Now",
+                                        font=("SF Pro Text", 10, "bold"),
+                                        fg=c["text"], bg=c["btn_secondary_bg"],
+                                        activebackground=c["btn_secondary_hover"],
+                                        bd=0, padx=20, pady=8, cursor="hand2",
+                                        command=lambda: self._on_net_pause(on_pause_callback))
+        self._net_pause_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        self._net_continue_btn = tk.Button(btn_frame, text="Continue Waiting",
+                                           font=("SF Pro Text", 10, "bold"),
+                                           fg=c["text"], bg=c["btn_secondary_bg"],
+                                           activebackground=c["btn_secondary_hover"],
+                                           bd=0, padx=20, pady=8, cursor="hand2",
+                                           command=lambda: self._close_network_dialog())
+        self._net_continue_btn.pack(side=tk.LEFT)
+
+        d.update_idletasks()
+        pw, ph = self.root.winfo_width(), self.root.winfo_height()
+        px, py = self.root.winfo_x(), self.root.winfo_y()
+        dw, dh = d.winfo_width(), d.winfo_height()
+        d.geometry(f"+{px + (pw - dw)//2}+{py + (ph - dh)//2}")
+
+    def _update_network_dialog(self, retry_count):
+        if hasattr(self, "_net_retry_label") and self._net_retry_label.winfo_exists():
+            self._net_retry_label.config(text=f"Retry {retry_count} / 10")
+        if hasattr(self, "_net_countdown_label") and self._net_countdown_label.winfo_exists():
+            self._net_countdown_value = 30
+            self._net_countdown_label.config(text="Next retry in: 30s")
+
+    def _update_dialog_countdown(self, seconds):
+        if hasattr(self, "_net_countdown_label") and self._net_countdown_label.winfo_exists():
+            self._net_countdown_label.config(text=f"Next retry in: {seconds}s")
+
+    def _auto_close_network_dialog(self):
+        if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
+            try:
+                self._net_dialog.destroy()
+            except:
+                pass
+        self._net_dialog = None
+        self.show_toast("\u2705 Internet restored. Resuming download...", "success", 3000)
+
+    def _update_to_max_retry_dialog(self, on_resume_cb=None, on_cancel_cb=None, on_keep_waiting_cb=None):
+        if not (hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists()):
+            return
+        d = self._net_dialog
+        d.title("Internet Connection Lost")
+        for w in d.winfo_children():
+            w.destroy()
+        c = self.colors
+        frame = tk.Frame(d, bg=c["card_bg"], padx=32, pady=24)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="\u26a0  Internet Connection Lost",
+                 font=("SF Pro Display", 16, "bold"),
+                 fg=c["error"], bg=c["card_bg"]).pack(anchor=tk.W, pady=(0, 8))
+
+        msg = "Download paused because the internet connection could not be restored."
+        tk.Label(frame, text=msg, font=("SF Pro Text", 11),
+                 fg=c["text"], bg=c["card_bg"], justify=tk.LEFT).pack(anchor=tk.W, pady=(0, 16))
+
+        btn_frame = tk.Frame(frame, bg=c["card_bg"])
+        btn_frame.pack(fill=tk.X)
+
+        self._net_resume_btn = tk.Button(btn_frame, text="Resume",
+                                         font=("SF Pro Text", 10, "bold"),
+                                         fg="white", bg=c["accent"],
+                                         activebackground=c["accent_hover"],
+                                         bd=0, padx=20, pady=8, cursor="hand2",
+                                         command=lambda: self._close_network_dialog() or (on_resume_cb and on_resume_cb()))
+        self._net_resume_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        self._net_cancel_btn = tk.Button(btn_frame, text="Cancel",
+                                         font=("SF Pro Text", 10, "bold"),
+                                         fg=c["text"], bg=c["btn_secondary_bg"],
+                                         activebackground=c["btn_secondary_hover"],
+                                         bd=0, padx=20, pady=8, cursor="hand2",
+                                         command=lambda: self._close_network_dialog() or (on_cancel_cb and on_cancel_cb()))
+        self._net_cancel_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        self._net_keep_waiting_btn = tk.Button(btn_frame, text="Keep Waiting",
+                                               font=("SF Pro Text", 10, "bold"),
+                                               fg=c["text"], bg=c["btn_secondary_bg"],
+                                               activebackground=c["btn_secondary_hover"],
+                                               bd=0, padx=20, pady=8, cursor="hand2",
+                                               command=lambda: self._close_network_dialog() or (on_keep_waiting_cb and on_keep_waiting_cb()))
+        self._net_keep_waiting_btn.pack(side=tk.LEFT)
+
+    def _close_network_dialog(self):
+        if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
+            try:
+                self._net_dialog.destroy()
+            except:
+                pass
+        self._net_dialog = None
+
+    def _on_net_pause(self, callback):
+        self._close_network_dialog()
+        if callback:
+            callback()
+
+    def _on_retry_now(self, retry_callback, pause_callback):
+        if retry_callback:
+            retry_callback()
+
     # ---- Dashboard ----
 
     def show_dashboard(self):
@@ -406,12 +567,13 @@ class ZEMmacOSUI:
         self.index_entry = tk.Entry(
             inner,
             font=("SF Pro Text", 14),
-            bg=colors["card_bg"], fg=colors["input_fg"],
+            bg="#f0f0f0", fg=colors["input_fg"],
             insertbackground=colors["accent"],
             bd=0, relief=tk.FLAT, width=5, justify="center",
         )
         self.index_entry.pack(side=tk.LEFT, ipady=6, fill=tk.Y, expand=True)
         self.index_entry.bind("<Return>", lambda e: self._on_download_clicked())
+        self.root.after_idle(lambda: self.index_entry.focus_set())
 
         sep_v = tk.Frame(inner, bg=colors["accent"], width=1)
         sep_v.pack(side=tk.LEFT, fill=tk.Y, pady=4)
@@ -485,6 +647,14 @@ class ZEMmacOSUI:
                             bd=0, padx=16, pady=6, cursor="hand2", state=tk.DISABLED)
             btn.pack(side=tk.LEFT, padx=4, fill=tk.X, expand=True)
             setattr(self, btn_data[3], btn)
+
+        # Debug Console Card
+        debug_card = ModernCard(right_panel, colors, title="Developer Console", padding=8)
+        debug_card.pack(fill=tk.BOTH, expand=True, pady=10)
+        self._debug_console = DebugConsole(debug_card.get_body(), colors, height=120)
+        self._debug_console.pack(fill=tk.BOTH, expand=True)
+        self._debug_console.log("APP", "INFO", "Debug console ready")
+        self._debug_console.log("APP", "SYSTEM", "Monitoring download activity...")
 
         # Console Card
         console_card = ModernCard(left_panel, colors, title="Console Output", padding=14)
@@ -624,6 +794,12 @@ class ZEMmacOSUI:
     def _on_clean_logs(self):
         if self._clean_logs_callback:
             self._clean_logs_callback()
+
+    # ---- Debug Logging ----
+
+    def debug_log(self, category, level, message, detail=None):
+        if hasattr(self, "_debug_console") and self._debug_console and self._debug_console.winfo_exists():
+            self._debug_console.log(category, level, message, detail)
 
     # ---- Download Progress ----
 
