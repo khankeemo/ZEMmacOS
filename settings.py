@@ -120,7 +120,7 @@ class AppSettingsService:
             return False, "Invalid thread count"
         
         catalog = self.settings_manager.get("catalog", "publicrelease")
-            if catalog not in ("publicrelease", "public", "customer", "developer"):
+        if catalog not in ("publicrelease", "public", "customer", "developer"):
             return False, "Invalid catalog type"
         
         return True, "Valid"
