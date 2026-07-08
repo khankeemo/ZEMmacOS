@@ -16,15 +16,10 @@ a = Analysis(
         ('config.json', '.'),
         ('public/images', 'public/images'),
         ('help', 'help'),
-        # WSD SDK - config and manifest
-        ('ZEMmacOS/wsd_sdk/config', 'ZEMmacOS/wsd_sdk/config'),
-        ('ZEMmacOS/wsd_sdk/manifest.json', 'ZEMmacOS/wsd_sdk/'),
     ],
     # CRITICAL: Hidden imports for PyInstaller to include these modules
     hiddenimports=[
         # Core dependencies
-        'cryptography',
-        'cryptography.fernet',
         'requests',
         'urllib3',
         'certifi',
@@ -36,25 +31,16 @@ a = Analysis(
         'PIL.ImageTk',
         'PIL.ImageDraw',
         # Project modules
-        'usb_creator',
-        'usb_creator_ui',
         'safe_console',
-        'console_manager',
         'logger',
-        'state_manager',
         'gib_macos_wrapper',
         'idm_downloader',
         'cleaner',
         'main_ui',
+        'settings_ui',
+        'themes',
+        'modern_widgets',
         'gibMacOS',
-        # WSD SDK modules
-        'wsd_sdk',
-        'wsd_sdk.client',
-        'wsd_sdk.license_engine',
-        'wsd_sdk.hardware',
-        'wsd_sdk.crypto',
-        # Integration layer
-        'integration.wsd_license',
         # Scripts subfolder modules
         'Scripts.run',
         'Scripts.utils',
@@ -62,7 +48,7 @@ a = Analysis(
         'Scripts.disk',
         'Scripts.diskwin',
         'Scripts.downloader',
-    ] + collect_submodules('Scripts'),  # Auto-collect all Scripts/*.py
+    ] + collect_submodules('Scripts'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

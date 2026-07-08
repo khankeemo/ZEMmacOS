@@ -252,91 +252,11 @@ class AppUpdater:
         return self.current_version
 
 
-class AppStatus:
-    """
-    Checks license status for UI badge.
-    
-    Uses LicenseService as single source of truth.
-    Falls back to license_manager only if needed.
-    """
-    
-    def __init__(self):
-        self.app_dir = BASE_DIR
-    
-    def get_license_status(self):
-        """
-        Returns dict with status info for the UI badge.
-        
-        Keys:
-            - text: str - Display text for badge
-            - color_key: str - 'success', 'warning', or 'error'
-            - is_valid: bool - Whether license/trial is valid
-            - type: str - 'licensed', 'trial', 'expired', 'required', 'error'
-        """
-        try:
-            # Use WSD LicenseService as primary source
-            from integration.wsd_license import get_license_service
-            
-            service = get_license_service()
-            status = service.check_license()
-            
-            if status.get("is_valid"):
-                if status.get("is_trial"):
-                    days = status.get("days_left", 0)
-                    return {
-                        "text": f"Trial • {days} Days Left",
-                        "color_key": "warning",
-                        "is_valid": True,
-                        "type": "trial"
-                    }
-                else:
-                    days = status.get("days_left", 0)
-                    if days <= 7:
-                        return {
-                            "text": f"License • {days} Days Left",
-                            "color_key": "warning",
-                            "is_valid": True,
-                            "type": "licensed"
-                        }
-                    else:
-                        return {
-                            "text": "Licensed • Active",
-                            "color_key": "success",
-                            "is_valid": True,
-                            "type": "licensed"
-                        }
-            else:
-                error_type = status.get("error_type", "missing")
-                if error_type == "expired" or error_type == "trial_expired":
-                    return {
-                        "text": "License Expired",
-                        "color_key": "error",
-                        "is_valid": False,
-                        "type": "expired"
-                    }
-                else:
-                    return {
-                        "text": "License Required",
-                        "color_key": "error",
-                        "is_valid": False,
-                        "type": "required"
-                    }
-                    
-        except Exception:
-            return {
-                "text": "License Error",
-                "color_key": "error",
-                "is_valid": False,
-                "type": "error"
-            }
-
-
 if __name__ == "__main__":
     print("\n" + "="*50)
     print("   Update Module Test")
     print("="*50)
     
-    # Test version parsing
     print("\n--- Version Parsing Test ---")
     updater = AppUpdater()
     print(f"Parse '3.10' -> {updater._parse_version('3.10')}")
@@ -346,14 +266,8 @@ if __name__ == "__main__":
     
     print(f"\nCurrent Version: {updater.get_current_version()}")
     
-    # Test update check (requires internet)
     print("\n--- Update Check Test ---")
     result = updater.check_for_updates()
     print(f"Result: {result}")
-    
-    # Test AppStatus
-    print("\n--- License Status Test ---")
-    status = AppStatus()
-    print(f"License Status: {status.get_license_status()}")
     
     print("\nUpdate module ready")

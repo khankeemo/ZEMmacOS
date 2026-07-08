@@ -16,9 +16,12 @@ DEFAULT_CONFIG = {
     "download_threads": 8,
     "window_width": 1200,
     "window_height": 800,
-    "license_api_url": "https://api.websmithdigital.com",
-    "license_api_timeout": 15,
-    "offline_grace_hours": 72,
+    "max_concurrent_downloads": 3,
+    "retry_on_failure": True,
+    "max_retries": 3,
+    "timeout_seconds": 30,
+    "notifications_enabled": True,
+    "compact_mode": False,
 }
 
 
@@ -117,7 +120,7 @@ class AppSettingsService:
             return False, "Invalid thread count"
         
         catalog = self.settings_manager.get("catalog", "publicrelease")
-        if catalog not in ["publicrelease", "public", "customer", "developer"]:
+            if catalog not in ("publicrelease", "public", "customer", "developer"):
             return False, "Invalid catalog type"
         
         return True, "Valid"
@@ -142,47 +145,29 @@ class AppSettingsService:
         return dl_dir
     
     def apply_saved_theme(self):
-        """Load and apply saved theme from settings"""
         saved_theme = self.settings_manager.get("theme", "light")
-        if saved_theme == "dark":
-            self.app.theme_mode = "dark"
-            apply_theme(self.app, "dark")
-        else:
-            self.app.theme_mode = "light"
-            apply_theme(self.app, "light")
-        
-        # Update theme toggle button text
-        if hasattr(self.app, 'theme_toggle_btn'):
-            self.app.theme_toggle_btn.config(text="☀️ Switch to Light" if self.app.theme_mode == "dark" else "🌙 Switch to Dark")
-        
+        mode = "dark" if saved_theme == "dark" else "light"
+        self.app.theme_mode = mode
+        apply_theme(self.app, mode)
         return self.app.theme_mode
-    
-    def toggle_and_save_theme(self):
-        """Toggle theme and save to settings"""
-        if self.app.theme_mode == "light":
-            self.app.theme_mode = "dark"
-            apply_theme(self.app, "dark")
-            new_text = "☀️ Switch to Light"
-        else:
-            self.app.theme_mode = "light"
-            apply_theme(self.app, "light")
-            new_text = "🌙 Switch to Dark"
-        
-        if hasattr(self.app, 'theme_toggle_btn'):
-            self.app.theme_toggle_btn.config(text=new_text)
-        
-        # Save theme preference
-        self.settings_manager.set("theme", self.app.theme_mode)
-        
-        # Refresh current view
-        if hasattr(self.app, 'current_view'):
+
+    def set_theme(self, mode):
+        if mode not in ("light", "dark", "system"):
+            return
+        self.app.theme_mode = mode
+        apply_theme(self.app, mode)
+        self.settings_manager.set("theme", mode)
+        if hasattr(self.app, "current_view"):
             if self.app.current_view == "dashboard":
                 self.app.show_dashboard()
             elif self.app.current_view == "library":
                 self.app.show_library()
             elif self.app.current_view == "settings":
                 self.app.show_settings()
-        
+
+    def toggle_and_save_theme(self):
+        new_mode = "dark" if self.app.theme_mode == "light" else "light"
+        self.set_theme(new_mode)
         return self.app.theme_mode
     
     def sanitize_thread_count(self, value):
