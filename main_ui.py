@@ -33,6 +33,7 @@ class ZEMmacOSUI:
         self._clean_logs_callback = None
         self._theme_toggle_callback = None
         self._check_updates_callback = None
+        self._retry_callback = None
 
         self._nav_buttons = {}
         self._toast_widgets = []
@@ -105,11 +106,11 @@ class ZEMmacOSUI:
         self.sidebar_frame = sidebar
 
         logo_frame = tk.Frame(sidebar, bg=self.colors["sidebar_bg"])
-        logo_frame.pack(fill=tk.X, pady=(28, 6))
+        logo_frame.pack(fill=tk.X, pady=28)
         self.logo_label = tk.Label(logo_frame, text="", bg=self.colors["sidebar_bg"])
         self.logo_label.pack()
         tk.Label(logo_frame, text="ZEMmacOS", font=("SF Pro Display", 18, "bold"),
-                 fg=self.colors["text"], bg=self.colors["sidebar_bg"]).pack(pady=(4, 0))
+                 fg=self.colors["text"], bg=self.colors["sidebar_bg"]).pack(pady=4)
         tk.Label(logo_frame, text="macOS Download Manager", font=("SF Pro Text", 9),
                  fg=self.colors["muted"], bg=self.colors["sidebar_bg"]).pack()
 
@@ -239,7 +240,7 @@ class ZEMmacOSUI:
 
         header = tk.Frame(self.content_area, bg=colors["header_bg"])
         header._role = "header"
-        header.pack(fill=tk.X, padx=30, pady=(24, 4))
+        header.pack(fill=tk.X, padx=30, pady=24)
 
         left_h = tk.Frame(header, bg=colors["header_bg"])
         left_h.pack(side=tk.LEFT, anchor=tk.W)
@@ -247,23 +248,27 @@ class ZEMmacOSUI:
                  fg=colors["text"], bg=colors["header_bg"]).pack(anchor=tk.W)
         tk.Label(left_h, text="Overview of your macOS downloads and activities",
                  font=("SF Pro Text", 11), fg=colors["muted"],
-                 bg=colors["header_bg"]).pack(anchor=tk.W, pady=(2, 0))
+                 bg=colors["header_bg"]).pack(anchor=tk.W, pady=2)
 
         right_h = tk.Frame(header, bg=colors["header_bg"])
-        right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=(4, 0))
+        right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6, padx=4)
+        self._theme_label = tk.Label(right_h, text="\u2600\ufe0f Light",
+                                     font=("SF Pro Text", 10, "bold"),
+                                     fg=colors["text"], bg=colors["header_bg"])
+        self._theme_label.pack(side=tk.RIGHT, padx=6)
         self._theme_toggle = ThemeToggle(
             right_h,
             command=self._on_theme_toggle,
             colors=colors,
         )
-        self._theme_toggle.pack(side=tk.RIGHT)
+        self._theme_toggle.pack(side=tk.RIGHT, padx=4)
         self._theme_toggle.set_theme(self.theme_mode == "dark")
 
         body_frame = tk.Frame(self.content_area, bg=colors["content_bg"])
-        body_frame.pack(fill=tk.BOTH, expand=True, padx=28, pady=(6, 24))
+        body_frame.pack(fill=tk.BOTH, expand=True, padx=28, pady=24)
 
         stats_row = tk.Frame(body_frame, bg=colors["content_bg"])
-        stats_row.pack(fill=tk.X, pady=(0, 12))
+        stats_row.pack(fill=tk.X, pady=12)
 
         stats_keys = ["versions", "downloads", "active", "storage"]
         stats_labels = ["Available Versions", "Downloads", "Active Downloads", "Storage Used"]
@@ -281,13 +286,13 @@ class ZEMmacOSUI:
             val_label = tk.Label(card, text=stats_defaults.get(key, "0"),
                                  font=("SF Pro Display", 28, "bold"),
                                  fg=stats_colors_list[i], bg=colors["card_bg"])
-            val_label.pack(pady=(16, 2))
+            val_label.pack(pady=16)
             self._stats_labels[key] = val_label
             tk.Label(card, text=stats_labels[i], font=("SF Pro Text", 10),
                      fg=colors["muted"], bg=colors["card_bg"]).pack()
 
         actions_card = ModernCard(body_frame, colors, title="Quick Actions", padding=18)
-        actions_card.pack(fill=tk.X, pady=(0, 12))
+        actions_card.pack(fill=tk.X, pady=12)
         act_frame = tk.Frame(actions_card.get_body(), bg=colors["card_bg"])
         act_frame.pack(fill=tk.X)
         for text, cmd, clr in [
@@ -302,7 +307,7 @@ class ZEMmacOSUI:
                       width=18).pack(side=tk.LEFT, padx=5)
 
         history_card = ModernCard(body_frame, colors, title="Recent Activity", subtitle="Your latest download actions", padding=18)
-        history_card.pack(fill=tk.X, pady=(0, 12))
+        history_card.pack(fill=tk.X, pady=12)
         tk.Label(history_card.get_body(), text="No recent activity yet. Start downloading macOS versions to see activity here.",
                  font=("SF Pro Text", 10), fg=colors["muted"], bg=colors["card_bg"]).pack(anchor=tk.W, pady=6)
 
@@ -320,7 +325,7 @@ class ZEMmacOSUI:
             tk.Label(row, text=num, font=("SF Pro Text", 12, "bold"),
                      fg=colors["accent"], bg=colors["card_bg"], width=3).pack(side=tk.LEFT)
             tk.Label(row, text=desc, font=("SF Pro Text", 11),
-                     fg=colors["text"], bg=colors["card_bg"]).pack(side=tk.LEFT, padx=(6, 0))
+                     fg=colors["text"], bg=colors["card_bg"]).pack(side=tk.LEFT, padx=6)
 
     # ---- Library ----
 
@@ -333,25 +338,25 @@ class ZEMmacOSUI:
 
         header = tk.Frame(self.content_area, bg=colors["header_bg"])
         header._role = "header"
-        header.pack(fill=tk.X, padx=30, pady=(24, 4))
+        header.pack(fill=tk.X, padx=30, pady=24)
         tk.Label(header, text="Download Library", font=("SF Pro Display", 26, "bold"),
                  fg=colors["text"], bg=colors["header_bg"]).pack(anchor=tk.W)
         tk.Label(header, text="Browse and download macOS installer versions",
                  font=("SF Pro Text", 11), fg=colors["muted"],
-                 bg=colors["header_bg"]).pack(anchor=tk.W, pady=(2, 0))
+                 bg=colors["header_bg"]).pack(anchor=tk.W, pady=2)
 
         body = tk.Frame(self.content_area, bg=colors["content_bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=28, pady=10)
 
         left_panel = tk.Frame(body, bg=colors["content_bg"])
-        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
 
         list_card = ModernCard(left_panel, colors, title="Available macOS Versions", padding=14)
-        list_card.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        list_card.pack(fill=tk.BOTH, expand=True, pady=10)
 
         list_body = list_card.get_body()
         list_top = tk.Frame(list_body, bg=colors["card_bg"])
-        list_top.pack(fill=tk.X, pady=(0, 10))
+        list_top.pack(fill=tk.X, pady=10)
         self.fetch_btn = tk.Button(list_top, text="\u21bb FETCH CATALOGUE", command=self._on_fetch_clicked,
                                    font=("SF Pro Text", 10, "bold"),
                                    fg="white", bg=colors["accent"],
@@ -381,40 +386,53 @@ class ZEMmacOSUI:
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH)
         right_panel.pack_propagate(False)
 
-        # Start Download Card (OS Index + Download Button side by side)
+        # Start Download Card - Unified toolbar: Index input + Download button
         index_card = ModernCard(right_panel, colors, title="Start Download", padding=16)
-        index_card.pack(fill=tk.X, pady=(0, 10))
+        index_card.pack(fill=tk.X, pady=10)
         index_body = index_card.get_body()
 
-        input_row = tk.Frame(index_body, bg=colors["card_bg"])
-        input_row.pack(fill=tk.X)
+        toolbar = tk.Frame(index_body, bg=colors["card_bg"],
+                           highlightbackground=colors["accent"],
+                           highlightthickness=1)
+        toolbar.pack(fill=tk.X)
+
+        inner = tk.Frame(toolbar, bg=colors["card_bg"])
+        inner.pack(fill=tk.X, expand=True)
+
+        tk.Label(inner, text="Index:", font=("SF Pro Text", 10, "bold"),
+                 fg=colors["muted"], bg=colors["card_bg"],
+                 padx=10, pady=8).pack(side=tk.LEFT)
+
         self.index_entry = tk.Entry(
-            input_row,
-            font=("SF Pro Text", 13),
-            bg=colors["input_bg"], fg=colors["input_fg"],
+            inner,
+            font=("SF Pro Text", 14),
+            bg=colors["card_bg"], fg=colors["input_fg"],
             insertbackground=colors["accent"],
-            bd=1, relief=tk.FLAT, width=8, justify="center",
+            bd=0, relief=tk.FLAT, width=5, justify="center",
         )
-        self.index_entry.pack(side=tk.LEFT, ipady=6, padx=(0, 8))
+        self.index_entry.pack(side=tk.LEFT, ipady=6, fill=tk.Y, expand=True)
         self.index_entry.bind("<Return>", lambda e: self._on_download_clicked())
 
+        sep_v = tk.Frame(inner, bg=colors["accent"], width=1)
+        sep_v.pack(side=tk.LEFT, fill=tk.Y, pady=4)
+
         self.download_btn = tk.Button(
-            input_row, text="\u2b07 DOWNLOAD",
+            inner, text="\u2b07 DOWNLOAD",
             command=self._on_download_clicked,
             font=("SF Pro Text", 11, "bold"),
-            fg="white", bg=colors["success"],
-            activebackground="#2db84a",
-            bd=0, padx=18, pady=0, cursor="hand2",
+            fg="white", bg=colors["accent"],
+            activebackground=colors["accent_hover"],
+            bd=0, padx=20, cursor="hand2",
         )
-        self.download_btn.pack(side=tk.LEFT, fill=tk.Y, expand=True, ipady=7)
+        self.download_btn.pack(side=tk.RIGHT, ipady=9)
 
         self.index_error_label = tk.Label(index_body, text="", font=("SF Pro Text", 9),
                                           fg=colors["error"], bg=colors["card_bg"])
-        self.index_error_label.pack(anchor=tk.W, pady=(4, 0))
+        self.index_error_label.pack(anchor=tk.W, pady=4)
 
         # MacLab Engine Card (with controls)
         engine_card = ModernCard(right_panel, colors, title="MacLab Download Engine", padding=16)
-        engine_card.pack(fill=tk.X, pady=(0, 10))
+        engine_card.pack(fill=tk.X, pady=10)
         eng_body = engine_card.get_body()
 
         top_row = tk.Frame(eng_body, bg=colors["card_bg"])
@@ -426,20 +444,23 @@ class ZEMmacOSUI:
         self.dl_filename.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         self.dl_progress = ModernProgressBar(eng_body, colors, height=10)
-        self.dl_progress.pack(fill=tk.X, pady=(10, 4))
+        self.dl_progress.pack(fill=tk.X, pady=10)
 
         pct_row = tk.Frame(eng_body, bg=colors["card_bg"])
         pct_row.pack(fill=tk.X)
         self.dl_percentage = tk.Label(pct_row, text="0%", font=("SF Pro Display", 20, "bold"),
                                       fg=colors["accent"], bg=colors["card_bg"])
-        self.dl_percentage.pack(side=tk.LEFT, padx=(0, 14))
+        self.dl_percentage.pack(side=tk.LEFT, padx=14)
 
         self.dl_size = tk.Label(pct_row, text="Size: --", font=("SF Pro Text", 10),
                                 fg=colors["text_secondary"], bg=colors["card_bg"])
         self.dl_size.pack(side=tk.LEFT, padx=8)
+        self.dl_remaining = tk.Label(pct_row, text="Remaining: --", font=("SF Pro Text", 10),
+                                     fg=colors["text_secondary"], bg=colors["card_bg"])
+        self.dl_remaining.pack(side=tk.LEFT, padx=8)
 
         stats_row = tk.Frame(eng_body, bg=colors["card_bg"])
-        stats_row.pack(fill=tk.X, pady=(4, 2))
+        stats_row.pack(fill=tk.X, pady=4)
         self.dl_speed = tk.Label(stats_row, text="Speed: --", font=("SF Pro Text", 10),
                                  fg=colors["text"], bg=colors["card_bg"])
         self.dl_speed.pack(side=tk.LEFT, padx=8)
@@ -448,7 +469,7 @@ class ZEMmacOSUI:
         self.dl_eta.pack(side=tk.LEFT, padx=8)
 
         sep2 = tk.Frame(eng_body, bg=colors["border"], height=1)
-        sep2.pack(fill=tk.X, pady=(8, 6))
+        sep2.pack(fill=tk.X, pady=8)
 
         btn_row = tk.Frame(eng_body, bg=colors["card_bg"])
         btn_row.pack(fill=tk.X)
@@ -456,6 +477,7 @@ class ZEMmacOSUI:
             ("Pause", self._on_pause_download, colors["warning"], "dl_pause_btn"),
             ("Resume", self._on_resume_download, colors["accent"], "dl_resume_btn"),
             ("Cancel", self._on_cancel_download, colors["error"], "dl_cancel_btn"),
+            ("Retry", self._on_retry_download, colors["info"], "dl_retry_btn"),
         ]:
             btn = tk.Button(btn_row, text=btn_data[0], command=btn_data[1],
                             font=("SF Pro Text", 10), fg="white", bg=btn_data[2],
@@ -466,11 +488,11 @@ class ZEMmacOSUI:
 
         # Console Card
         console_card = ModernCard(left_panel, colors, title="Console Output", padding=14)
-        console_card.pack(fill=tk.X, pady=(0, 10))
+        console_card.pack(fill=tk.X, pady=10)
 
         console_body = console_card.get_body()
         console_top = tk.Frame(console_body, bg=colors["card_bg"])
-        console_top.pack(fill=tk.X, pady=(0, 6))
+        console_top.pack(fill=tk.X, pady=6)
         tk.Button(console_top, text="Copy", command=self._on_copy_console,
                   font=("SF Pro Text", 10), fg=colors["text"], bg=colors["btn_secondary_bg"],
                   bd=1, relief=tk.FLAT, padx=12, pady=3, cursor="hand2").pack(side=tk.RIGHT, padx=3)
@@ -517,7 +539,8 @@ class ZEMmacOSUI:
 
     def set_callbacks(self, fetch_cb=None, download_cb=None, clear_cb=None, settings_cb=None,
                       pause_cb=None, resume_cb=None, cancel_cb=None, copy_cb=None,
-                      clean_cb=None, clean_logs_cb=None, theme_toggle_cb=None, check_updates_cb=None):
+                      clean_cb=None, clean_logs_cb=None, theme_toggle_cb=None, check_updates_cb=None,
+                      retry_cb=None):
         self._fetch_callback = fetch_cb
         self._download_callback = download_cb
         self._clear_callback = clear_cb
@@ -530,6 +553,7 @@ class ZEMmacOSUI:
         self._clean_logs_callback = clean_logs_cb
         self._theme_toggle_callback = theme_toggle_cb
         self._check_updates_callback = check_updates_cb
+        self._retry_callback = retry_cb
 
     def _check_for_updates(self):
         if self._check_updates_callback:
@@ -540,9 +564,22 @@ class ZEMmacOSUI:
             self._theme_toggle_callback()
         if hasattr(self, "_theme_toggle") and self._theme_toggle.winfo_exists():
             self._theme_toggle.set_theme(self.theme_mode == "dark")
+        if hasattr(self, "_theme_label") and self._theme_label.winfo_exists():
+            is_dark = self.theme_mode == "dark"
+            self._theme_label.config(text="\U0001f319 Dark" if is_dark else "\u2600\ufe0f Light")
+
+    def set_fetch_state(self, loading):
+        if hasattr(self, "fetch_btn") and self.fetch_btn.winfo_exists():
+            if loading:
+                self.fetch_btn.config(text="\u21bb FETCHING...", state=tk.DISABLED,
+                                      bg=self.colors.get("muted", "#86868b"))
+            else:
+                self.fetch_btn.config(text="\u21bb FETCH CATALOGUE", state=tk.NORMAL,
+                                      bg=self.colors.get("accent", "#0071e3"))
 
     def _on_fetch_clicked(self):
         self.index_error_label.config(text="")
+        self.set_fetch_state(True)
         if self._fetch_callback:
             self._fetch_callback()
     def _on_download_clicked(self):
@@ -578,6 +615,9 @@ class ZEMmacOSUI:
     def _on_cancel_download(self):
         if self._cancel_callback:
             self._cancel_callback()
+    def _on_retry_download(self):
+        if self._retry_callback:
+            self._retry_callback()
     def _on_clean_temp(self):
         if self._clean_callback:
             self._clean_callback()
@@ -618,27 +658,39 @@ class ZEMmacOSUI:
                     b /= 1024.0
                 return f"{b:.1f} PB"
             self.dl_size.config(text=f"{fmt(downloaded)} / {fmt(total)}")
+            remaining = max(0, total - downloaded)
+            self.dl_remaining.config(text=f"Remaining: {fmt(remaining)}")
 
             if status == "downloading":
                 self.dl_status.set_status("downloading", "Downloading")
                 self.dl_pause_btn.config(state=tk.NORMAL)
                 self.dl_resume_btn.config(state=tk.DISABLED)
                 self.dl_cancel_btn.config(state=tk.NORMAL)
+                self.dl_retry_btn.config(state=tk.DISABLED)
             elif status == "paused":
                 self.dl_status.set_status("paused", "Paused")
                 self.dl_pause_btn.config(state=tk.DISABLED)
                 self.dl_resume_btn.config(state=tk.NORMAL)
                 self.dl_cancel_btn.config(state=tk.NORMAL)
+                self.dl_retry_btn.config(state=tk.NORMAL)
             elif status == "completed":
                 self.dl_status.set_status("completed", "Completed")
                 self.dl_pause_btn.config(state=tk.DISABLED)
                 self.dl_resume_btn.config(state=tk.DISABLED)
                 self.dl_cancel_btn.config(state=tk.DISABLED)
+                self.dl_retry_btn.config(state=tk.DISABLED)
+            elif status in ("network_error", "retrying"):
+                self.dl_status.set_status("failed", status.replace("_", " ").title())
+                self.dl_pause_btn.config(state=tk.DISABLED)
+                self.dl_resume_btn.config(state=tk.DISABLED)
+                self.dl_cancel_btn.config(state=tk.NORMAL)
+                self.dl_retry_btn.config(state=tk.NORMAL)
             else:
                 self.dl_status.set_status("idle", status.capitalize())
                 self.dl_pause_btn.config(state=tk.DISABLED)
                 self.dl_resume_btn.config(state=tk.DISABLED)
                 self.dl_cancel_btn.config(state=tk.DISABLED)
+                self.dl_retry_btn.config(state=tk.DISABLED)
         self.root.after(0, update)
 
     def update_stats(self, versions=None, downloads=None, active=None, storage=None):
@@ -662,8 +714,10 @@ class ZEMmacOSUI:
             self.dl_speed.config(text="Speed: --")
             self.dl_eta.config(text="ETA: --")
             self.dl_size.config(text="Size: --")
+            self.dl_remaining.config(text="Remaining: --")
             self.dl_status.set_status("idle", "Ready")
             self.dl_pause_btn.config(state=tk.DISABLED)
             self.dl_resume_btn.config(state=tk.DISABLED)
             self.dl_cancel_btn.config(state=tk.DISABLED)
+            self.dl_retry_btn.config(state=tk.DISABLED)
         self.root.after(0, reset)

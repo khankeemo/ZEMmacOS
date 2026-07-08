@@ -16,7 +16,7 @@ class ModernCard(tk.Frame):
 
         if title:
             bar = tk.Frame(self._card, bg=colors["card_bg"])
-            bar.pack(fill=tk.X, padx=padding, pady=(padding - 4, 2))
+            bar.pack(fill=tk.X, padx=padding, pady=padding)
             if subtitle:
                 tk.Label(bar, text=title, font=("SF Pro Text", 14, "bold"),
                          fg=colors["text"], bg=colors["card_bg"]).pack(anchor=tk.W)
@@ -102,53 +102,65 @@ class StatusBadge(tk.Frame):
 
 
 class ThemeToggle(tk.Canvas):
-    """Animated sun/moon theme toggle switch"""
+    """Premium sun/moon theme toggle switch with matching background"""
 
     def __init__(self, parent, command=None, colors=None, **kwargs):
-        bg = (colors or {}).get("btn_secondary_bg", "#e5e5ea")
+        c = colors or {}
+        bg = c.get("header_bg", "#f5f5f7")
         super().__init__(parent, width=56, height=30,
                          bg=bg, highlightthickness=0, bd=0,
                          cursor="hand2", **kwargs)
+        self._role = "header"
         self._command = command
-        self._colors = colors or {}
+        self._colors = c
         self._is_dark = False
         self._animating = False
         self._anim_step = 0
 
         self.bind("<Button-1>", self._on_click)
+        self.bind("<Enter>", lambda e: self._draw(hover=True))
+        self.bind("<Leave>", lambda e: self._draw(hover=False))
+        self._hover = False
         self.after(20, self._draw)
 
-    def _draw(self):
+    def _draw(self, hover=False):
         self.delete("all")
-        cw = self.winfo_width() or 56
-        ch = self.winfo_height() or 30
-        r = ch / 2 - 2
-        cx = cw / 2
+        cw = max(self.winfo_width(), 56)
+        ch = max(self.winfo_height(), 30)
+        r = ch / 2 - 3
         cy = ch / 2
 
-        bg = self._colors.get("btn_secondary_bg", "#e5e5ea")
+        bg = self._colors.get("header_bg", "#f5f5f7")
         self.configure(bg=bg)
 
-        track_r = ch / 2
-        self.create_rounded_rect(1, 1, cw - 1, ch - 1, track_r,
-                                 fill=bg if not self._is_dark else "#3a3a3c", outline="")
-
-        knob_x = r + 2 if not self._is_dark else cw - r - 2
-        knob_color = "#ffcc00" if not self._is_dark else "#8e8e93"
-
-        self.create_oval(knob_x - r, cy - r, knob_x + r, cy + r,
-                         fill=knob_color, outline="", tags="knob")
-
         if self._is_dark:
-            self.create_text(knob_x - 1, cy - 1, text="\u2601\ufe0f",
-                             font=("Segoe UI", 8), fill="white", tags="icon")
+            track_fill = "#3a3a3c"
+            knob_fill = "#636366" if not hover else "#7c7c80"
+            icon = "\U0001f319"
+            icon_fill = "#ffd60a"
         else:
-            self.create_text(knob_x + 1, cy - 1, text="\u2600\ufe0f",
-                             font=("Segoe UI", 8), fill="#1a1a1a", tags="icon")
+            track_fill = "#c7c7cc" if not hover else "#a8a8ad"
+            knob_fill = "#ffffff"
+            icon = "\u2600\ufe0f"
+            icon_fill = "#ff9500"
+
+        track_r = ch / 2 - 1
+        outline = self._colors.get("border", "#e0e0e0")
+        self.create_rounded_rect(1, 1, cw - 1, ch - 1, track_r,
+                                 fill=track_fill, outline=outline, width=1)
+
+        knob_x = r + 3 if not self._is_dark else cw - r - 3
+        self.create_oval(knob_x - r, cy - r, knob_x + r, cy + r,
+                         fill=knob_fill, outline=self._colors.get("border", "#d1d1d6"),
+                         width=1, tags="knob")
+
+        fs = max(10, int(r * 1.2))
+        self.create_text(knob_x, cy, text=icon, font=("Segoe UI", fs),
+                         fill=icon_fill, tags="icon")
 
     def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
+        steps = 10
         points = []
-        steps = 12
         for i in range(steps + 1):
             a = math.pi + (math.pi * i) / (2 * steps)
             points.extend([x1 + r + r * math.cos(a), y1 + r + r * math.sin(a)])

@@ -465,6 +465,12 @@ class IDMDownloader:
                 except:
                     pass
 
+    def clear_state(self, url):
+        with self.lock:
+            self.active_downloads.pop(url, None)
+            self.cancelled.discard(url)
+            self.paused.discard(url)
+
     def is_paused(self, url):
         with self.lock: return url in self.paused
 

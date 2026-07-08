@@ -1,8 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
-import urllib.error
-import urllib.request
 import platform
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,19 +19,19 @@ class SettingsUI:
 
         header = tk.Frame(container, bg=self.colors["header_bg"])
         header._role = "header"
-        header.pack(fill=tk.X, padx=30, pady=(24, 4))
+        header.pack(fill=tk.X, padx=30, pady=24)
         tk.Label(header, text="Settings", font=("SF Pro Display", 26, "bold"),
                  fg=self.colors["text"], bg=self.colors["header_bg"]).pack(anchor=tk.W)
         tk.Label(header, text="Configure your application preferences",
                  font=("SF Pro Text", 11), fg=self.colors["muted"],
-                 bg=self.colors["header_bg"]).pack(anchor=tk.W, pady=(2, 0))
+                 bg=self.colors["header_bg"]).pack(anchor=tk.W, pady=2)
 
         body = tk.Frame(container, bg=self.colors["content_bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=30, pady=12)
 
         nav_frame = tk.Frame(body, bg=self.colors["card_bg"], width=200)
         nav_frame._role = "card"
-        nav_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 15))
+        nav_frame.pack(side=tk.LEFT, fill=tk.Y, padx=15)
         nav_frame.pack_propagate(False)
 
         self._nav_buttons = {}
@@ -85,16 +83,16 @@ class SettingsUI:
     def _card(self, parent, title):
         card = tk.Frame(parent, bg=self.colors["card_bg"], relief=tk.FLAT, bd=0)
         card._role = "card"
-        card.pack(fill=tk.X, pady=(0, 14))
+        card.pack(fill=tk.X, pady=14)
         if title:
             bar = tk.Frame(card, bg=self.colors["card_bg"])
-            bar.pack(fill=tk.X, padx=22, pady=(16, 4))
+            bar.pack(fill=tk.X, padx=22, pady=16)
             tk.Label(bar, text=title, font=("SF Pro Text", 14, "bold"),
                      fg=self.colors["text"], bg=self.colors["card_bg"]).pack(anchor=tk.W)
             sep = tk.Frame(card, bg=self.colors["border"], height=1)
             sep.pack(fill=tk.X, padx=22)
         inner = tk.Frame(card, bg=self.colors["card_bg"])
-        inner.pack(fill=tk.X, padx=22, pady=(10, 16))
+        inner.pack(fill=tk.X, padx=22, pady=16)
         return inner
 
     def _row(self, parent, label_text):
@@ -114,7 +112,7 @@ class SettingsUI:
                                               bg=self.colors["input_bg"], fg=self.colors["input_fg"],
                                               insertbackground=self.colors["accent"],
                                               bd=1, relief=tk.FLAT)
-        self.settings_download_dir.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+        self.settings_download_dir.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8)
         tk.Button(row, text="Browse", command=self._browse_download_dir,
                   font=("SF Pro Text", 10), fg=self.colors["text"],
                   bg=self.colors["btn_secondary_bg"], bd=1, relief=tk.FLAT,
@@ -143,7 +141,7 @@ class SettingsUI:
         ttk.Combobox(row, textvariable=self.threads_var, values=["4", "8", "16", "32"],
                      state="readonly", font=("SF Pro Text", 11), width=6).pack(side=tk.LEFT)
         tk.Label(row, text="Recommended: 8", font=("SF Pro Text", 9),
-                 fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT, padx=(10, 0))
+                 fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT, padx=10)
 
         row = self._row(inner, "Max Concurrent Downloads:")
         self.max_concurrent_var = tk.StringVar(value=str(self.app.settings.get("max_concurrent_downloads", 3)))
@@ -155,7 +153,7 @@ class SettingsUI:
         ttk.Combobox(row, textvariable=self.timeout_var, values=["10", "20", "30", "60", "120"],
                      state="readonly", font=("SF Pro Text", 11), width=6).pack(side=tk.LEFT)
         tk.Label(row, text="seconds", font=("SF Pro Text", 9),
-                 fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT, padx=(6, 0))
+                 fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT, padx=6)
 
         row = self._row(inner, "Auto-Retry on Failure:")
         self.retry_var = tk.BooleanVar(value=self.app.settings.get("retry_on_failure", True))
@@ -191,7 +189,7 @@ class SettingsUI:
                                 activebackground=self.colors["card_bg"],
                                 activeforeground=self.colors["text"],
                                 indicatoron=True)
-            rb.pack(side=tk.LEFT, padx=(0, 18))
+            rb.pack(side=tk.LEFT, padx=18)
 
         inner2 = self._card(self._content_frame, "Preview")
         tk.Label(inner2, text="Theme changes apply immediately across the entire application.",
@@ -199,27 +197,27 @@ class SettingsUI:
                  bg=self.colors["card_bg"]).pack(anchor=tk.W)
         tk.Label(inner2, text="'System' will follow your Windows dark/light mode setting.",
                  font=("SF Pro Text", 10), fg=self.colors["muted"],
-                 bg=self.colors["card_bg"]).pack(anchor=tk.W, pady=(2, 0))
+                 bg=self.colors["card_bg"]).pack(anchor=tk.W, pady=2)
 
     def _build_performance(self):
         inner = self._card(self._content_frame, "Performance Settings")
         tk.Label(inner, text="Performance settings help optimize download behavior.",
                  font=("SF Pro Text", 10), fg=self.colors["muted"],
-                 bg=self.colors["card_bg"]).pack(anchor=tk.W, pady=(0, 10))
+                 bg=self.colors["card_bg"]).pack(anchor=tk.W, pady=10)
 
         row = self._row(inner, "Buffer Size:")
         self.buffer_var = tk.StringVar(value="8192")
         ttk.Combobox(row, textvariable=self.buffer_var, values=["4096", "8192", "16384", "32768"],
                      state="readonly", font=("SF Pro Text", 11), width=8).pack(side=tk.LEFT)
         tk.Label(row, text="bytes per chunk", font=("SF Pro Text", 9),
-                 fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT, padx=(6, 0))
+                 fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT, padx=6)
 
         row = self._row(inner, "Max Simultaneous Segments:")
         self.segments_var = tk.StringVar(value="8")
         ttk.Combobox(row, textvariable=self.segments_var, values=["4", "8", "16", "32"],
                      state="readonly", font=("SF Pro Text", 11), width=6).pack(side=tk.LEFT)
         tk.Label(row, text="per download", font=("SF Pro Text", 9),
-                 fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT, padx=(6, 0))
+                 fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT, padx=6)
 
         inner2 = self._card(self._content_frame, "Actions")
         tk.Button(inner2, text="Save Performance Settings", command=self._save_performance_settings,
@@ -302,38 +300,8 @@ class SettingsUI:
         messagebox.showinfo("Settings", "Performance settings saved!")
 
     def _check_for_updates(self):
-        def has_internet():
-            try:
-                urllib.request.urlopen("https://8.8.8.8", timeout=3)
-                return True
-            except (urllib.error.URLError, ValueError):
-                return False
-
-        if not has_internet():
-            messagebox.showwarning("No Internet", "No internet connection detected.")
-            return
-
-        if self.app._check_updates_callback:
-            self.app._check_updates_callback()
-        else:
-            try:
-                from update import AppUpdater
-                updater = AppUpdater()
-                result = updater.check_for_updates()
-                if result.get("update_available"):
-                    msg = f"Update Available!\n\nVersion {result.get('latest_version')} is available.\n\nCurrent: {updater.get_current_version()}"
-                    if messagebox.askyesno("Update Available", msg):
-                        import webbrowser
-                        webbrowser.open("https://www.websmithdigital.com")
-                elif result.get("error"):
-                    msg = f"{result.get('error')}\n\nVisit website?"
-                    if messagebox.askyesno("Update Check", msg):
-                        import webbrowser
-                        webbrowser.open("https://www.websmithdigital.com")
-                else:
-                    messagebox.showinfo("Up to Date", f"You are running the latest version.\n\nVersion: {updater.get_current_version()}")
-            except Exception as e:
-                messagebox.showerror("Update Error", f"Failed to check for updates.\n\nError: {str(e)}")
+        import webbrowser
+        webbrowser.open("https://www.websmithdigital.com/software-store")
 
     def get_values(self):
         return {

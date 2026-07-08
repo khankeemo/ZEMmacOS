@@ -77,6 +77,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             clean_logs_cb=self.on_clean_logs,
             theme_toggle_cb=self.toggle_theme,
             check_updates_cb=self.check_for_updates,
+            retry_cb=self.on_retry_download,
         )
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -163,6 +164,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             except Exception as e:
                 self.log(f"Failed to fetch catalogue: {str(e)}", "error")
             finally:
+                self.root.after(0, lambda: self.set_fetch_state(False))
                 with self.fetch_lock:
                     self.fetch_in_progress = False
 
@@ -213,6 +215,18 @@ class ZEMmacOSApp(ZEMmacOSUI):
             if idx < 1 or idx > len(self.gib_wrapper.products):
                 messagebox.showerror("Invalid Index", f"Index must be between 1 and {len(self.gib_wrapper.products)}")
                 return
+
+        # Auto-select and highlight in version listbox
+        if hasattr(self, 'version_listbox') and self.version_listbox.size() > 0:
+            try:
+                idx_int = int(index_str) - 1
+                if 0 <= idx_int < self.version_listbox.size():
+                    self.version_listbox.selection_clear(0, tk.END)
+                    self.version_listbox.selection_set(idx_int)
+                    self.version_listbox.activate(idx_int)
+                    self.version_listbox.see(idx_int)
+            except (ValueError, tk.TclError):
+                pass
 
         self._download_macos_version(index_str)
         if hasattr(self, 'index_entry'):
@@ -279,7 +293,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 "total_packages": len(packages),
                 "start_time": time.time(),
                 "url": None,
-                "idm_downloader": idm_downloader
+                "idm_downloader": idm_downloader,
+                "retry_count": 0,
+                "connection_lost": False,
             }
 
         def start_download():
@@ -316,6 +332,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     if result["status"] == "completed":
                         downloaded_count += 1
                         self.log(f"\u2705 Completed package {i}/{len(packages)}", "success")
+                        with self.download_lock:
+                            if download_id in self.downloads:
+                                self.downloads[download_id]["retry_count"] = 0
                     elif result["status"] == "paused":
                         self.log(f"\u23f8 Package {i}/{len(packages)} paused", "warning")
                         with self.download_lock:
@@ -326,9 +345,44 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     elif result["status"] == "cancelled":
                         self.log(f"\u23f9 Package {i}/{len(packages)} cancelled", "warning")
                         break
-                    else:
-                        failed_count += 1
-                        self.log(f"\u274c Failed package {i}/{len(packages)}", "error")
+                    elif result["status"] == "failed":
+                        err = result.get("error", "")
+                        is_network_error = any(word in err.lower() for word in
+                            ["connectionerror", "timeout", "connection", "reset", "refused",
+                             "resolve", "network", "eof", "read timed out"])
+
+                        if is_network_error:
+                            with self.download_lock:
+                                if download_id in self.downloads:
+                                    retry_count = self.downloads[download_id].get("retry_count", 0) + 1
+                                    self.downloads[download_id]["retry_count"] = retry_count
+                                    self.downloads[download_id]["connection_lost"] = True
+
+                            if retry_count <= 10:
+                                self.log(f"\U0001f504 Network issue - retry {retry_count}/10 in 30s...", "warning")
+                                self.root.after(0, lambda: self.update_download_progress(
+                                    0, 0, 0, 0, 0, filename, "retrying"))
+                                idm_downloader.clear_state(url)
+                                time.sleep(30)
+                                i -= 1
+                                with self.download_lock:
+                                    if download_id in self.downloads:
+                                        self.downloads[download_id]["status"] = "downloading"
+                                continue
+                            else:
+                                self.log("\u26a0 Internet connection lost. Download paused.", "error")
+                                self.root.after(0, lambda: self.show_toast(
+                                    "Internet connection lost. Download paused.", "error", 5000))
+                                self.root.after(0, lambda f=filename: self.update_download_progress(
+                                    0, 0, 0, 0, 0, f, "paused"))
+                                with self.download_lock:
+                                    if download_id in self.downloads:
+                                        self.downloads[download_id]["status"] = "paused"
+                                self.root.after(0, self.update_button_states)
+                                return
+                        else:
+                            failed_count += 1
+                            self.log(f"\u274c Failed package {i}/{len(packages)}: {err[:80]}", "error")
 
                 total_packages = len(packages)
                 with self.download_lock:
@@ -407,7 +461,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def update_button_states(self):
         active_id = self._get_active_download_id()
-        states = {"dl_pause_btn": tk.DISABLED, "dl_resume_btn": tk.DISABLED, "dl_cancel_btn": tk.DISABLED}
+        states = {"dl_pause_btn": tk.DISABLED, "dl_resume_btn": tk.DISABLED,
+                  "dl_cancel_btn": tk.DISABLED, "dl_retry_btn": tk.DISABLED}
 
         if active_id and active_id in self.downloads:
             status = self.downloads[active_id].get("status", "")
@@ -417,6 +472,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             elif status == "paused":
                 states["dl_resume_btn"] = tk.NORMAL
                 states["dl_cancel_btn"] = tk.NORMAL
+                states["dl_retry_btn"] = tk.NORMAL
 
         for btn, state in states.items():
             if hasattr(self, btn):
@@ -463,6 +519,20 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
                 threading.Thread(target=resume, daemon=True).start()
                 self.update_button_states()
+
+    def on_retry_download(self):
+        active_id = self._get_active_download_id()
+        if active_id and active_id in self.idm_downloaders:
+            info = self.downloads.get(active_id, {})
+            url = info.get("url")
+            if url:
+                self.idm_downloaders[active_id].clear_state(url)
+            with self.download_lock:
+                if active_id in self.downloads:
+                    self.downloads[active_id]["retry_count"] = 0
+                    self.downloads[active_id]["status"] = "downloading"
+            self.log("\U0001f504 Retrying download...", "info")
+            self.on_resume_download()
 
     def on_cancel_download(self):
         active_id = self._get_active_download_id()
