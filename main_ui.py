@@ -267,7 +267,10 @@ class ZEMmacOSUI:
                                               fg=c["muted"], bg=c["card_bg"])
         self._net_countdown_label.pack(anchor=tk.W, pady=(0, 4))
 
-        self._net_hint_label = tk.Label(frame, text="Reconnect to the internet.\nThe download will automatically continue if the connection is restored.",
+        hint = ("Reconnect to the internet.\nThe download will automatically continue if the connection is restored."
+        if on_pause_callback else
+        "Reconnect to the internet.\nThe application will automatically continue when the connection is restored.")
+        self._net_hint_label = tk.Label(frame, text=hint,
                                          font=("SF Pro Text", 10),
                                          fg=c["muted"], bg=c["card_bg"], justify=tk.LEFT)
         self._net_hint_label.pack(anchor=tk.W, pady=(0, 16))
@@ -275,15 +278,16 @@ class ZEMmacOSUI:
         btn_frame = tk.Frame(frame, bg=c["card_bg"])
         btn_frame.pack(fill=tk.X)
 
-        self._net_pause_btn = tk.Button(btn_frame, text="Pause Download",
-                                        font=("SF Pro Text", 10, "bold"),
-                                        fg=c["text"], bg=c["btn_secondary_bg"],
-                                        activebackground=c["btn_secondary_hover"],
-                                        bd=0, padx=20, pady=8, cursor="hand2",
-                                        command=lambda: self._on_net_pause(on_pause_callback))
-        self._net_pause_btn.pack(side=tk.LEFT, padx=(0, 8))
+        if on_pause_callback:
+            self._net_pause_btn = tk.Button(btn_frame, text="Pause Download",
+                                            font=("SF Pro Text", 10, "bold"),
+                                            fg=c["text"], bg=c["btn_secondary_bg"],
+                                            activebackground=c["btn_secondary_hover"],
+                                            bd=0, padx=20, pady=8, cursor="hand2",
+                                            command=lambda: self._on_net_pause(on_pause_callback))
+            self._net_pause_btn.pack(side=tk.LEFT, padx=(0, 8))
 
-        self._net_continue_btn = tk.Button(btn_frame, text="Continue Waiting",
+        self._net_continue_btn = tk.Button(btn_frame, text="Close",
                                            font=("SF Pro Text", 10, "bold"),
                                            fg=c["text"], bg=c["btn_secondary_bg"],
                                            activebackground=c["btn_secondary_hover"],
@@ -316,36 +320,6 @@ class ZEMmacOSUI:
                 pass
         self._net_dialog = None
         self.show_toast("\u2705 Internet restored. Resuming download...", "success", 3000)
-
-    def _update_to_max_retry_dialog(self, on_resume_cb=None, on_cancel_cb=None, on_keep_waiting_cb=None):
-        if not (hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists()):
-            return
-        d = self._net_dialog
-        d.title("Internet Connection Lost")
-        for w in d.winfo_children():
-            w.destroy()
-        c = self.colors
-        frame = tk.Frame(d, bg=c["card_bg"], padx=32, pady=24)
-        frame.pack(fill=tk.BOTH, expand=True)
-
-        tk.Label(frame, text="\u26a0  Internet Connection Lost",
-                 font=("SF Pro Display", 16, "bold"),
-                 fg=c["error"], bg=c["card_bg"]).pack(anchor=tk.W, pady=(0, 8))
-
-        msg = "Download paused because the internet connection could not be restored.\nThe download will resume automatically when the internet is available."
-        tk.Label(frame, text=msg, font=("SF Pro Text", 11),
-                 fg=c["text"], bg=c["card_bg"], justify=tk.LEFT).pack(anchor=tk.W, pady=(0, 16))
-
-        btn_frame = tk.Frame(frame, bg=c["card_bg"])
-        btn_frame.pack(fill=tk.X)
-
-        self._net_cancel_btn = tk.Button(btn_frame, text="Cancel",
-                                         font=("SF Pro Text", 10, "bold"),
-                                         fg=c["text"], bg=c["btn_secondary_bg"],
-                                         activebackground=c["btn_secondary_hover"],
-                                         bd=0, padx=20, pady=8, cursor="hand2",
-                                         command=lambda: self._close_network_dialog() or (on_cancel_cb and on_cancel_cb()))
-        self._net_cancel_btn.pack(side=tk.LEFT, padx=(0, 8))
 
     def _close_network_dialog(self):
         if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
@@ -383,10 +357,6 @@ class ZEMmacOSUI:
 
         right_h = tk.Frame(header, bg=colors["header_bg"])
         right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6, padx=4)
-        self._theme_label = tk.Label(right_h, text="\u2600\ufe0f Light",
-                                     font=("SF Pro Text", 10, "bold"),
-                                     fg=colors["text"], bg=colors["header_bg"])
-        self._theme_label.pack(side=tk.RIGHT, padx=6)
         self._theme_toggle = ThemeToggle(
             right_h,
             command=self._on_theme_toggle,
@@ -537,7 +507,7 @@ class ZEMmacOSUI:
         self.index_entry = tk.Entry(
             inner,
             font=("SF Pro Text", 14),
-            bg="#f0f0f0", fg=colors["input_fg"],
+            bg=colors["input_bg"], fg=colors["input_fg"],
             insertbackground=colors["accent"],
             bd=0, relief=tk.FLAT, width=5, justify="center",
         )
@@ -701,9 +671,6 @@ class ZEMmacOSUI:
             self._theme_toggle_callback()
         if hasattr(self, "_theme_toggle") and self._theme_toggle.winfo_exists():
             self._theme_toggle.set_theme(self.theme_mode == "dark")
-        if hasattr(self, "_theme_label") and self._theme_label.winfo_exists():
-            is_dark = self.theme_mode == "dark"
-            self._theme_label.config(text="\U0001f319 Dark" if is_dark else "\u2600\ufe0f Light")
 
     def set_fetch_state(self, loading):
         if hasattr(self, "fetch_btn") and self.fetch_btn.winfo_exists():

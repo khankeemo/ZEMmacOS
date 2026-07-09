@@ -135,23 +135,26 @@ class IDMDownloader:
         with self.lock:
             # If already running and not paused, reject
             if download_id in self.active_downloads:
-                if self.active_downloads[download_id].get("status") != "paused":
+                existing = self.active_downloads[download_id]
+                if existing.get("status") == "paused":
+                    self.paused.discard(url)
+                    self._send_log("Resuming paused download...", "info")
+                elif existing.get("status") == "downloading":
                     return {"status": "already_running", "filepath": None, "error": None}
-                # If paused, remove from paused set but keep active_downloads entry
-                self.paused.discard(url)
-                self._send_log("Resuming paused download...", "info")
-
-            # Initialize or reset state for this download
-            self.active_downloads[download_id] = {
-                "url": url,
-                "filename": filename,
-                "save_dir": save_dir,
-                "headers": headers,
-                "start_time": time.time(),
-                "total_bytes": 0,
-                "downloaded_bytes": 0,
-                "status": "starting"
-            }
+                else:
+                    return {"status": "already_running", "filepath": None, "error": None}
+            else:
+                # Fresh download - create entry
+                self.active_downloads[download_id] = {
+                    "url": url,
+                    "filename": filename,
+                    "save_dir": save_dir,
+                    "headers": headers,
+                    "start_time": time.time(),
+                    "total_bytes": 0,
+                    "downloaded_bytes": 0,
+                    "status": "starting"
+                }
 
         try:
             os.makedirs(save_dir, exist_ok=True)

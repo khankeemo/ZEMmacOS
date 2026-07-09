@@ -107,7 +107,7 @@ class ThemeToggle(tk.Canvas):
     def __init__(self, parent, command=None, colors=None, **kwargs):
         c = colors or {}
         bg = c.get("header_bg", "#f5f5f7")
-        super().__init__(parent, width=56, height=30,
+        super().__init__(parent, width=56, height=28,
                          bg=bg, highlightthickness=0, bd=0,
                          cursor="hand2", **kwargs)
         self._role = "header"
@@ -118,16 +118,14 @@ class ThemeToggle(tk.Canvas):
         self._anim_step = 0
 
         self.bind("<Button-1>", self._on_click)
-        self.bind("<Enter>", lambda e: self._draw(hover=True))
-        self.bind("<Leave>", lambda e: self._draw(hover=False))
-        self._hover = False
         self.after(20, self._draw)
 
-    def _draw(self, hover=False):
+    def _draw(self):
         self.delete("all")
         cw = max(self.winfo_width(), 56)
-        ch = max(self.winfo_height(), 30)
-        r = ch / 2 - 3
+        ch = max(self.winfo_height(), 28)
+        track_r = ch / 2 - 1
+        knob_r = ch / 2 - 3
         cy = ch / 2
 
         bg = self._colors.get("header_bg", "#f5f5f7")
@@ -137,24 +135,22 @@ class ThemeToggle(tk.Canvas):
             track_fill = "#34c759"
             knob_fill = "#000000"
             icon = "\U0001f319"
-            icon_fill = "#ffffff"
+            icon_fill = "#e0e0e0"
         else:
             track_fill = "#34c759"
             knob_fill = "#ffffff"
             icon = "\u2600\ufe0f"
             icon_fill = "#ff9500"
 
-        track_r = ch / 2 - 1
         outline = self._colors.get("border", "#e0e0e0")
         self.create_rounded_rect(1, 1, cw - 1, ch - 1, track_r,
                                  fill=track_fill, outline=outline, width=1)
 
-        knob_x = r + 3 if not self._is_dark else cw - r - 3
-        self.create_oval(knob_x - r, cy - r, knob_x + r, cy + r,
-                         fill=knob_fill, outline=self._colors.get("border", "#d1d1d6"),
-                         width=1, tags="knob")
+        knob_x = knob_r + 3 if not self._is_dark else cw - knob_r - 3
+        self.create_oval(knob_x - knob_r, cy - knob_r, knob_x + knob_r, cy + knob_r,
+                         fill=knob_fill, outline=outline, width=1, tags="knob")
 
-        fs = max(10, int(r * 1.2))
+        fs = int(knob_r * 1.6)
         self.create_text(knob_x, cy, text=icon, font=("Segoe UI", fs),
                          fill=icon_fill, tags="icon")
 

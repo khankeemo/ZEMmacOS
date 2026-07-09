@@ -85,7 +85,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
         self._network_pause_event = threading.Event()
         self._current_dialog_download_id = None
-        self._max_retry_action = None
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.settings_service.apply_saved_theme()
@@ -100,6 +99,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
         self.root.after(500, self._show_startup_toast)
         self.root.after(1000, self._auto_fetch)
+        self.root.after(2000, self._check_internet_on_startup)
 
     def check_internet(self):
         try:
@@ -110,6 +110,12 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def _show_startup_toast(self):
         self.show_toast("ZEMmacOS started successfully", "success", 2500)
+
+    def _check_internet_on_startup(self):
+        if not self.check_internet():
+            self.debug_log("NETWORK", "WARNING", "No internet on startup - showing dialog")
+            self.root.after(0, lambda: self._show_network_dialog(0, None))
+            self._wait_for_internet_startup()
 
     def _console_output(self, message, level):
         if hasattr(self, 'console'):
@@ -210,33 +216,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     if retry_count > max_retries:
                         self.debug_log("NETWORK", "ERROR", "All 10 retries exhausted for fetch")
                         self.log("\u26a0 Catalogue fetch failed after 10 retries.", "error")
-                        self._max_retry_action = None
-                        self.root.after(0, lambda: self._update_to_max_retry_dialog(
-                            on_resume_cb=self._on_fetch_max_retry_resume,
-                            on_cancel_cb=self._on_fetch_max_retry_cancel,
-                            on_keep_waiting_cb=self._on_fetch_max_retry_keep_waiting
-                        ))
-                        self._network_pause_event.clear()
-                        while self._max_retry_action is None:
-                            if self._network_pause_event.wait(timeout=5):
-                                break
-                            if self.check_internet():
-                                self._max_retry_action = "resume"
-                                break
-                        action = self._max_retry_action
-                        self._max_retry_action = None
-                        if action == "resume":
-                            retry_count = 0
-                            self.debug_log("NETWORK", "SUCCESS", "Internet restored - resuming fetch retries")
-                            self.root.after(0, self._auto_close_network_dialog)
-                            continue
-                        elif action == "cancel":
-                            break
-                        elif action == "keep_waiting":
-                            retry_count = 0
-                            continue
-                        else:
-                            break
+                        self.root.after(0, self._close_network_dialog)
+                        break
 
                     self.debug_log("NETWORK", "INFO", f"Retry {retry_count}/{max_retries} - waiting 30s")
                     self.log(f"\U0001f504 Fetch retry {retry_count}/{max_retries} in 30s...", "warning")
@@ -250,10 +231,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     for remaining in range(30, 0, -1):
                         self.root.after(0, lambda s=remaining: self._update_dialog_countdown(s))
                         if self._network_pause_event.wait(timeout=1):
-                            if self._max_retry_action == "retry_now":
-                                self._max_retry_action = None
-                                self.debug_log("NETWORK", "INFO", "User triggered retry now")
-                                break
                             self.log("\u23f8 Fetch paused by user", "warning")
                             self.root.after(0, self._close_network_dialog)
                             user_paused = True
@@ -275,23 +252,30 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def _on_net_pause_fetch(self):
         self._network_pause_event.set()
 
-    def _on_fetch_max_retry_resume(self):
-        self._max_retry_action = "resume"
-        self._network_pause_event.set()
-
-    def _on_fetch_max_retry_cancel(self):
-        self._max_retry_action = "cancel"
-        self._network_pause_event.set()
-
-    def _on_fetch_max_retry_keep_waiting(self):
-        self._max_retry_action = "keep_waiting"
-        self._network_pause_event.set()
-
     def _update_version_list(self, products):
         if hasattr(self, 'version_listbox'):
             self.version_listbox.delete(0, tk.END)
             for product in products:
                 self.version_listbox.insert(tk.END, product)
+
+    def _wait_for_internet_startup(self):
+        def waiter():
+            while True:
+                for _ in range(30):
+                    time.sleep(1)
+                    if self.check_internet():
+                        self.debug_log("NETWORK", "SUCCESS", "Internet restored on startup")
+                        self.root.after(0, self._auto_close_network_dialog)
+                        return
+                if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
+                    rc = getattr(self, "_net_startup_retry", 0) + 1
+                    self._net_startup_retry = rc
+                    if rc >= 10:
+                        self.debug_log("NETWORK", "WARNING", "Startup retries exhausted - continuing offline")
+                        self.root.after(0, self._close_network_dialog)
+                        return
+                    self.root.after(0, lambda: self._update_network_dialog(rc))
+        threading.Thread(target=waiter, daemon=True).start()
 
     def check_for_updates(self):
         def check():
@@ -514,10 +498,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
                                 for remaining in range(30, 0, -1):
                                     self.root.after(0, lambda s=remaining: self._update_dialog_countdown(s))
                                     if self._network_pause_event.wait(timeout=1):
-                                        if self._max_retry_action == "retry_now":
-                                            self._max_retry_action = None
-                                            self.debug_log("NETWORK", "INFO", "User triggered retry now")
-                                            break
                                         self.log("\u23f8 Download paused by user via network dialog", "warning")
                                         self.root.after(0, self._close_network_dialog)
                                         with self.download_lock:
@@ -852,18 +832,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 url = self.downloads[did].get("url")
                 if url and did in self.idm_downloaders:
                     self.idm_downloaders[did].pause(url)
-
-    def _on_download_max_retry_resume(self):
-        self._max_retry_action = "resume"
-        self._network_pause_event.set()
-
-    def _on_download_max_retry_cancel(self):
-        self._max_retry_action = "cancel"
-        self._network_pause_event.set()
-
-    def _on_download_max_retry_keep_waiting(self):
-        self._max_retry_action = "keep_waiting"
-        self._network_pause_event.set()
 
     def on_cancel_download(self):
         active_id = self._get_active_download_id()
