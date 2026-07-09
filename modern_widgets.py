@@ -134,12 +134,12 @@ class ThemeToggle(tk.Canvas):
         self.configure(bg=bg)
 
         if self._is_dark:
-            track_fill = "#3a3a3c"
-            knob_fill = "#636366" if not hover else "#7c7c80"
+            track_fill = "#34c759"
+            knob_fill = "#000000"
             icon = "\U0001f319"
-            icon_fill = "#ffd60a"
+            icon_fill = "#ffffff"
         else:
-            track_fill = "#c7c7cc" if not hover else "#a8a8ad"
+            track_fill = "#34c759"
             knob_fill = "#ffffff"
             icon = "\u2600\ufe0f"
             icon_fill = "#ff9500"

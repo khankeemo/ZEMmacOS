@@ -1,13 +1,13 @@
 # ===================================================================
-# ZEMmacOS - IDM STYLE DOWNLOADER (RESUME FIXED)
+# ZEMmacOS - IDM STYLE DOWNLOADER (RESUME FIXED + THREADPOOL)
 # ===================================================================
 import os
 import threading
 import time
 import json
 import requests
-#from concurrent.futures import ThreadPoolExecutor, as_completed
-#from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
 
 class IDMDownloader:
     """Multi-threaded download manager with pause/resume support"""
@@ -101,7 +101,7 @@ class IDMDownloader:
                 if bytes_written >= (end_byte - start_byte + 1):
                     return True, bytes_written
 
-            with open(part_file, 'ab') as f: # Append mode for resume
+            with open(part_file, 'ab') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if download_id:
                         with self.lock:
@@ -116,13 +116,10 @@ class IDMDownloader:
                         
                         if download_id and total_size:
                             now = time.time()
-                            if now - last_update >= 0.3:
+                            if now - last_update >= 0.5:
                                 with self.lock:
                                     if download_id in self.active_downloads:
-                                        # Note: We don't increment active_downloads[download_id]["downloaded_bytes"] here
-                                        # because we are calculating total progress from scratch in the main loop
-                                        # to avoid double counting or race conditions during resume.
-                                        pass
+                                        self.active_downloads[download_id]["downloaded_bytes"] += len(chunk)
                                 last_update = now
             return True, bytes_written
         except Exception as e:
@@ -229,6 +226,30 @@ class IDMDownloader:
                 })
             
             self._send_progress(download_id, downloaded_so_far, total_size)
+
+            # Start background progress reporter
+            progress_stop = threading.Event()
+            def progress_reporter():
+                last_bytes = downloaded_so_far
+                last_time = time.time()
+                while not progress_stop.is_set():
+                    time.sleep(0.5)
+                    with self.lock:
+                        if download_id not in self.active_downloads:
+                            break
+                        info = self.active_downloads[download_id]
+                        current = info.get("downloaded_bytes", downloaded_so_far)
+                        total = info.get("total_bytes", total_size)
+                        now = time.time()
+                        elapsed = now - last_time
+                        speed = (current - last_bytes) / elapsed if elapsed > 0 else 0
+                        eta = (total - current) / speed if speed > 0 else 0
+                        last_bytes = current
+                        last_time = now
+                    self._send_progress(download_id, current, total, speed, eta)
+            
+            reporter_thread = threading.Thread(target=progress_reporter, daemon=True)
+            reporter_thread.start()
             
             with ThreadPoolExecutor(max_workers=self.num_threads) as executor:
                 futures = {}
@@ -244,17 +265,22 @@ class IDMDownloader:
                     )
                     futures[future] = (seg_id, part_file, start, end)
                 
-                last_update = time.time()
-                last_downloaded = downloaded_so_far
-                
                 while futures:
                     # Check for cancellation/pause
                     if download_id in self.cancelled:
                         executor.shutdown(wait=False, cancel_futures=True)
+                        progress_stop.set()
+                        reporter_thread.join(timeout=1)
                         return {"status": "cancelled", "filepath": None, "error": None}
                     
                     if download_id in self.paused:
-                        # Save current state
+                        # Aggregate current total from part files
+                        current_total = 0
+                        for s_start, s_end, s_id in segments:
+                            p_file = os.path.join(part_dir, f"part_{s_id}")
+                            if os.path.exists(p_file):
+                                current_total += os.path.getsize(p_file)
+                        downloaded_so_far = current_total
                         state_data = {
                             'segments': list(completed_segments),
                             'downloaded_bytes': downloaded_so_far,
@@ -266,44 +292,36 @@ class IDMDownloader:
                         with open(state_file, 'w') as f:
                             json.dump(state_data, f)
                         with self.lock:
+                            self.active_downloads[download_id]["downloaded_bytes"] = downloaded_so_far
                             self.active_downloads[download_id]["status"] = "paused"
                         self._send_log("Download paused - state saved", "warning")
+                        progress_stop.set()
                         return {"status": "paused", "filepath": None, "error": None}
                     
                     # Check for completed futures
                     done_futures = [f for f in futures if f.done()]
                     for future in done_futures:
                         seg_id, part_file, start, end = futures.pop(future)
-                        success, bytes_downloaded = future.result()
+                        success, _ = future.result()
                         
                         if success:
                             completed_segments.add(seg_id)
                             
-                            # Recalculate total downloaded from all parts to ensure accuracy
-                            current_total_downloaded = 0
+                            # Aggregate total from part files
+                            current_total = 0
                             for s_start, s_end, s_id in segments:
                                 p_file = os.path.join(part_dir, f"part_{s_id}")
                                 if os.path.exists(p_file):
-                                    current_total_downloaded += os.path.getsize(p_file)
+                                    current_total += os.path.getsize(p_file)
                             
-                            downloaded_so_far = current_total_downloaded
+                            downloaded_so_far = current_total
                             
                             # Update state
                             with self.lock:
                                 if download_id in self.active_downloads:
                                     self.active_downloads[download_id]["downloaded_bytes"] = downloaded_so_far
                             
-                            now = time.time()
-                            if now - last_update >= 0.3:
-                                elapsed = now - self.active_downloads[download_id]["start_time"]
-                                speed = (downloaded_so_far - last_downloaded) / (now - last_update) if (now - last_update) > 0 else 0
-                                eta = (total_size - downloaded_so_far) / speed if speed > 0 else 0
-                                
-                                self._send_progress(download_id, downloaded_so_far, total_size, speed, eta)
-                                last_update = now
-                                last_downloaded = downloaded_so_far
-                            
-                            # Save state periodically
+                            # Save state on each segment completion
                             state_data = {
                                 'segments': list(completed_segments),
                                 'downloaded_bytes': downloaded_so_far,
@@ -316,10 +334,12 @@ class IDMDownloader:
                                 json.dump(state_data, f)
                         else:
                             self._send_log(f"Segment {seg_id} failed", "error")
-                            # Optionally retry or fail whole download. For now, fail.
                             raise Exception(f"Segment {seg_id} download failed")
                     
-                    time.sleep(0.05) # Small sleep to prevent CPU spinning
+                    time.sleep(0.05)
+
+            progress_stop.set()
+            reporter_thread.join(timeout=1)
 
             # All segments completed
             if download_id not in self.cancelled and download_id not in self.paused:
@@ -418,7 +438,11 @@ class IDMDownloader:
                 part_file = os.path.join(part_dir, f"part_{i}")
                 if os.path.exists(part_file):
                     with open(part_file, 'rb') as infile:
-                        outfile.write(infile.read())
+                        while True:
+                            buf = infile.read(65536)
+                            if not buf:
+                                break
+                            outfile.write(buf)
 
     def _cleanup(self, part_dir, state_file):
         try:

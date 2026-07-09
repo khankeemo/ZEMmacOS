@@ -33,8 +33,6 @@ class ZEMmacOSUI:
         self._clean_logs_callback = None
         self._theme_toggle_callback = None
         self._check_updates_callback = None
-        self._retry_callback = None
-
         self._nav_buttons = {}
         self._toast_widgets = []
 
@@ -231,7 +229,7 @@ class ZEMmacOSUI:
 
     # ---- Network Recovery Dialog ----
 
-    def _show_network_dialog(self, retry_count, on_pause_callback=None, on_retry_now_callback=None):
+    def _show_network_dialog(self, retry_count, on_pause_callback=None):
         if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
             self._update_network_dialog(retry_count)
             return
@@ -277,15 +275,7 @@ class ZEMmacOSUI:
         btn_frame = tk.Frame(frame, bg=c["card_bg"])
         btn_frame.pack(fill=tk.X)
 
-        self._net_retry_now_btn = tk.Button(btn_frame, text="Retry Now",
-                                            font=("SF Pro Text", 10, "bold"),
-                                            fg="white", bg=c["accent"],
-                                            activebackground=c["accent_hover"],
-                                            bd=0, padx=20, pady=8, cursor="hand2",
-                                            command=lambda: self._on_retry_now(on_retry_now_callback, on_pause_callback))
-        self._net_retry_now_btn.pack(side=tk.LEFT, padx=(0, 8))
-
-        self._net_pause_btn = tk.Button(btn_frame, text="Pause Now",
+        self._net_pause_btn = tk.Button(btn_frame, text="Pause Download",
                                         font=("SF Pro Text", 10, "bold"),
                                         fg=c["text"], bg=c["btn_secondary_bg"],
                                         activebackground=c["btn_secondary_hover"],
@@ -342,20 +332,12 @@ class ZEMmacOSUI:
                  font=("SF Pro Display", 16, "bold"),
                  fg=c["error"], bg=c["card_bg"]).pack(anchor=tk.W, pady=(0, 8))
 
-        msg = "Download paused because the internet connection could not be restored."
+        msg = "Download paused because the internet connection could not be restored.\nThe download will resume automatically when the internet is available."
         tk.Label(frame, text=msg, font=("SF Pro Text", 11),
                  fg=c["text"], bg=c["card_bg"], justify=tk.LEFT).pack(anchor=tk.W, pady=(0, 16))
 
         btn_frame = tk.Frame(frame, bg=c["card_bg"])
         btn_frame.pack(fill=tk.X)
-
-        self._net_resume_btn = tk.Button(btn_frame, text="Resume",
-                                         font=("SF Pro Text", 10, "bold"),
-                                         fg="white", bg=c["accent"],
-                                         activebackground=c["accent_hover"],
-                                         bd=0, padx=20, pady=8, cursor="hand2",
-                                         command=lambda: self._close_network_dialog() or (on_resume_cb and on_resume_cb()))
-        self._net_resume_btn.pack(side=tk.LEFT, padx=(0, 8))
 
         self._net_cancel_btn = tk.Button(btn_frame, text="Cancel",
                                          font=("SF Pro Text", 10, "bold"),
@@ -364,14 +346,6 @@ class ZEMmacOSUI:
                                          bd=0, padx=20, pady=8, cursor="hand2",
                                          command=lambda: self._close_network_dialog() or (on_cancel_cb and on_cancel_cb()))
         self._net_cancel_btn.pack(side=tk.LEFT, padx=(0, 8))
-
-        self._net_keep_waiting_btn = tk.Button(btn_frame, text="Keep Waiting",
-                                               font=("SF Pro Text", 10, "bold"),
-                                               fg=c["text"], bg=c["btn_secondary_bg"],
-                                               activebackground=c["btn_secondary_hover"],
-                                               bd=0, padx=20, pady=8, cursor="hand2",
-                                               command=lambda: self._close_network_dialog() or (on_keep_waiting_cb and on_keep_waiting_cb()))
-        self._net_keep_waiting_btn.pack(side=tk.LEFT)
 
     def _close_network_dialog(self):
         if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
@@ -385,10 +359,6 @@ class ZEMmacOSUI:
         self._close_network_dialog()
         if callback:
             callback()
-
-    def _on_retry_now(self, retry_callback, pause_callback):
-        if retry_callback:
-            retry_callback()
 
     # ---- Dashboard ----
 
@@ -639,7 +609,6 @@ class ZEMmacOSUI:
             ("Pause", self._on_pause_download, colors["warning"], "dl_pause_btn"),
             ("Resume", self._on_resume_download, colors["accent"], "dl_resume_btn"),
             ("Cancel", self._on_cancel_download, colors["error"], "dl_cancel_btn"),
-            ("Retry", self._on_retry_download, colors["info"], "dl_retry_btn"),
         ]:
             btn = tk.Button(btn_row, text=btn_data[0], command=btn_data[1],
                             font=("SF Pro Text", 10), fg="white", bg=btn_data[2],
@@ -709,8 +678,7 @@ class ZEMmacOSUI:
 
     def set_callbacks(self, fetch_cb=None, download_cb=None, clear_cb=None, settings_cb=None,
                       pause_cb=None, resume_cb=None, cancel_cb=None, copy_cb=None,
-                      clean_cb=None, clean_logs_cb=None, theme_toggle_cb=None, check_updates_cb=None,
-                      retry_cb=None):
+                      clean_cb=None, clean_logs_cb=None, theme_toggle_cb=None, check_updates_cb=None):
         self._fetch_callback = fetch_cb
         self._download_callback = download_cb
         self._clear_callback = clear_cb
@@ -723,7 +691,6 @@ class ZEMmacOSUI:
         self._clean_logs_callback = clean_logs_cb
         self._theme_toggle_callback = theme_toggle_cb
         self._check_updates_callback = check_updates_cb
-        self._retry_callback = retry_cb
 
     def _check_for_updates(self):
         if self._check_updates_callback:
@@ -785,9 +752,6 @@ class ZEMmacOSUI:
     def _on_cancel_download(self):
         if self._cancel_callback:
             self._cancel_callback()
-    def _on_retry_download(self):
-        if self._retry_callback:
-            self._retry_callback()
     def _on_clean_temp(self):
         if self._clean_callback:
             self._clean_callback()
@@ -842,31 +806,26 @@ class ZEMmacOSUI:
                 self.dl_pause_btn.config(state=tk.NORMAL)
                 self.dl_resume_btn.config(state=tk.DISABLED)
                 self.dl_cancel_btn.config(state=tk.NORMAL)
-                self.dl_retry_btn.config(state=tk.DISABLED)
             elif status == "paused":
                 self.dl_status.set_status("paused", "Paused")
                 self.dl_pause_btn.config(state=tk.DISABLED)
                 self.dl_resume_btn.config(state=tk.NORMAL)
                 self.dl_cancel_btn.config(state=tk.NORMAL)
-                self.dl_retry_btn.config(state=tk.NORMAL)
             elif status == "completed":
                 self.dl_status.set_status("completed", "Completed")
                 self.dl_pause_btn.config(state=tk.DISABLED)
                 self.dl_resume_btn.config(state=tk.DISABLED)
                 self.dl_cancel_btn.config(state=tk.DISABLED)
-                self.dl_retry_btn.config(state=tk.DISABLED)
             elif status in ("network_error", "retrying"):
                 self.dl_status.set_status("failed", status.replace("_", " ").title())
                 self.dl_pause_btn.config(state=tk.DISABLED)
                 self.dl_resume_btn.config(state=tk.DISABLED)
                 self.dl_cancel_btn.config(state=tk.NORMAL)
-                self.dl_retry_btn.config(state=tk.NORMAL)
             else:
                 self.dl_status.set_status("idle", status.capitalize())
                 self.dl_pause_btn.config(state=tk.DISABLED)
                 self.dl_resume_btn.config(state=tk.DISABLED)
                 self.dl_cancel_btn.config(state=tk.DISABLED)
-                self.dl_retry_btn.config(state=tk.DISABLED)
         self.root.after(0, update)
 
     def update_stats(self, versions=None, downloads=None, active=None, storage=None):
@@ -895,5 +854,4 @@ class ZEMmacOSUI:
             self.dl_pause_btn.config(state=tk.DISABLED)
             self.dl_resume_btn.config(state=tk.DISABLED)
             self.dl_cancel_btn.config(state=tk.DISABLED)
-            self.dl_retry_btn.config(state=tk.DISABLED)
         self.root.after(0, reset)
