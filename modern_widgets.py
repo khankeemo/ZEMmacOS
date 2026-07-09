@@ -1,6 +1,6 @@
+import math
 import tkinter as tk
 from tkinter import ttk
-import math
 
 
 class ModernCard(tk.Frame):
@@ -102,91 +102,97 @@ class StatusBadge(tk.Frame):
 
 
 class ThemeToggle(tk.Canvas):
-    """Premium sun/moon theme toggle switch with matching background"""
+    """Rounded-square theme toggle — macOS toolbar style"""
+
+    SIZE = 36
 
     def __init__(self, parent, command=None, colors=None, **kwargs):
         c = colors or {}
         bg = c.get("header_bg", "#f5f5f7")
-        super().__init__(parent, width=56, height=28,
-                         bg=bg, highlightthickness=0, bd=0,
-                         cursor="hand2", **kwargs)
+        super().__init__(parent, width=self.SIZE, height=self.SIZE,
+                         bg=bg, highlightthickness=0, bd=0, cursor="hand2", **kwargs)
         self._role = "header"
         self._command = command
         self._colors = c
         self._is_dark = False
-        self._animating = False
+        self._hover = False
         self._anim_step = 0
 
         self.bind("<Button-1>", self._on_click)
-        self.after(20, self._draw)
+        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Leave>", lambda e: self._set_hover(False))
+        self.after(10, self._draw)
+
+    def _set_hover(self, hover):
+        self._hover = hover
+        self._draw()
+
+    def _draw_sun(self, cx, cy):
+        r = 9
+        self.create_oval(cx - r, cy - r, cx + r, cy + r,
+                         fill="#ffca28", outline="", tags="icon")
+        for angle in range(0, 360, 45):
+            a = math.radians(angle)
+            x1 = cx + r * 0.5 * math.cos(a)
+            y1 = cy + r * 0.5 * math.sin(a)
+            x2 = cx + (r + 4) * math.cos(a)
+            y2 = cy + (r + 4) * math.sin(a)
+            self.create_line(x1, y1, x2, y2,
+                             fill="#ffca28", width=2, capstyle="round", tags="icon")
+
+    def _draw_moon(self, cx, cy):
+        r = 8
+        self.create_oval(cx - r, cy - r, cx + r, cy + r,
+                         fill="#ffca28", outline="", tags="icon")
+        bg = "#1e2a3a"
+        if self._hover:
+            bg = "#2a3a4a"
+        self.create_oval(cx + 3, cy - 1.5, cx + 9, cy + 6.5,
+                         fill=bg, outline="", tags="icon")
 
     def _draw(self):
         self.delete("all")
-        cw = max(self.winfo_width(), 56)
-        ch = max(self.winfo_height(), 28)
-        track_r = ch / 2 - 1
-        knob_r = ch / 2 - 3
-        cy = ch / 2
+        s = self.SIZE
+        cx = cy = s // 2
+        inset = 2
 
-        bg = self._colors.get("header_bg", "#f5f5f7")
-        self.configure(bg=bg)
+        bg = "#1a1a2e" if self._is_dark else "#f0f0f0"
+        border = "#3a3a5c" if self._is_dark else "#d0d0d0"
+        if self._hover:
+            border = "#5a5a8c" if self._is_dark else "#b0b0b0"
+
+        self.create_roundrect(inset, inset, s - inset, s - inset,
+                              r=8, fill=bg, outline=border, width=1, tags="bg")
 
         if self._is_dark:
-            track_fill = "#34c759"
-            knob_fill = "#000000"
-            icon = "\U0001f319"
-            icon_fill = "#e0e0e0"
+            self._draw_moon(cx, cy)
         else:
-            track_fill = "#34c759"
-            knob_fill = "#ffffff"
-            icon = "\u2600\ufe0f"
-            icon_fill = "#ff9500"
+            self._draw_sun(cx, cy)
 
-        outline = self._colors.get("border", "#e0e0e0")
-        self.create_rounded_rect(1, 1, cw - 1, ch - 1, track_r,
-                                 fill=track_fill, outline=outline, width=1)
-
-        knob_x = knob_r + 3 if not self._is_dark else cw - knob_r - 3
-        self.create_oval(knob_x - knob_r, cy - knob_r, knob_x + knob_r, cy + knob_r,
-                         fill=knob_fill, outline=outline, width=1, tags="knob")
-
-        fs = int(knob_r * 1.6)
-        self.create_text(knob_x, cy, text=icon, font=("Segoe UI", fs),
-                         fill=icon_fill, tags="icon")
-
-    def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
-        steps = 10
-        points = []
-        for i in range(steps + 1):
-            a = math.pi + (math.pi * i) / (2 * steps)
-            points.extend([x1 + r + r * math.cos(a), y1 + r + r * math.sin(a)])
-        for i in range(steps + 1):
-            a = -math.pi / 2 + (math.pi * i) / (2 * steps)
-            points.extend([x2 - r + r * math.cos(a), y1 + r + r * math.sin(a)])
-        for i in range(steps + 1):
-            a = 0 + (math.pi * i) / (2 * steps)
-            points.extend([x2 - r + r * math.cos(a), y2 - r + r * math.sin(a)])
-        for i in range(steps + 1):
-            a = math.pi / 2 + (math.pi * i) / (2 * steps)
-            points.extend([x1 + r + r * math.cos(a), y2 - r + r * math.sin(a)])
-        return self.create_polygon(points, smooth=True, **kwargs)
+    def create_roundrect(self, x1, y1, x2, y2, r=8, **kwargs):
+        self.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r,
+                        start=90, extent=90, **kwargs)
+        self.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r,
+                        start=0, extent=90, **kwargs)
+        self.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2,
+                        start=180, extent=90, **kwargs)
+        self.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2,
+                        start=270, extent=90, **kwargs)
+        self.create_rectangle(x1 + r, y1, x2 - r, y2, **kwargs)
+        self.create_rectangle(x1, y1 + r, x2, y2 - r, **kwargs)
 
     def _on_click(self, e):
         self._is_dark = not self._is_dark
-        if not self._animating:
-            self._animating = True
-            self._anim_step = 0
-            self._animate_knob()
+        self._anim_step = 0
+        self._animate()
         if self._command:
             self._command()
 
-    def _animate_knob(self):
+    def _animate(self):
         self._anim_step += 1
         self._draw()
         if self._anim_step < 6:
-            self.after(30, self._animate_knob)
-        else:
-            self._animating = False
+            self.after(25, self._animate)
 
     def set_theme(self, is_dark):
         self._is_dark = is_dark

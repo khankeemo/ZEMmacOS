@@ -73,17 +73,22 @@ class ZEMmacOSUI:
                   foreground=[("selected", "#ffffff")])
 
     def load_logo(self):
+        if hasattr(self, "_logo_loaded") and self._logo_loaded:
+            return
+        self._logo_loaded = True
         self.logo_image = None
         logo_path = os.path.join(BASE_DIR, "public", "images", "logo.png")
         try:
             if os.path.exists(logo_path):
-                img = Image.open(logo_path).resize((56, 56), Image.Resampling.LANCZOS)
+                img = Image.open(logo_path).convert("RGBA").resize((56, 56), Image.Resampling.LANCZOS)
                 mask = Image.new("L", (56, 56), 0)
-                ImageDraw.Draw(mask).ellipse((0, 0, 56, 56), fill=255)
-                img.putalpha(mask)
-                self.logo_image = ImageTk.PhotoImage(img)
+                draw = ImageDraw.Draw(mask)
+                draw.ellipse((1, 1, 54, 54), fill=255)
+                result = Image.new("RGBA", (56, 56), (0, 0, 0, 0))
+                result.paste(img, (0, 0), mask)
+                self.logo_image = ImageTk.PhotoImage(result)
                 if hasattr(self, "logo_label"):
-                    self.logo_label.config(image=self.logo_image)
+                    self.logo_label.config(image=self.logo_image, bg=self.colors["sidebar_bg"])
             elif hasattr(self, "logo_label"):
                 self.logo_label.config(text="Z", font=("SF Pro Display", 24, "bold"),
                                        fg=self.colors["accent"], bg=self.colors["sidebar_bg"])
@@ -235,8 +240,8 @@ class ZEMmacOSUI:
             return
         c = self.colors
         d = tk.Toplevel(self.root)
-        d.title("Internet Connection Lost")
-        d.configure(bg=c["card_bg"])
+        d.title("")
+        d.configure(bg=c["card_bg"], highlightbackground=c["border"], highlightthickness=1)
         d.resizable(False, False)
         d.attributes("-topmost", True)
         d.protocol("WM_DELETE_WINDOW", lambda: None)
@@ -245,55 +250,49 @@ class ZEMmacOSUI:
         self._net_dialog = d
         self._net_countdown_value = 30
 
-        frame = tk.Frame(d, bg=c["card_bg"], padx=32, pady=24)
-        frame.pack(fill=tk.BOTH, expand=True)
+        frame = tk.Frame(d, bg=c["card_bg"], padx=24, pady=18)
+        frame.pack()
 
-        tk.Label(frame, text="\u26a0  Internet Connection Lost",
-                 font=("SF Pro Display", 16, "bold"),
-                 fg=c["error"], bg=c["card_bg"]).pack(anchor=tk.W, pady=(0, 8))
+        icon = tk.Label(frame, text="\u26a0", font=("SF Pro Display", 22),
+                        fg=c["warning"], bg=c["card_bg"])
+        icon.pack(pady=(0, 6))
 
-        msg = ("Connection to the download server has been interrupted.\n"
-               "The application will retry automatically every 30 seconds.")
-        tk.Label(frame, text=msg, font=("SF Pro Text", 11),
-                 fg=c["text"], bg=c["card_bg"], justify=tk.LEFT).pack(anchor=tk.W, pady=(0, 12))
+        tk.Label(frame, text="Connection Lost",
+                 font=("SF Pro Text", 13, "bold"),
+                 fg=c["text"], bg=c["card_bg"]).pack(pady=(0, 4))
+
+        tk.Label(frame, text="Auto-retry every 30s",
+                 font=("SF Pro Text", 9),
+                 fg=c["muted"], bg=c["card_bg"]).pack(pady=(0, 8))
 
         self._net_retry_label = tk.Label(frame, text=f"Retry {retry_count} / 10",
-                                          font=("SF Pro Text", 12, "bold"),
+                                          font=("SF Pro Text", 11, "bold"),
                                           fg=c["accent"], bg=c["card_bg"])
-        self._net_retry_label.pack(anchor=tk.W, pady=(0, 2))
+        self._net_retry_label.pack()
 
         self._net_countdown_label = tk.Label(frame, text="Next retry in: 30s",
-                                              font=("SF Pro Text", 10),
+                                              font=("SF Pro Text", 9),
                                               fg=c["muted"], bg=c["card_bg"])
-        self._net_countdown_label.pack(anchor=tk.W, pady=(0, 4))
-
-        hint = ("Reconnect to the internet.\nThe download will automatically continue if the connection is restored."
-        if on_pause_callback else
-        "Reconnect to the internet.\nThe application will automatically continue when the connection is restored.")
-        self._net_hint_label = tk.Label(frame, text=hint,
-                                         font=("SF Pro Text", 10),
-                                         fg=c["muted"], bg=c["card_bg"], justify=tk.LEFT)
-        self._net_hint_label.pack(anchor=tk.W, pady=(0, 16))
+        self._net_countdown_label.pack(pady=(2, 10))
 
         btn_frame = tk.Frame(frame, bg=c["card_bg"])
-        btn_frame.pack(fill=tk.X)
+        btn_frame.pack()
 
         if on_pause_callback:
-            self._net_pause_btn = tk.Button(btn_frame, text="Pause Download",
-                                            font=("SF Pro Text", 10, "bold"),
-                                            fg=c["text"], bg=c["btn_secondary_bg"],
-                                            activebackground=c["btn_secondary_hover"],
-                                            bd=0, padx=20, pady=8, cursor="hand2",
+            self._net_pause_btn = tk.Button(btn_frame, text="Pause",
+                                            font=("SF Pro Text", 9, "bold"),
+                                            fg="white", bg=c["warning"],
+                                            activebackground=c["warning_text"],
+                                            bd=0, padx=14, pady=5, cursor="hand2",
                                             command=lambda: self._on_net_pause(on_pause_callback))
-            self._net_pause_btn.pack(side=tk.LEFT, padx=(0, 8))
+            self._net_pause_btn.pack(side=tk.LEFT, padx=(0, 6))
 
-        self._net_continue_btn = tk.Button(btn_frame, text="Close",
-                                           font=("SF Pro Text", 10, "bold"),
-                                           fg=c["text"], bg=c["btn_secondary_bg"],
-                                           activebackground=c["btn_secondary_hover"],
-                                           bd=0, padx=20, pady=8, cursor="hand2",
-                                           command=lambda: self._close_network_dialog())
-        self._net_continue_btn.pack(side=tk.LEFT)
+        tk.Button(btn_frame, text="Close",
+                  font=("SF Pro Text", 9, "bold"),
+                  fg=c["text"], bg=c["btn_secondary_bg"],
+                  activebackground=c["btn_secondary_hover"],
+                  bd=0, padx=14, pady=5, cursor="hand2",
+                  command=self._close_network_dialog).pack(side=tk.LEFT)
 
         d.update_idletasks()
         pw, ph = self.root.winfo_width(), self.root.winfo_height()
@@ -313,6 +312,7 @@ class ZEMmacOSUI:
             self._net_countdown_label.config(text=f"Next retry in: {seconds}s")
 
     def _auto_close_network_dialog(self):
+        self._net_dialog_open = False
         if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
             try:
                 self._net_dialog.destroy()
@@ -322,6 +322,7 @@ class ZEMmacOSUI:
         self.show_toast("\u2705 Internet restored. Resuming download...", "success", 3000)
 
     def _close_network_dialog(self):
+        self._net_dialog_open = False
         if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
             try:
                 self._net_dialog.destroy()
@@ -363,7 +364,6 @@ class ZEMmacOSUI:
             colors=colors,
         )
         self._theme_toggle.pack(side=tk.RIGHT, padx=4)
-        self._theme_toggle.set_theme(self.theme_mode == "dark")
 
         body_frame = tk.Frame(self.content_area, bg=colors["content_bg"])
         body_frame.pack(fill=tk.BOTH, expand=True, padx=28, pady=24)
@@ -481,6 +481,7 @@ class ZEMmacOSUI:
         self.version_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.version_listbox.yview)
         self.version_listbox.insert(tk.END, "Click 'FETCH CATALOGUE' to load macOS versions")
+        self.version_listbox.bind("<<ListboxSelect>>", self._on_listbox_select)
 
         # -- Right panel: Download Engine --
         right_panel = tk.Frame(body, bg=colors["content_bg"], width=420)
@@ -513,6 +514,7 @@ class ZEMmacOSUI:
         )
         self.index_entry.pack(side=tk.LEFT, ipady=6, fill=tk.Y, expand=True)
         self.index_entry.bind("<Return>", lambda e: self._on_download_clicked())
+        self.index_entry.bind("<KeyRelease>", self._on_index_entry_keyrelease)
         self.root.after_idle(lambda: self.index_entry.focus_set())
 
         sep_v = tk.Frame(inner, bg=colors["accent"], width=1)
@@ -680,6 +682,25 @@ class ZEMmacOSUI:
             else:
                 self.fetch_btn.config(text="\u21bb FETCH CATALOGUE", state=tk.NORMAL,
                                       bg=self.colors.get("accent", "#0071e3"))
+
+    def _on_listbox_select(self, event):
+        selection = self.version_listbox.curselection()
+        if selection:
+            idx = selection[0] + 1
+            self.index_entry.delete(0, tk.END)
+            self.index_entry.insert(0, str(idx))
+
+    def _on_index_entry_keyrelease(self, event):
+        if not hasattr(self, 'version_listbox'):
+            return
+        text = self.index_entry.get().strip()
+        if text.isdigit():
+            idx = int(text) - 1
+            if 0 <= idx < self.version_listbox.size():
+                self.version_listbox.selection_clear(0, tk.END)
+                self.version_listbox.selection_set(idx)
+                self.version_listbox.activate(idx)
+                self.version_listbox.see(idx)
 
     def _on_fetch_clicked(self):
         self.index_error_label.config(text="")

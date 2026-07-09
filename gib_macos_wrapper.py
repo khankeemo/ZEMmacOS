@@ -51,14 +51,8 @@ class GibMacOSWrapper:
             self._log(f"Using catalog: {catalog}", "info")
             self._log(f"Max macOS version: {self.gib.num_to_macos(maxos, for_url=False)}", "info")
             
-            # Fetch catalog data
+            # Fetch catalog data and set products
             self._log("Fetching catalog from Apple...", "info")
-            if not self.gib.get_catalog_data():
-                self._log("Failed to fetch catalog data!", "error")
-                return False
-            
-            # Set products
-            self._log("Parsing product data...", "info")
             self.gib.set_prods()
             
             # Store products

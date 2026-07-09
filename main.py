@@ -45,6 +45,19 @@ def main():
     root.mainloop()
 
 
+NETWORK_ERROR_KEYWORDS = [
+    "connectionerror", "timeout", "connection", "reset", "refused",
+    "resolve", "network", "eof", "read timed out",
+    "chunkedencodingerror", "remotedisconnected",
+    "connectionabortederror", "connectionreseterror",
+]
+
+
+def _is_network_error_str(err_str):
+    low = err_str.lower()
+    return any(k in low for k in NETWORK_ERROR_KEYWORDS)
+
+
 class ZEMmacOSApp(ZEMmacOSUI):
     def __init__(self, root):
         super().__init__(root)
@@ -83,8 +96,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
             check_updates_cb=self.check_for_updates,
         )
 
-        self._network_pause_event = threading.Event()
-        self._current_dialog_download_id = None
+        self._network_monitor_running = False
+        self._network_monitor_stop = threading.Event()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.settings_service.apply_saved_theme()
@@ -100,7 +113,52 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.root.after(500, self._show_startup_toast)
         self.root.after(1000, self._auto_fetch)
         self.root.after(2000, self._check_internet_on_startup)
+        self._start_network_monitor()
 
+    # -----------------------------------------------------------------
+    # NETWORK MONITOR — runs continuously in background
+    # -----------------------------------------------------------------
+    def _start_network_monitor(self):
+        if self._network_monitor_running:
+            return
+        self._network_monitor_running = True
+        self._network_monitor_stop.clear()
+        self._net_dialog_open = False
+
+        def monitor():
+            while not self._network_monitor_stop.is_set():
+                online = self.check_internet()
+                has_active_download = False
+                with self.download_lock:
+                    for info in self.downloads.values():
+                        if info.get("status") in ("downloading", "retrying", "network_error"):
+                            has_active_download = True
+                            break
+
+                if not online and has_active_download and not self._net_dialog_open:
+                    self._net_dialog_open = True
+                    self.debug_log("NETWORK", "WARNING", "Internet lost - opening dialog")
+                    self.root.after(0, lambda: self._show_network_dialog(1, self._on_net_pause_download))
+                elif not online and not has_active_download and self._net_dialog_open:
+                    self._net_dialog_open = False
+                    self.root.after(0, self._close_network_dialog)
+                elif online and self._net_dialog_open:
+                    self._net_dialog_open = False
+                    self.root.after(0, self._auto_close_network_dialog)
+
+                for _ in range(5):
+                    if self._network_monitor_stop.is_set():
+                        return
+                    time.sleep(1)
+
+        threading.Thread(target=monitor, daemon=True).start()
+
+    def _stop_network_monitor(self):
+        self._network_monitor_stop.set()
+
+    # -----------------------------------------------------------------
+    # INTERNET CHECK
+    # -----------------------------------------------------------------
     def check_internet(self):
         try:
             socket.create_connection(("8.8.8.8", 53), timeout=3)
@@ -114,7 +172,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def _check_internet_on_startup(self):
         if not self.check_internet():
             self.debug_log("NETWORK", "WARNING", "No internet on startup - showing dialog")
-            self.root.after(0, lambda: self._show_network_dialog(0, None))
+            self.root.after(0, lambda: self._show_network_dialog(0, self._on_net_pause_download))
             self._wait_for_internet_startup()
 
     def _console_output(self, message, level):
@@ -141,6 +199,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.log("Auto-fetching catalogue...", "info")
         self.on_fetch_clicked()
 
+    # -----------------------------------------------------------------
+    # FETCH CATALOGUE
+    # -----------------------------------------------------------------
     def on_fetch_clicked(self):
         with self.fetch_lock:
             if self.fetch_in_progress:
@@ -159,14 +220,12 @@ class ZEMmacOSApp(ZEMmacOSUI):
         def fetch():
             retry_count = 0
             max_retries = 10
-            self._network_pause_event.clear()
             self.debug_log("CATALOGUE", "INFO", "Catalogue fetch thread started")
 
             while True:
                 try:
                     catalog = self.settings.get("catalog", "publicrelease")
                     self.debug_log("CATALOGUE", "INFO", f"Fetching catalogue: {catalog}")
-                    self.debug_log("PERFORMANCE", "INFO", "Catalogue fetch - DNS lookup starting")
                     t0 = time.time()
 
                     self.gib_wrapper = GibMacOSWrapper(callback=self.log)
@@ -190,7 +249,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
                     self.log(" ", "output")
                     self.log("=" * 60, "info")
-                    self.log(f"\u2713 CATALOGUE FETCH COMPLETED - Found {len(products)} versions", "success")
+                    self.log("CATALOGUE FETCH COMPLETED - Found {} versions".format(len(products)), "success")
                     self.log("=" * 60, "info")
                     self.log(" ", "output")
                     self.log("INSTRUCTIONS:", "info")
@@ -211,37 +270,28 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     retry_count += 1
                     self.debug_log("NETWORK", "WARNING", "Internet disconnected",
                                    f"Fetch attempt {retry_count}/{max_retries}: {str(e)[:80]}")
-                    self.debug_log("NETWORK", "INFO", f"Retry scheduled (30s) - retry {retry_count}/{max_retries}")
 
                     if retry_count > max_retries:
                         self.debug_log("NETWORK", "ERROR", "All 10 retries exhausted for fetch")
-                        self.log("\u26a0 Catalogue fetch failed after 10 retries.", "error")
+                        self.log("Catalogue fetch failed after 10 retries.", "error")
                         self.root.after(0, self._close_network_dialog)
                         break
 
-                    self.debug_log("NETWORK", "INFO", f"Retry {retry_count}/{max_retries} - waiting 30s")
-                    self.log(f"\U0001f504 Fetch retry {retry_count}/{max_retries} in 30s...", "warning")
+                    self.log(f"Fetch retry {retry_count}/{max_retries} in 30s...", "warning")
                     self.root.after(0, lambda rc=retry_count: self._show_network_dialog(
                         rc, self._on_net_pause_fetch
                     ))
 
-                    # Poll for internet or user action every 1s for up to 30s
-                    self._network_pause_event.clear()
-                    user_paused = False
                     for remaining in range(30, 0, -1):
+                        with self.fetch_lock:
+                            if not self.fetch_in_progress:
+                                return
                         self.root.after(0, lambda s=remaining: self._update_dialog_countdown(s))
-                        if self._network_pause_event.wait(timeout=1):
-                            self.log("\u23f8 Fetch paused by user", "warning")
-                            self.root.after(0, self._close_network_dialog)
-                            user_paused = True
-                            break
+                        time.sleep(1)
                         if self.check_internet():
                             self.debug_log("NETWORK", "SUCCESS", "Internet restored")
-                            self.debug_log("NETWORK", "INFO", "Auto resume started")
                             self.root.after(0, self._auto_close_network_dialog)
                             break
-                    if user_paused:
-                        break
 
             self.root.after(0, lambda: self.set_fetch_state(False))
             with self.fetch_lock:
@@ -250,33 +300,39 @@ class ZEMmacOSApp(ZEMmacOSUI):
         threading.Thread(target=fetch, daemon=True).start()
 
     def _on_net_pause_fetch(self):
-        self._network_pause_event.set()
+        self.log("Pausing catalogue fetch...", "warning")
+        with self.fetch_lock:
+            self.fetch_in_progress = False
+        self.root.after(0, lambda: self.set_fetch_state(False))
+        self.root.after(0, self._close_network_dialog)
 
     def _update_version_list(self, products):
         if hasattr(self, 'version_listbox'):
             self.version_listbox.delete(0, tk.END)
             for product in products:
                 self.version_listbox.insert(tk.END, product)
+        if hasattr(self, 'index_entry'):
+            self.index_entry.delete(0, tk.END)
+            self.root.after(50, self.index_entry.focus_set)
 
     def _wait_for_internet_startup(self):
         def waiter():
-            while True:
+            for _ in range(10):
+                self.debug_log("NETWORK", "INFO", "Waiting for internet...")
                 for _ in range(30):
                     time.sleep(1)
                     if self.check_internet():
                         self.debug_log("NETWORK", "SUCCESS", "Internet restored on startup")
                         self.root.after(0, self._auto_close_network_dialog)
                         return
-                if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
-                    rc = getattr(self, "_net_startup_retry", 0) + 1
-                    self._net_startup_retry = rc
-                    if rc >= 10:
-                        self.debug_log("NETWORK", "WARNING", "Startup retries exhausted - continuing offline")
-                        self.root.after(0, self._close_network_dialog)
-                        return
-                    self.root.after(0, lambda: self._update_network_dialog(rc))
+            self.debug_log("NETWORK", "WARNING", "Startup retries exhausted - continuing offline")
+            self.root.after(0, self._close_network_dialog)
+
         threading.Thread(target=waiter, daemon=True).start()
 
+    # -----------------------------------------------------------------
+    # UPDATE CHECK
+    # -----------------------------------------------------------------
     def check_for_updates(self):
         def check():
             self.log("Checking for updates...", "info")
@@ -296,13 +352,13 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
         threading.Thread(target=check, daemon=True).start()
 
+    # -----------------------------------------------------------------
+    # DOWNLOAD START
+    # -----------------------------------------------------------------
     def on_download_clicked(self):
         index_str = self.index_entry.get().strip() if hasattr(self, 'index_entry') else ""
 
-        if not index_str:
-            return
-
-        if not index_str.isdigit():
+        if not index_str or not index_str.isdigit():
             return
 
         dl_dir = self.settings.get("download_directory")
@@ -317,7 +373,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 messagebox.showerror("Invalid Index", f"Index must be between 1 and {len(self.gib_wrapper.products)}")
                 return
 
-        # Auto-select and highlight in version listbox
         if hasattr(self, 'version_listbox') and self.version_listbox.size() > 0:
             try:
                 idx_int = int(index_str) - 1
@@ -332,6 +387,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._download_macos_version(index_str)
         if hasattr(self, 'index_entry'):
             self.index_entry.delete(0, tk.END)
+            self.root.after(50, self.index_entry.focus_set)
 
     def _download_macos_version(self, index_str):
         if not self.gib_wrapper or not self.gib_wrapper.initialized:
@@ -373,12 +429,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.debug_log("DOWNLOAD", "INFO", "Download requested",
                        f"Index: {index} | Product: {product.get('title')} {product.get('version')}")
         self.debug_log("DOWNLOAD", "INFO", f"Total packages: {len(packages)} | Threads: {num_threads}")
-        self.debug_log("PERFORMANCE", "INFO", "Download start sequence initiated")
         self.root.after(0, lambda: self.show_toast(f"Downloading: {product.get('title')} {product.get('version')}", "info", 3000))
         self.log("=" * 60, "info")
-        self.log(f"\U0001f4e5 DOWNLOADING: {product.get('title')} {product.get('version')}", "info")
-        self.log(f"\U0001f4e6 Total packages: {len(packages)}", "info")
-        self.log(f"\U0001f4c1 Save to: {download_dir}", "output")
+        self.log("DOWNLOADING: {} {}".format(product.get('title'), product.get('version')), "info")
+        self.log("Total packages: {}".format(len(packages)), "info")
+        self.log("Save to: {}".format(download_dir), "output")
         self.log("=" * 60, "info")
 
         idm_downloader = IDMDownloader(
@@ -403,21 +458,50 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 "connection_lost": False,
             }
 
-        def start_download():
-            try:
-                os.makedirs(download_dir, exist_ok=True)
-                downloaded_count = 0
-                failed_count = 0
+        self._run_package_loop(download_id)
 
-                for i, pkg in enumerate(packages, 1):
+    # -----------------------------------------------------------------
+    # PACKAGE LOOP — single shared loop for both start and resume
+    # -----------------------------------------------------------------
+    _package_loop_running = set()
+
+    def _run_package_loop(self, download_id):
+        with self.download_lock:
+            if download_id in self._package_loop_running:
+                return
+            self._package_loop_running.add(download_id)
+
+        def loop():
+            try:
+                with self.download_lock:
+                    info = self.downloads.get(download_id, {})
+                    if not info:
+                        return
+                    packages = info.get("packages", [])
+                    download_dir = info.get("download_dir")
+                    idm_downloader = info.get("idm_downloader")
+
+                if not packages or not download_dir or not idm_downloader:
+                    return
+
+                os.makedirs(download_dir, exist_ok=True)
+
+                all_completed = True
+                any_failed = False
+
+                i = info.get("current_package", 0) + 1
+                total_pkgs = len(packages)
+
+                while i <= total_pkgs:
                     with self.download_lock:
                         if self.downloads.get(download_id, {}).get("status") == "cancelled":
                             break
 
+                    pkg = packages[i - 1]
                     url = pkg.get("URL")
                     if not url:
-                        self.log(f"\u26a0 Package {i}/{len(packages)} has no URL - skipping", "warning")
-                        failed_count += 1
+                        self.log(f"Package {i}/{total_pkgs} has no URL - skipping", "warning")
+                        i += 1
                         continue
 
                     filename = os.path.basename(url)
@@ -426,160 +510,142 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
                     with self.download_lock:
                         if download_id in self.downloads:
-                            self.downloads[download_id]["current_package"] = i
+                            self.downloads[download_id]["current_package"] = i - 1
                             self.downloads[download_id]["url"] = url
 
-                    self.debug_log("DOWNLOAD", "INFO", f"Package {i}/{len(packages)}: {filename}")
-                    self.debug_log("NETWORK", "INFO", f"URL: {url[:120]}...")
-                    pkg_t0 = time.time()
+                    self.debug_log("DOWNLOAD", "INFO", f"Package {i}/{total_pkgs}: {filename}")
 
+                    retry_count_for_pkg = 0
+                    max_retries = 9
                     headers = {"User-Agent": "Mozilla/5.0 ZEMmacOS Downloader"}
-                    result = idm_downloader.download(url, filename, download_dir, headers=headers)
-                    pkg_t1 = time.time()
 
-                    self.debug_log("PERFORMANCE", "INFO", f"Package {i} completed",
-                                   f"Duration: {pkg_t1 - pkg_t0:.1f}s | Status: {result['status']}")
-
-                    if result["status"] == "completed":
-                        downloaded_count += 1
-                        self.log(f"\u2705 Completed package {i}/{len(packages)}", "success")
-                        self.root.after(0, self._close_network_dialog)
-                        self.debug_log("DOWNLOAD", "SUCCESS", f"Package {i}/{len(packages)} completed")
-                        self.debug_log("DOWNLOAD", "SUCCESS", "Download continued successfully")
+                    while retry_count_for_pkg <= max_retries:
                         with self.download_lock:
-                            if download_id in self.downloads:
-                                self.downloads[download_id]["retry_count"] = 0
-                    elif result["status"] == "paused":
-                        self.log(f"\u23f8 Package {i}/{len(packages)} paused", "warning")
-                        with self.download_lock:
-                            if download_id in self.downloads:
-                                self.downloads[download_id]["status"] = "paused"
-                        self.root.after(0, self.update_button_states)
-                        return
-                    elif result["status"] == "cancelled":
-                        self.log(f"\u23f9 Package {i}/{len(packages)} cancelled", "warning")
-                        break
-                    elif result["status"] == "failed":
-                        err = result.get("error", "")
-                        is_network_error = any(word in err.lower() for word in
-                            ["connectionerror", "timeout", "connection", "reset", "refused",
-                             "resolve", "network", "eof", "read timed out"])
+                            if self.downloads.get(download_id, {}).get("status") == "cancelled":
+                                break
 
-                        if is_network_error:
+                        result = idm_downloader.download(url, filename, download_dir, headers=headers)
+
+                        if result["status"] == "completed":
+                            self.log(f"Completed package {i}/{total_pkgs}", "success")
+                            self.root.after(0, self._close_network_dialog)
                             with self.download_lock:
                                 if download_id in self.downloads:
-                                    dl_retry_count = self.downloads[download_id].get("retry_count", 0) + 1
-                                    self.downloads[download_id]["retry_count"] = dl_retry_count
+                                    self.downloads[download_id]["retry_count"] = 0
+                            break
+
+                        elif result["status"] == "paused":
+                            self.log(f"Package {i}/{total_pkgs} paused", "warning")
+                            with self.download_lock:
+                                if download_id in self.downloads:
+                                    self.downloads[download_id]["status"] = "paused"
+                            self.root.after(0, self.update_button_states)
+                            return
+
+                        elif result["status"] == "cancelled":
+                            self.log(f"Package {i}/{total_pkgs} cancelled", "warning")
+                            return
+
+                        elif result["status"] == "network_error":
+                            retry_count_for_pkg += 1
+                            with self.download_lock:
+                                if download_id in self.downloads:
+                                    self.downloads[download_id]["retry_count"] = retry_count_for_pkg
                                     self.downloads[download_id]["connection_lost"] = True
-                                    self.downloads[download_id]["status"] = "retrying"
 
                             self.debug_log("NETWORK", "WARNING", "Internet disconnected",
-                                           f"Download attempt {dl_retry_count}/10: {err[:80]}")
-                            self.debug_log("NETWORK", "INFO", f"Retry scheduled (30s) - retry {dl_retry_count}/10")
-                            idm_downloader.clear_state(url)
+                                           f"Download attempt {retry_count_for_pkg}/{max_retries}")
 
-                            if dl_retry_count == 1:
-                                self._current_dialog_download_id = download_id
-                                self._network_pause_event.clear()
-                                self.root.after(0, lambda rc=1: self._show_network_dialog(
-                                    rc, self._on_net_pause_download
+                            if retry_count_for_pkg == 1:
+                                self.root.after(0, lambda: self._show_network_dialog(
+                                    retry_count_for_pkg, self._on_net_pause_download
                                 ))
 
-                            if dl_retry_count <= 10:
-                                self.debug_log("NETWORK", "INFO", f"Retry {dl_retry_count}/10 - waiting 30s")
-                                self.log(f"\U0001f504 Network issue - retry {dl_retry_count}/10 in 30s...", "warning")
-                                self.root.after(0, lambda rc=dl_retry_count, fn=filename:
+                            if retry_count_for_pkg <= max_retries:
+                                self.log(f"Network issue - retry {retry_count_for_pkg}/{max_retries} in 30s...", "warning")
+                                self.root.after(0, lambda rc=retry_count_for_pkg, fn=filename:
                                     self.update_download_progress(0, 0, 0, 0, 0, fn, "retrying"))
-                                self.root.after(0, lambda rc=dl_retry_count:
+                                self.root.after(0, lambda rc=retry_count_for_pkg:
                                     self._update_network_dialog(rc))
 
-                                self._network_pause_event.clear()
-                                user_paused = False
-                                for remaining in range(30, 0, -1):
-                                    self.root.after(0, lambda s=remaining: self._update_dialog_countdown(s))
-                                    if self._network_pause_event.wait(timeout=1):
-                                        self.log("\u23f8 Download paused by user via network dialog", "warning")
-                                        self.root.after(0, self._close_network_dialog)
-                                        with self.download_lock:
-                                            if download_id in self.downloads:
-                                                self.downloads[download_id]["status"] = "paused"
-                                        self.root.after(0, self.update_button_states)
-                                        user_paused = True
-                                        break
+                                waited = 0
+                                while waited < 30:
+                                    time.sleep(1)
+                                    waited += 1
+                                    with self.download_lock:
+                                        s = self.downloads.get(download_id, {}).get("status")
+                                        if s == "paused":
+                                            self.log("Paused during retry wait", "warning")
+                                            return
+                                        if s == "cancelled":
+                                            return
+                                    self.root.after(0, lambda s=30 - waited: self._update_dialog_countdown(s))
                                     if self.check_internet():
                                         self.debug_log("NETWORK", "SUCCESS", "Internet restored")
-                                        self.debug_log("NETWORK", "INFO", "Auto resume started")
                                         self.root.after(0, self._auto_close_network_dialog)
                                         break
-                                if user_paused:
-                                    return
+                                else:
+                                    continue
 
-                                i -= 1
-                                with self.download_lock:
-                                    if download_id in self.downloads:
-                                        self.downloads[download_id]["status"] = "downloading"
+                                self.log(f"Retrying package {i}/{total_pkgs}...", "info")
                                 continue
                             else:
-                                self.debug_log("NETWORK", "ERROR", "All 10 retries exhausted",
-                                               "Download paused automatically - waiting for internet")
-                                self.log("\u26a0 Internet connection lost. Download paused.", "error")
+                                self.debug_log("NETWORK", "ERROR", f"All {max_retries} retries exhausted")
+                                self.log("Internet connection lost. Download paused.", "error")
                                 self.root.after(0, lambda f=filename: self.update_download_progress(
                                     0, 0, 0, 0, 0, f, "paused"))
-
-                                # Auto-pause: save state, do not show dialog
                                 with self.download_lock:
                                     if download_id in self.downloads:
                                         self.downloads[download_id]["retry_count"] = 0
                                         self.downloads[download_id]["status"] = "paused"
-
-                                # Poll silently for internet in background, auto-resume when restored
-                                def poll_internet_and_auto_resume():
-                                    while True:
-                                        for _ in range(12):
-                                            time.sleep(5)
-                                            if self.check_internet():
-                                                break
-                                        else:
-                                            continue
-                                        # Internet restored
-                                        self.debug_log("NETWORK", "SUCCESS", "Internet restored - auto resuming download")
-                                        self.root.after(0, self._auto_close_network_dialog)
-                                        idm_downloader.clear_state(url)
-                                        with self.download_lock:
-                                            if download_id in self.downloads:
-                                                self.downloads[download_id]["retry_count"] = 0
-                                                self.downloads[download_id]["status"] = "downloading"
-                                        self.root.after(0, self.on_resume_download)
-                                        break
-
-                                threading.Thread(target=poll_internet_and_auto_resume, daemon=True).start()
+                                self._start_auto_resume_watcher(download_id, url, filename, download_dir)
                                 self.root.after(0, self.update_button_states)
                                 return
-                        else:
-                            failed_count += 1
-                            self.log(f"\u274c Failed package {i}/{len(packages)}: {err[:80]}", "error")
 
-                total_packages = len(packages)
+                        elif result["status"] == "already_running":
+                            retry_count_for_pkg += 1
+                            if retry_count_for_pkg <= max_retries:
+                                self.log(f"Retrying after stale state ({retry_count_for_pkg}/{max_retries})...", "warning")
+                                time.sleep(1)
+                                continue
+                            else:
+                                self.log("Max retries reached for stale state", "error")
+                                any_failed = True
+                                i += 1
+                                break
+
+                        elif result["status"] == "failed":
+                            err = result.get("error", "")
+                            is_net = _is_network_error_str(err)
+                            if is_net:
+                                continue
+                            else:
+                                self.log(f"Failed package {i}/{total_pkgs}: {err[:80]}", "error")
+                                any_failed = True
+                                i += 1
+                                break
+
+                    with self.download_lock:
+                        if self.downloads.get(download_id, {}).get("status") == "cancelled":
+                            break
+
+                    i += 1
+
+                total_pkgs = len(packages)
                 with self.download_lock:
                     if download_id in self.downloads:
                         if self.downloads[download_id].get("status") != "cancelled":
-                            if failed_count == 0 and downloaded_count == total_packages:
+                            if not any_failed:
                                 self.downloads[download_id]["status"] = "completed"
-                            elif downloaded_count > 0:
+                            elif all_completed:
                                 self.downloads[download_id]["status"] = "partial"
                             else:
                                 self.downloads[download_id]["status"] = "failed"
 
-                self.debug_log("DOWNLOAD", "INFO", "Download thread finished",
-                               f"Completed: {downloaded_count}/{total_packages} | Failed: {failed_count}")
-                self.log("=" * 60, "info")
-                if downloaded_count == total_packages:
-                    self.debug_log("DOWNLOAD", "SUCCESS", "All packages downloaded successfully")
-                    self.log("\u2705 DOWNLOAD COMPLETED SUCCESSFULLY!", "success")
+                if not any_failed:
+                    self.log("DOWNLOAD COMPLETED SUCCESSFULLY!", "success")
                 else:
-                    self.debug_log("DOWNLOAD", "WARNING", f"Download partial/fail: {downloaded_count}/{total_packages} packages")
-                    self.log("\u274c DOWNLOAD FAILED OR PARTIAL", "error")
-                self.log("=" * 60, "info")
+                    self.log("DOWNLOAD FAILED OR PARTIAL", "error")
 
                 self.root.after(0, self._close_network_dialog)
                 self._cleanup_download(download_id)
@@ -588,18 +654,45 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     self.root.after(100, self.index_entry.focus_set)
 
             except Exception as e:
-                self.log(f"\u274c Download error: {str(e)}", "error")
+                self.log(f"Download error: {str(e)}", "error")
                 self.root.after(0, lambda: self.show_toast(f"Download failed: {str(e)[:50]}", "error", 4000))
                 self._cleanup_download(download_id)
                 self.update_button_states()
                 if hasattr(self, 'index_entry'):
                     self.root.after(100, self.index_entry.focus_set)
+            finally:
+                with self.download_lock:
+                    self._package_loop_running.discard(download_id)
 
-        thread = threading.Thread(target=start_download, daemon=True)
+        thread = threading.Thread(target=loop, daemon=True)
         thread.start()
         with self.download_lock:
+            self.download_threads = [t for t in self.download_threads if t.is_alive()]
             self.download_threads.append(thread)
 
+    def _start_auto_resume_watcher(self, download_id, url, filename, download_dir):
+        def watcher():
+            while True:
+                for _ in range(12):
+                    time.sleep(5)
+                    if self.check_internet():
+                        break
+                else:
+                    continue
+                self.debug_log("NETWORK", "SUCCESS", "Internet restored - auto resuming download")
+                self.root.after(0, self._auto_close_network_dialog)
+                with self.download_lock:
+                    if download_id in self.downloads:
+                        self.downloads[download_id]["retry_count"] = 0
+                        self.downloads[download_id]["status"] = "downloading"
+                self.root.after(0, self.on_resume_download)
+                return
+
+        threading.Thread(target=watcher, daemon=True).start()
+
+    # -----------------------------------------------------------------
+    # IDM CALLBACK
+    # -----------------------------------------------------------------
     def _handle_idm_callback(self, download_id, data):
         if isinstance(data, dict):
             if data.get("type") == "progress":
@@ -614,6 +707,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 with self.download_lock:
                     if download_id in self.downloads:
                         old_status = self.downloads[download_id].get("status")
+                        if old_status == "paused":
+                            return
                         if status == "completed":
                             self.downloads[download_id]["status"] = "completed"
                             if old_status != "completed":
@@ -621,7 +716,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
                         elif status == "downloading" and old_status != "paused":
                             self.downloads[download_id]["status"] = "downloading"
 
-                self.update_download_progress(percentage, downloaded, total, speed, eta, filename, status)
+                self.root.after(0, lambda: self._safe_update_progress(
+                    download_id, percentage, downloaded, total, speed, eta, filename, status
+                ))
 
                 if percentage > 0 and int(percentage) % 25 == 0 and not hasattr(self, f"_logged_{int(percentage)}_{download_id}"):
                     self.debug_log("DOWNLOAD", "INFO", f"Progress: {percentage:.0f}% | Speed: {speed/1024/1024:.1f} MB/s",
@@ -631,7 +728,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 if hasattr(self, 'console') and percentage > 0:
                     bar_length = 25
                     filled = int(bar_length * percentage / 100)
-                    bar = "\u2588" * filled + "\u2591" * (bar_length - filled)
+                    bar = chr(9608) * filled + chr(9617) * (bar_length - filled)
                     speed_str = f"{speed/1024/1024:.1f} MB/s" if speed > 0 else "0 B/s"
                     eta_str = f"{int(eta//60)}:{int(eta%60):02d}" if eta > 0 else "--:--"
                     self._direct_console_update(f"[{bar}] {percentage:.1f}% | {speed_str} | ETA: {eta_str}", "progress")
@@ -641,6 +738,13 @@ class ZEMmacOSApp(ZEMmacOSUI):
             elif data.get("type") == "log":
                 self.log(data.get("message", ""), data.get("level", "info"))
 
+    def _safe_update_progress(self, download_id, percentage, downloaded, total, speed, eta, filename, status):
+        with self.download_lock:
+            if download_id in self.downloads:
+                if self.downloads[download_id].get("status") == "paused":
+                    return
+        self.update_download_progress(percentage, downloaded, total, speed, eta, filename, status)
+
     def _direct_console_update(self, message, level="progress"):
         if hasattr(self, 'console') and self.console.is_valid():
             try:
@@ -648,6 +752,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
             except Exception:
                 self.console.append(message, level)
 
+    # -----------------------------------------------------------------
+    # BUTTON STATES
+    # -----------------------------------------------------------------
     def update_button_states(self):
         active_id = self._get_active_download_id()
         states = {"dl_pause_btn": tk.DISABLED, "dl_resume_btn": tk.DISABLED,
@@ -666,193 +773,61 @@ class ZEMmacOSApp(ZEMmacOSUI):
             if hasattr(self, btn):
                 getattr(self, btn).config(state=state)
 
+    # -----------------------------------------------------------------
+    # PAUSE / RESUME / CANCEL
+    # -----------------------------------------------------------------
     def on_pause_download(self):
         active_id = self._get_active_download_id()
         if active_id and active_id in self.idm_downloaders:
             url = self.downloads[active_id].get("url")
             if url:
-                self.debug_log("DOWNLOAD", "WARNING", "Pause requested",
-                               f"Download ID: {active_id}")
-                self.debug_log("RESUME", "INFO", "Pausing - saving state")
+                self.debug_log("DOWNLOAD", "WARNING", "Pause requested", f"Download ID: {active_id}")
                 self.idm_downloaders[active_id].pause(url)
                 with self.download_lock:
                     if active_id in self.downloads:
                         self.downloads[active_id]["status"] = "paused"
-                self.log("\u23f8 Paused", "warning")
+                self.log("Paused", "warning")
                 self.update_button_states()
 
     def on_resume_download(self):
         active_id = self._get_active_download_id()
-        if active_id and active_id in self.idm_downloaders:
-            info = self.downloads.get(active_id, {})
-            url = info.get("url")
-            filename = os.path.basename(url) if url else ""
-            save_dir = info.get("download_dir")
-
-            if url and filename and save_dir:
-                self.debug_log("RESUME", "INFO", "Resume requested",
-                               f"URL: {url[:80]}...")
-                self.debug_log("RESUME", "INFO", "Checking existing file and HTTP Range support")
-                self.log("\u25b6 Resuming", "info")
-                with self.download_lock:
-                    if active_id in self.downloads:
-                        self.downloads[active_id]["status"] = "downloading"
-
-                def resume():
-                    res_t0 = time.time()
-
-                    # Log resume byte position from state file
-                    state_file = os.path.join(save_dir, filename + '.idmstate')
-                    if os.path.exists(state_file):
-                        try:
-                            with open(state_file, 'r') as f:
-                                state = json.load(f)
-                                resume_byte = state.get("downloaded_bytes", 0)
-                                self.debug_log("RESUME", "INFO", f"Resume from byte {resume_byte}")
-                        except Exception:
-                            pass
-
-                    headers = {"User-Agent": "Mozilla/5.0 ZEMmacOS Downloader"}
-                    downloader = self.idm_downloaders.get(active_id)
-                    if not downloader:
-                        return
-
-                    self.debug_log("RESUME", "INFO", "Calling IDM downloader.resume()")
-                    result = downloader.resume(url, filename, save_dir, headers)
-                    res_t1 = time.time()
-                    self.debug_log("PERFORMANCE", "INFO", "Resume operation",
-                                   f"Duration: {res_t1 - res_t0:.1f}s | Status: {result.get('status', 'unknown')}")
-
-                    if result.get("status") != "completed":
-                        self._cleanup_download(active_id)
-                        self.update_button_states()
-                        return
-
-                    curr_pkg = info.get("current_package", 0)
-                    total_pkgs = len(info.get("packages", []))
-                    self.log(f"\u2705 Completed package {curr_pkg}/{total_pkgs}", "success")
-                    with self.download_lock:
-                        if active_id in self.downloads:
-                            self.downloads[active_id]["retry_count"] = 0
-
-                    packages = info.get("packages", [])
-                    download_dir = info.get("download_dir")
-                    downloaded_count = curr_pkg
-
-                    for i, pkg in enumerate(packages, 1):
-                        if i <= curr_pkg:
-                            continue
-
-                        pkg_url = pkg.get("URL")
-                        if not pkg_url:
-                            continue
-
-                        pkg_filename = os.path.basename(pkg_url) or f"package_{i}.pkg"
-
-                        with self.download_lock:
-                            if active_id in self.downloads:
-                                self.downloads[active_id]["current_package"] = i
-                                self.downloads[active_id]["url"] = pkg_url
-
-                        self.debug_log("DOWNLOAD", "INFO", f"Package {i}/{total_pkgs}: {pkg_filename}")
-                        self.debug_log("NETWORK", "INFO", f"URL: {pkg_url[:120]}...")
-
-                        pkg_result = downloader.download(pkg_url, pkg_filename, download_dir, headers)
-
-                        if pkg_result["status"] == "completed":
-                            downloaded_count += 1
-                            self.log(f"\u2705 Completed package {i}/{total_pkgs}", "success")
-                            self.root.after(0, self._close_network_dialog)
-                            self.debug_log("DOWNLOAD", "SUCCESS", "Download continued successfully")
-                            with self.download_lock:
-                                if active_id in self.downloads:
-                                    self.downloads[active_id]["retry_count"] = 0
-                        elif pkg_result["status"] == "paused":
-                            self.log(f"\u23f8 Package {i}/{total_pkgs} paused", "warning")
-                            with self.download_lock:
-                                if active_id in self.downloads:
-                                    self.downloads[active_id]["status"] = "paused"
-                            self.root.after(0, self.update_button_states)
-                            return
-                        elif pkg_result["status"] == "cancelled":
-                            self.log(f"\u23f9 Package {i}/{total_pkgs} cancelled", "warning")
-                            break
-                        elif pkg_result["status"] == "failed":
-                            err = pkg_result.get("error", "")
-                            is_network_error = any(word in err.lower() for word in
-                                ["connectionerror", "timeout", "connection", "reset", "refused",
-                                 "resolve", "network", "eof", "read timed out"])
-                            if is_network_error:
-                                self.debug_log("NETWORK", "WARNING", f"Network error during resume continuation: {err[:100]}")
-                                self.log(f"\U0001f504 Network issue - retrying package {i}/{total_pkgs}...", "warning")
-                                downloader.clear_state(pkg_url)
-                                # Poll internet every 5s for up to 30s
-                                for _ in range(6):
-                                    if self.check_internet():
-                                        self.debug_log("NETWORK", "SUCCESS", "Internet restored during resume")
-                                        self.root.after(0, self._auto_close_network_dialog)
-                                        break
-                                    time.sleep(5)
-                                else:
-                                    self.log(f"\u274c Package {i}/{total_pkgs} failed after resume timeout", "error")
-                                    failed_count += 1
-                                    continue
-                                i -= 1
-                                continue
-                            else:
-                                failed_count += 1
-                                self.log(f"\u274c Failed package {i}/{total_pkgs}: {err[:80]}", "error")
-
-                    with self.download_lock:
-                        if active_id in self.downloads:
-                            if downloaded_count == total_pkgs:
-                                self.downloads[active_id]["status"] = "completed"
-                            elif downloaded_count > 0:
-                                self.downloads[active_id]["status"] = "partial"
-                            else:
-                                self.downloads[active_id]["status"] = "failed"
-
-                    if downloaded_count == total_pkgs:
-                        self.log("\u2705 DOWNLOAD COMPLETED SUCCESSFULLY!", "success")
-                    else:
-                        self.log(f"\u274c DOWNLOAD PARTIAL: {downloaded_count}/{total_pkgs} packages", "error")
-
-                    self.root.after(0, self._close_network_dialog)
-                    self._cleanup_download(active_id)
-                    self.update_button_states()
-
-                threading.Thread(target=resume, daemon=True).start()
-                self.update_button_states()
+        if not active_id or active_id not in self.idm_downloaders:
+            return
+        info = self.downloads.get(active_id, {})
+        if not info:
+            return
+        with self.download_lock:
+            if info.get("status") != "paused":
+                return
+            if active_id in self.downloads:
+                self.downloads[active_id]["status"] = "downloading"
+        self.log("Resuming download...", "info")
+        with self.download_lock:
+            self.download_threads = [t for t in self.download_threads if t.is_alive()]
+        self._run_package_loop(active_id)
 
     def _on_net_pause_download(self):
-        self._network_pause_event.set()
-        with self.download_lock:
-            did = self._current_dialog_download_id
-            if did and did in self.downloads:
-                url = self.downloads[did].get("url")
-                if url and did in self.idm_downloaders:
-                    self.idm_downloaders[did].pause(url)
+        self.on_pause_download()
 
     def on_cancel_download(self):
         active_id = self._get_active_download_id()
         if active_id and active_id in self.idm_downloaders:
             url = self.downloads[active_id].get("url")
             if url:
-                self.debug_log("DOWNLOAD", "WARNING", "Cancel requested",
-                               f"Download ID: {active_id}")
+                self.debug_log("DOWNLOAD", "WARNING", "Cancel requested", f"Download ID: {active_id}")
                 self.idm_downloaders[active_id].cancel(url)
                 with self.download_lock:
                     if active_id in self.downloads:
                         self.downloads[active_id]["status"] = "cancelled"
-                self.log("\u274c Cancelled", "warning")
+                self.log("Cancelled", "warning")
                 self._cleanup_download(active_id)
                 self.reset_download_ui()
                 self.update_button_states()
 
     def _get_active_download_id(self):
         with self.download_lock:
-            for did, info in self.downloads.items():
-                if info.get("status") in ["downloading", "paused"]:
+            for did, d_info in self.downloads.items():
+                if d_info.get("status") in ["downloading", "paused"]:
                     return did
         return None
 
@@ -860,12 +835,16 @@ class ZEMmacOSApp(ZEMmacOSUI):
         with self.download_lock:
             self.idm_downloaders.pop(download_id, None)
             self.downloads.pop(download_id, None)
+            self.download_threads = [t for t in self.download_threads if t.is_alive()]
 
+    # -----------------------------------------------------------------
+    # CONSOLE
+    # -----------------------------------------------------------------
     def on_copy_console(self):
         if hasattr(self, '_console_raw'):
             self.root.clipboard_clear()
             self.root.clipboard_append(self._console_raw.get(1.0, tk.END))
-            self.log("\U0001f4cb Console content copied", "info")
+            self.log("Console content copied", "info")
 
     def on_clear_console(self):
         if hasattr(self, 'console'):
@@ -876,16 +855,16 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self.gib_wrapper = None
 
     def on_clean_temp(self):
-        self.log("\U0001f9f9 Cleaning temporary files...", "info")
+        self.log("Cleaning temporary files...", "info")
         pycache_count = self.cleaner.clear_pycache()
         pyc_count = self.cleaner.clear_pyc_files()
         self.cleaner.clear_gibmacos_temp()
-        self.log(f"\u2713 \u2705 Cleanup complete ({pycache_count + pyc_count} items)", "success")
+        self.log(f"Cleanup complete ({pycache_count + pyc_count} items)", "success")
         messagebox.showinfo("Cleanup Complete", f"Removed {pycache_count + pyc_count} temporary items")
 
     def on_clean_logs(self):
-        if messagebox.askyesno("Delete All Logs", "\u26a0 WARNING: This will delete ALL log files.\n\nContinue?"):
-            self.log("\U0001f5d1 Deleting ALL log files...", "warning")
+        if messagebox.askyesno("Delete All Logs", "WARNING: This will delete ALL log files.\n\nContinue?"):
+            self.log("Deleting ALL log files...", "warning")
             logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
             count = 0
             current_log = self.logger.get_log_file_path() if hasattr(self, 'logger') else None
@@ -901,7 +880,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
                             count += 1
                         except OSError:
                             pass
-            self.log(f"\u2713 \u2705 Deleted {count} log file(s)", "success")
+            self.log(f"Deleted {count} log file(s)", "success")
             messagebox.showinfo("Logs Deleted", f"Deleted {count} log files")
 
     def toggle_theme(self):
@@ -920,6 +899,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
                             downloader.cancel(url)
                     except Exception:
                         pass
+        self._stop_network_monitor()
         self.log("Application shutting down...", "info")
         self.logger.stop()
         self.root.destroy()

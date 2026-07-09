@@ -1,27 +1,52 @@
 # ===================================================================
-# ZEMmacOS - IDM STYLE DOWNLOADER (RESUME FIXED + THREADPOOL)
+# ZEMmacOS - IDM STYLE DOWNLOADER
 # ===================================================================
 import os
 import threading
 import time
 import json
 import requests
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+
+NETWORK_ERRORS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ReadTimeout,
+    requests.exceptions.ConnectTimeout,
+    requests.exceptions.ChunkedEncodingError,
+    ConnectionResetError,
+    ConnectionAbortedError,
+    ConnectionError,
+    TimeoutError,
+    OSError,
+)
+
+
+def _is_network_error(exc):
+    name = type(exc).__name__.lower()
+    keywords = ["connectionerror", "timeout", "connection", "reset",
+                "refused", "resolve", "network", "eof", "read timed out",
+                "chunkedencodingerror", "remotedisconnected",
+                "connectionabortederror", "connectionreseterror"]
+    return any(k in name for k in keywords) or isinstance(exc, NETWORK_ERRORS)
+
 
 class IDMDownloader:
     """Multi-threaded download manager with pause/resume support"""
-    
+
     def __init__(self, callback=None, num_threads=8):
         self.callback = callback
         self.num_threads = num_threads
-        self.active_downloads = {}  # {url: download_info}
-        self.paused = set()          # Set of paused URLs
-        self.cancelled = set()       # Set of cancelled URLs
+        self.active_downloads = {}
+        self.paused = set()
+        self.cancelled = set()
         self.lock = threading.Lock()
+        self._session = requests.Session()
+        self._session.headers.update({"User-Agent": "Mozilla/5.0 ZEMmacOS Downloader"})
 
     # -----------------------------------------------------------------
-    # PROGRESS CALLBACK
+    # CALLBACK HELPERS
     # -----------------------------------------------------------------
     def _send_progress(self, download_id, downloaded, total, speed=0, eta=0, final=False):
         if self.callback:
@@ -48,16 +73,18 @@ class IDMDownloader:
             except Exception as e:
                 print(f"Log callback error: {e}")
 
+    def _get_active(self, download_id):
+        with self.lock:
+            return self.active_downloads.get(download_id)
+
     # -----------------------------------------------------------------
     # URL CHECKING
     # -----------------------------------------------------------------
     def _get_file_size(self, url, headers=None):
         try:
-            response = requests.head(url, headers=headers or {}, timeout=10, allow_redirects=True)
+            response = self._session.head(url, headers=headers or {}, timeout=10, allow_redirects=True)
             if response.status_code == 200:
                 return int(response.headers.get('Content-Length', -1))
-            elif response.status_code in (301, 302):
-                return self._get_file_size(response.headers.get('Location', url), headers)
             return -1
         except Exception as e:
             self._send_log(f"Failed to get file size: {e}", "error")
@@ -65,12 +92,10 @@ class IDMDownloader:
 
     def _check_url(self, url, headers=None):
         try:
-            response = requests.head(url, headers=headers or {}, timeout=10, allow_redirects=True)
+            response = self._session.head(url, headers=headers or {}, timeout=10, allow_redirects=True)
             if response.status_code == 200:
                 supports_range = response.headers.get('Accept-Ranges', '').lower() == 'bytes'
-                return True, supports_range, response.headers.get('Content-Length', -1)
-            elif response.status_code in (301, 302):
-                return self._check_url(response.headers.get('Location', url), headers)
+                return True, supports_range, int(response.headers.get('Content-Length', -1))
             return False, False, -1
         except Exception as e:
             self._send_log(f"URL check failed: {e}", "error")
@@ -79,81 +104,90 @@ class IDMDownloader:
     # -----------------------------------------------------------------
     # SEGMENT DOWNLOAD
     # -----------------------------------------------------------------
-    def _download_segment(self, url, start_byte, end_byte, part_file, segment_id, headers=None, 
+    def _download_segment(self, url, start_byte, end_byte, part_file, segment_id, headers=None,
                           download_id=None, total_size=None):
-        try:
-            range_header = {'Range': f'bytes={start_byte}-{end_byte}'}
-            if headers:
-                range_header.update(headers)
-            
-            response = requests.get(url, headers=range_header, stream=True, timeout=30)
-            if response.status_code not in (200, 206):
-                self._send_log(f"Segment {segment_id} failed: HTTP {response.status_code}", "error")
-                return False, 0
-            
-            bytes_written = 0
-            last_update = time.time()
-            
-            # Check if part file exists and has content (for resume)
-            if os.path.exists(part_file):
-                bytes_written = os.path.getsize(part_file)
-                # If already complete, skip
-                if bytes_written >= (end_byte - start_byte + 1):
-                    return True, bytes_written
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                range_header = {'Range': f'bytes={start_byte}-{end_byte}'}
+                if headers:
+                    range_header.update(headers)
 
-            with open(part_file, 'ab') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if download_id:
-                        with self.lock:
-                            if download_id in self.cancelled:
-                                return False, bytes_written
-                            if download_id in self.paused:
-                                return False, bytes_written
-                    
-                    if chunk:
-                        f.write(chunk)
-                        bytes_written += len(chunk)
-                        
-                        if download_id and total_size:
-                            now = time.time()
-                            if now - last_update >= 0.5:
-                                with self.lock:
-                                    if download_id in self.active_downloads:
-                                        self.active_downloads[download_id]["downloaded_bytes"] += len(chunk)
-                                last_update = now
-            return True, bytes_written
-        except Exception as e:
-            self._send_log(f"Segment {segment_id} error: {e}", "error")
-            raise
+                response = self._session.get(url, headers=range_header, stream=True, timeout=60)
+                if response.status_code not in (200, 206):
+                    self._send_log(f"Segment {segment_id} failed: HTTP {response.status_code}", "error")
+                    if attempt < max_retries:
+                        time.sleep(1)
+                        continue
+                    return False, 0
+
+                bytes_written = 0
+                last_update = time.time()
+
+                if os.path.exists(part_file):
+                    bytes_written = os.path.getsize(part_file)
+                    if bytes_written >= (end_byte - start_byte + 1):
+                        return True, bytes_written
+
+                with open(part_file, 'ab') as f:
+                    for chunk in response.iter_content(chunk_size=65536):
+                        if download_id:
+                            with self.lock:
+                                if download_id in self.cancelled:
+                                    return False, bytes_written
+                                if download_id in self.paused:
+                                    return False, bytes_written
+
+                        if chunk:
+                            f.write(chunk)
+                            bytes_written += len(chunk)
+
+                            if download_id and total_size:
+                                now = time.time()
+                                if now - last_update >= 0.5:
+                                    with self.lock:
+                                        if download_id in self.active_downloads:
+                                            self.active_downloads[download_id]["downloaded_bytes"] += len(chunk)
+                                    last_update = now
+                return True, bytes_written
+            except Exception as e:
+                self._send_log(f"Segment {segment_id} attempt {attempt}/{max_retries}: {e}", "error")
+                if _is_network_error(e):
+                    if attempt < max_retries:
+                        time.sleep(2)
+                        continue
+                    return "network_loss", 0
+                raise
 
     # -----------------------------------------------------------------
     # MAIN DOWNLOAD METHOD
     # -----------------------------------------------------------------
     def download(self, url, filename, save_dir, headers=None):
         download_id = url
-        
+
         with self.lock:
-            # If already running and not paused, reject
             if download_id in self.active_downloads:
                 existing = self.active_downloads[download_id]
-                if existing.get("status") == "paused":
+                status = existing.get("status")
+                if status == "paused":
                     self.paused.discard(url)
                     self._send_log("Resuming paused download...", "info")
-                elif existing.get("status") == "downloading":
+                elif status == "downloading":
                     return {"status": "already_running", "filepath": None, "error": None}
+                elif status in ("network_error", "failed", "completed", "cancelled"):
+                    self.active_downloads[download_id] = {
+                        "url": url, "filename": filename, "save_dir": save_dir,
+                        "headers": headers, "start_time": time.time(),
+                        "total_bytes": 0, "downloaded_bytes": 0, "status": "starting"
+                    }
+                    self._send_log(f"Starting fresh download ({status})...", "info")
                 else:
                     return {"status": "already_running", "filepath": None, "error": None}
             else:
-                # Fresh download - create entry
                 self.active_downloads[download_id] = {
-                    "url": url,
-                    "filename": filename,
-                    "save_dir": save_dir,
-                    "headers": headers,
-                    "start_time": time.time(),
-                    "total_bytes": 0,
-                    "downloaded_bytes": 0,
-                    "status": "starting"
+                    "url": url, "filename": filename, "save_dir": save_dir,
+                    "headers": headers, "start_time": time.time(),
+                    "total_bytes": 0, "downloaded_bytes": 0, "status": "starting"
                 }
 
         try:
@@ -161,56 +195,50 @@ class IDMDownloader:
             filepath = os.path.join(save_dir, filename)
             state_file = filepath + '.idmstate'
             part_dir = filepath + '.parts'
-            
-            # Check for existing state to resume
+
             resume_data = None
             if os.path.exists(state_file):
                 try:
                     with open(state_file, 'r') as f:
                         resume_data = json.load(f)
-                    self._send_log(f"Found state file. Resuming...", "info")
-                except:
+                    self._send_log("Found state file. Resuming...", "info")
+                except Exception:
                     pass
-            
-            # Get file size
+
             valid, supports_range, content_length = self._check_url(url, headers)
             if not valid:
                 raise Exception("URL returned invalid response")
-            
+
             total_size = int(content_length) if content_length != -1 else -1
-            
+
             if total_size == -1 or not supports_range:
                 self._send_log("Server doesn't support range requests - using single thread", "warning")
                 return self._single_thread_download(url, filepath, headers)
 
             self._send_log(f"File size: {self._format_size(total_size)}", "info")
-            
-            # Calculate segments
+
             segment_size = total_size // self.num_threads
             segments = []
             for i in range(self.num_threads):
                 start = i * segment_size
                 end = (i + 1) * segment_size - 1 if i < self.num_threads - 1 else total_size - 1
                 segments.append((start, end, i))
-            
+
             os.makedirs(part_dir, exist_ok=True)
-            
-            # Load existing progress
+
             completed_segments = set()
             downloaded_so_far = 0
-            
+
             if resume_data and resume_data.get('segments'):
                 completed_segments = set(resume_data['segments'])
                 downloaded_so_far = resume_data.get('downloaded_bytes', 0)
                 self._send_log(f"Resuming from {self._format_size(downloaded_so_far)}", "info")
             else:
-                # If no state file, check if part files exist to calculate progress
                 for i in range(len(segments)):
                     part_file = os.path.join(part_dir, f"part_{i}")
                     if os.path.exists(part_file):
                         size = os.path.getsize(part_file)
                         downloaded_so_far += size
-                        # If part file is full size, mark as completed
                         start, end, _ = segments[i]
                         if size >= (end - start + 1):
                             completed_segments.add(i)
@@ -219,19 +247,18 @@ class IDMDownloader:
 
             if download_id in self.cancelled:
                 raise Exception("Download cancelled before start")
-            
-            # Update active download state
+
             with self.lock:
                 self.active_downloads[download_id].update({
                     "total_bytes": total_size,
                     "downloaded_bytes": downloaded_so_far,
                     "status": "downloading"
                 })
-            
+
             self._send_progress(download_id, downloaded_so_far, total_size)
 
-            # Start background progress reporter
             progress_stop = threading.Event()
+
             def progress_reporter():
                 last_bytes = downloaded_so_far
                 last_time = time.time()
@@ -243,23 +270,26 @@ class IDMDownloader:
                         info = self.active_downloads[download_id]
                         current = info.get("downloaded_bytes", downloaded_so_far)
                         total = info.get("total_bytes", total_size)
-                        now = time.time()
-                        elapsed = now - last_time
-                        speed = (current - last_bytes) / elapsed if elapsed > 0 else 0
-                        eta = (total - current) / speed if speed > 0 else 0
-                        last_bytes = current
-                        last_time = now
+                        status = info.get("status", "downloading")
+                    if status == "paused" or status == "cancelled":
+                        break
+                    now = time.time()
+                    elapsed = now - last_time
+                    speed = (current - last_bytes) / elapsed if elapsed > 0 else 0
+                    eta = (total - current) / speed if speed > 0 else 0
+                    last_bytes = current
+                    last_time = now
                     self._send_progress(download_id, current, total, speed, eta)
-            
+
             reporter_thread = threading.Thread(target=progress_reporter, daemon=True)
             reporter_thread.start()
-            
+
+            network_lost = False
             with ThreadPoolExecutor(max_workers=self.num_threads) as executor:
                 futures = {}
                 for start, end, seg_id in segments:
                     if seg_id in completed_segments:
                         continue
-                    
                     part_file = os.path.join(part_dir, f"part_{seg_id}")
                     future = executor.submit(
                         self._download_segment,
@@ -267,17 +297,15 @@ class IDMDownloader:
                         download_id, total_size
                     )
                     futures[future] = (seg_id, part_file, start, end)
-                
+
                 while futures:
-                    # Check for cancellation/pause
                     if download_id in self.cancelled:
                         executor.shutdown(wait=False, cancel_futures=True)
                         progress_stop.set()
                         reporter_thread.join(timeout=1)
                         return {"status": "cancelled", "filepath": None, "error": None}
-                    
+
                     if download_id in self.paused:
-                        # Aggregate current total from part files
                         current_total = 0
                         for s_start, s_end, s_id in segments:
                             p_file = os.path.join(part_dir, f"part_{s_id}")
@@ -299,32 +327,29 @@ class IDMDownloader:
                             self.active_downloads[download_id]["status"] = "paused"
                         self._send_log("Download paused - state saved", "warning")
                         progress_stop.set()
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        reporter_thread.join(timeout=1)
                         return {"status": "paused", "filepath": None, "error": None}
-                    
-                    # Check for completed futures
-                    done_futures = [f for f in futures if f.done()]
-                    for future in done_futures:
+
+                    done = [f for f in futures if f.done()]
+                    for future in done:
                         seg_id, part_file, start, end = futures.pop(future)
-                        success, _ = future.result()
-                        
-                        if success:
+                        try:
+                            success, _ = future.result()
+                        except Exception:
+                            success = False
+
+                        if success is True:
                             completed_segments.add(seg_id)
-                            
-                            # Aggregate total from part files
                             current_total = 0
                             for s_start, s_end, s_id in segments:
                                 p_file = os.path.join(part_dir, f"part_{s_id}")
                                 if os.path.exists(p_file):
                                     current_total += os.path.getsize(p_file)
-                            
                             downloaded_so_far = current_total
-                            
-                            # Update state
                             with self.lock:
                                 if download_id in self.active_downloads:
                                     self.active_downloads[download_id]["downloaded_bytes"] = downloaded_so_far
-                            
-                            # Save state on each segment completion
                             state_data = {
                                 'segments': list(completed_segments),
                                 'downloaded_bytes': downloaded_so_far,
@@ -335,43 +360,55 @@ class IDMDownloader:
                             }
                             with open(state_file, 'w') as f:
                                 json.dump(state_data, f)
+                        elif success == "network_loss":
+                            network_lost = True
+                            break
                         else:
                             self._send_log(f"Segment {seg_id} failed", "error")
-                            raise Exception(f"Segment {seg_id} download failed")
-                    
+                            network_lost = True
+                            break
+
+                    if network_lost:
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        progress_stop.set()
+                        reporter_thread.join(timeout=1)
+                        with self.lock:
+                            if download_id in self.active_downloads:
+                                self.active_downloads[download_id]["status"] = "network_error"
+                        return {"status": "network_error", "filepath": None, "error": "Network connection lost"}
+
                     time.sleep(0.05)
 
             progress_stop.set()
             reporter_thread.join(timeout=1)
 
-            # All segments completed
             if download_id not in self.cancelled and download_id not in self.paused:
                 self._send_log("Merging segments...", "info")
                 self._merge_segments(part_dir, filepath, total_size, self.num_threads)
                 self._cleanup(part_dir, state_file)
-                
+
                 elapsed = time.time() - self.active_downloads[download_id]["start_time"]
                 self._send_log(f"Download complete! ({self._format_size(total_size)} in {self._format_time(elapsed)})", "success")
-                
+
                 with self.lock:
                     self.active_downloads[download_id]["status"] = "completed"
-                
+
                 self._send_progress(download_id, total_size, total_size, final=True)
                 return {"status": "completed", "filepath": filepath, "error": None}
-            
+
             return {"status": "cancelled", "filepath": None, "error": None}
-            
+
         except Exception as e:
-            self._send_log(f"Download failed: {e}", "error")
+            is_net = _is_network_error(e)
+            self._send_log(f"Download {'network error' if is_net else 'failed'}: {e}", "error")
             with self.lock:
                 if download_id in self.active_downloads:
-                    self.active_downloads[download_id]["status"] = "failed"
-            return {"status": "failed", "filepath": None, "error": str(e)}
+                    self.active_downloads[download_id]["status"] = "network_error" if is_net else "failed"
+            return {"status": "network_error" if is_net else "failed", "filepath": None, "error": str(e)}
         finally:
             with self.lock:
                 if download_id in self.cancelled:
                     self.cancelled.discard(download_id)
-                    # Don't pop immediately if we want to inspect state, but usually clean up
                     if download_id in self.active_downloads:
                         del self.active_downloads[download_id]
 
@@ -380,42 +417,31 @@ class IDMDownloader:
     # -----------------------------------------------------------------
     def _single_thread_download(self, url, filepath, headers=None):
         try:
-            # Check for resume
             start_byte = 0
             if os.path.exists(filepath):
                 start_byte = os.path.getsize(filepath)
-            
+
             range_header = {}
             if start_byte > 0:
                 range_header['Range'] = f'bytes={start_byte}-'
             if headers:
                 range_header.update(headers)
 
-            response = requests.get(url, headers=range_header, stream=True, timeout=30)
+            response = self._session.get(url, headers=range_header, stream=True, timeout=60)
             total_size = int(response.headers.get('Content-Length', -1))
-            if total_size != -1 and start_byte > 0:
-                total_size = total_size # Keep original total for progress calculation
-            
+
             downloaded = start_byte
             last_update = time.time()
             start_time = time.time()
-            
+
             mode = 'ab' if start_byte > 0 else 'wb'
             with open(filepath, mode) as f:
-                for chunk in response.iter_content(chunk_size=8192):
+                for chunk in response.iter_content(chunk_size=65536):
                     if url in self.cancelled:
                         return {"status": "cancelled", "filepath": None, "error": None}
                     if url in self.paused:
-                        # Save state for single thread
-                        state_data = {
-                            'downloaded_bytes': downloaded,
-                            'total_bytes': total_size,
-                            'filename': os.path.basename(filepath),
-                            'url': url
-                        }
-                        # Single thread doesn't use segments, so we save differently or just rely on file size
                         return {"status": "paused", "filepath": None, "error": None}
-                    
+
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
@@ -426,11 +452,12 @@ class IDMDownloader:
                             eta = (total_size - downloaded) / speed if speed > 0 else 0
                             self._send_progress(url, downloaded, total_size, speed, eta)
                             last_update = now
-            
+
             self._send_progress(url, total_size, total_size, final=True)
             return {"status": "completed", "filepath": filepath, "error": None}
         except Exception as e:
-            return {"status": "failed", "filepath": None, "error": str(e)}
+            is_net = _is_network_error(e)
+            return {"status": "network_error" if is_net else "failed", "filepath": None, "error": str(e)}
 
     # -----------------------------------------------------------------
     # UTILS
@@ -442,7 +469,7 @@ class IDMDownloader:
                 if os.path.exists(part_file):
                     with open(part_file, 'rb') as infile:
                         while True:
-                            buf = infile.read(65536)
+                            buf = infile.read(1048576)
                             if not buf:
                                 break
                             outfile.write(buf)
@@ -454,7 +481,7 @@ class IDMDownloader:
                 shutil.rmtree(part_dir)
             if os.path.exists(state_file):
                 os.remove(state_file)
-        except:
+        except Exception:
             pass
 
     # -----------------------------------------------------------------
@@ -465,11 +492,9 @@ class IDMDownloader:
             self.paused.add(url)
             if url in self.active_downloads:
                 self.active_downloads[url]["status"] = "paused"
-        self._send_log("⏸️ Pause signal sent - download will stop shortly", "warning")
+        self._send_log("Pause signal sent - download will stop shortly", "warning")
 
     def resume(self, url, filename, save_dir, headers=None):
-        # Just call download. The download method checks for existing state/paused status.
-        # We do NOT delete from active_downloads here anymore.
         return self.download(url, filename, save_dir, headers)
 
     def cancel(self, url):
@@ -477,7 +502,7 @@ class IDMDownloader:
             self.cancelled.add(url)
             if url in self.active_downloads:
                 self.active_downloads[url]["status"] = "cancelled"
-        self._send_log("❌ Cancel signal sent - cleaning up...", "warning")
+        self._send_log("Cancel signal sent - cleaning up...", "warning")
         time.sleep(0.5)
         with self.lock:
             if url in self.active_downloads:
@@ -487,9 +512,11 @@ class IDMDownloader:
                 state_file = filepath + '.idmstate'
                 try:
                     import shutil
-                    if os.path.exists(part_dir): shutil.rmtree(part_dir)
-                    if os.path.exists(state_file): os.remove(state_file)
-                except:
+                    if os.path.exists(part_dir):
+                        shutil.rmtree(part_dir)
+                    if os.path.exists(state_file):
+                        os.remove(state_file)
+                except Exception:
                     pass
 
     def clear_state(self, url):
@@ -499,18 +526,23 @@ class IDMDownloader:
             self.paused.discard(url)
 
     def is_paused(self, url):
-        with self.lock: return url in self.paused
+        with self.lock:
+            return url in self.paused
 
     def is_cancelled(self, url):
-        with self.lock: return url in self.cancelled
+        with self.lock:
+            return url in self.cancelled
 
     def get_status(self, url):
-        with self.lock: return self.active_downloads.get(url, {}).copy()
+        with self.lock:
+            return self.active_downloads.get(url, {}).copy()
 
     def _format_size(self, bytes_size):
-        if bytes_size <= 0: return "0 B"
+        if bytes_size <= 0:
+            return "0 B"
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if bytes_size < 1024.0: return f"{bytes_size:.1f} {unit}"
+            if bytes_size < 1024.0:
+                return f"{bytes_size:.1f} {unit}"
             bytes_size /= 1024.0
         return f"{bytes_size:.1f} PB"
 
