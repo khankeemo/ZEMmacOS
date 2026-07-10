@@ -170,6 +170,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._license_engine = None
         self._sdk_config = None
         self._license_active = False
+        self._app_locked = True
 
         if not self._sdk_available:
             self.log("License SDK not found - running without license check", "warning")
@@ -189,11 +190,14 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def _check_license(self):
         if not self._sdk_available or not self._license_engine:
+            self._app_locked = False
             return
 
         stored_key = self.settings.get("license_key")
         if not stored_key:
             self.log("No license key configured", "info")
+            self._app_locked = True
+            self.root.after(300, self._show_license_startup_dialog)
             return
 
         try:
@@ -203,6 +207,13 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.log("License validated successfully", "success")
                 self.debug_log("LICENSE", "SUCCESS", "License validated online")
                 self._update_license_cache(result)
+                lic = result.get('license', {})
+                remaining = lic.get('remaining_days')
+                is_activated = lic.get('is_activated', True)
+                if not is_activated or (remaining is not None and remaining <= 0):
+                    self._app_locked = True
+                else:
+                    self._app_locked = False
             else:
                 err = result.get('error', 'invalid')
                 self.log(f"License validation failed: {err}", "warning")
@@ -211,6 +222,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
         except Exception:
             self.debug_log("LICENSE", "WARNING", "Offline - checking cached license")
             self._try_offline_cache(stored_key)
+        self.root.after(300, self._show_license_startup_dialog)
 
     def _try_offline_cache(self, key):
         cached_data = self.settings.get("license_data")
@@ -225,17 +237,20 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
                 if expiry > datetime.now(expiry.tzinfo):
                     self._license_active = True
+                    self._app_locked = False
                     self.log("License validated from offline cache", "success")
                     self.debug_log("LICENSE", "SUCCESS", "Offline cache valid")
                     return
                 self.log("Cached license has expired", "warning")
             else:
                 self._license_active = True
+                self._app_locked = False
                 self.log("License validated from offline cache", "success")
                 self.debug_log("LICENSE", "SUCCESS", "Offline cache valid (no expiry)")
                 return
         self.log("Cached license expired or unavailable", "warning")
         self._license_active = False
+        self._app_locked = True
 
     def _activate_license_key(self, key):
         import platform
@@ -249,6 +264,10 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.settings.set("license_key", key)
                 self._update_license_cache(result)
                 self._license_active = True
+                lic = result.get('license', {})
+                remaining = lic.get('remaining_days')
+                is_activated = lic.get('is_activated', True)
+                self._app_locked = not (is_activated and (remaining is None or remaining > 0))
                 self.log("License activated successfully", "success")
                 self.debug_log("LICENSE", "SUCCESS", "License activation successful")
                 return True
@@ -265,6 +284,158 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def _update_license_cache(self, result):
         self.settings.set("license_data", result)
         self.settings.set("license_cached_at", time.time())
+
+    # -----------------------------------------------------------------
+    # STARTUP LICENSE DIALOGS (ZEMmacOS only)
+    # -----------------------------------------------------------------
+    def _make_license_dialog(self, w, h):
+        c = self.colors
+        d = tk.Toplevel(self.root)
+        d.title("")
+        d.overrideredirect(True)
+        d.transient(self.root)
+        d.resizable(False, False)
+        d.configure(bg=c["card_bg"])
+
+        outer = tk.Frame(d, bg=c["card_bg"],
+                         highlightbackground=c["border"],
+                         highlightthickness=1)
+        outer.pack(fill=tk.BOTH, expand=True)
+        container = tk.Frame(outer, bg=c["card_bg"], padx=28, pady=24)
+        container.pack(fill=tk.BOTH, expand=True)
+
+        d.update_idletasks()
+        d.tk.call("tk::PlaceWindow", d, "center")
+        d.lift()
+        d.focus_force()
+        d.grab_set()
+        d.wait_visibility()
+        return d, container
+
+    def _dialog_title(self, parent, text):
+        c = self.colors
+        tk.Label(parent, text=text, font=("SF Pro Display", 16, "bold"),
+                 fg=c["text"], bg=c["card_bg"]).pack(anchor=tk.W, pady=(0, 4))
+
+    def _dialog_text(self, parent, text, fg=None, size=11, bold=False):
+        c = self.colors
+        weight = "bold" if bold else "normal"
+        tk.Label(parent, text=text, font=("SF Pro Text", size, weight),
+                 fg=fg if fg else c["text_secondary"], bg=c["card_bg"],
+                 justify=tk.LEFT).pack(anchor=tk.W, pady=2)
+
+    def _dialog_button(self, parent, text, bg, fg, cmd):
+        btn = tk.Button(parent, text=text, font=("SF Pro Text", 10, "bold"),
+                        fg=fg, bg=bg, bd=0, cursor="hand2", padx=20, pady=8,
+                        activebackground=self.colors.get("btn_secondary_hover", "#555"),
+                        command=cmd)
+        btn.pack(side=tk.LEFT, padx=(0, 10), pady=(16, 0))
+        return btn
+
+    def _show_license_startup_dialog(self):
+        if not self._sdk_available:
+            return
+        stored_key = self.settings.get("license_key")
+        license_data = self.settings.get("license_data", {})
+        lic = license_data.get('license', {})
+
+        is_trial = lic.get('is_trial', False)
+        has_expired = bool(stored_key) and not self._license_active
+
+        if is_trial and self._license_active:
+            self._show_trial_dialog(license_data)
+        elif self._license_active and stored_key:
+            self._show_licensed_dialog(license_data)
+        elif has_expired:
+            self._show_expired_dialog()
+        elif not stored_key:
+            self._show_activation_required_dialog()
+
+    def _show_trial_dialog(self, license_data):
+        c = self.colors
+        lic = license_data.get('license', {})
+        remaining = lic.get('remaining_days', '--')
+        expires_at = lic.get('expires_at', 'N/A')
+        try:
+            from datetime import datetime
+            expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+            expires_at = expiry.strftime('%d %b %Y')
+        except:
+            pass
+
+        d, container = self._make_license_dialog(380, 280)
+        self._dialog_title(container, "ZEMmacOS Trial")
+        self._dialog_text(container, "You are using the trial version.", bold=True)
+        self._dialog_text(container, f"Remaining: {remaining} days")
+        self._dialog_text(container, f"Expires on: {expires_at}")
+
+        btn_row = tk.Frame(container, bg=c["card_bg"])
+        btn_row.pack(fill=tk.X, pady=(16, 0))
+        self._dialog_button(btn_row, "Activate License", c["accent"], "#ffffff",
+                            lambda: self._on_dialog_activate(d))
+        self._dialog_button(btn_row, "Continue Trial", c["btn_secondary_bg"], c["text"],
+                            d.destroy)
+
+    def _show_licensed_dialog(self, license_data):
+        c = self.colors
+        lic = license_data.get('license', {})
+        plan = lic.get('plan_name', '--')
+        expires_at = lic.get('expires_at', 'N/A')
+        try:
+            from datetime import datetime
+            expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+            expires_at = expiry.strftime('%d %b %Y')
+        except:
+            pass
+
+        d, container = self._make_license_dialog(380, 260)
+        self._dialog_title(container, "ZEMmacOS License")
+        self._dialog_text(container, f"Plan: {plan}", bold=True)
+        self._dialog_text(container, "License valid until:")
+        self._dialog_text(container, expires_at, size=13, bold=True, fg=c["accent"])
+
+        btn_row = tk.Frame(container, bg=c["card_bg"])
+        btn_row.pack(fill=tk.X, pady=(16, 0))
+        self._dialog_button(btn_row, "Continue", c["accent"], "#ffffff", d.destroy)
+
+    def _show_expired_dialog(self):
+        c = self.colors
+        d, container = self._make_license_dialog(380, 240)
+        self._dialog_title(container, "ZEMmacOS License Expired")
+        self._dialog_text(container, "Your license has expired.")
+        self._dialog_text(container, "Please activate a valid license to continue.")
+
+        btn_row = tk.Frame(container, bg=c["card_bg"])
+        btn_row.pack(fill=tk.X, pady=(16, 0))
+        self._dialog_button(btn_row, "Activate License", c["accent"], "#ffffff",
+                            lambda: self._on_dialog_activate(d))
+        self._dialog_button(btn_row, "Exit", c["error"], "#ffffff", self.root.destroy)
+
+    def _show_activation_required_dialog(self):
+        c = self.colors
+        d, container = self._make_license_dialog(380, 230)
+        self._dialog_title(container, "ZEMmacOS")
+        self._dialog_text(container, "No license detected.", bold=True)
+        self._dialog_text(container, "Please activate to unlock all features.")
+
+        btn_row = tk.Frame(container, bg=c["card_bg"])
+        btn_row.pack(fill=tk.X, pady=(16, 0))
+        self._dialog_button(btn_row, "Activate License", c["accent"], "#ffffff",
+                            lambda: self._on_dialog_activate(d))
+        self._dialog_button(btn_row, "Continue", c["btn_secondary_bg"], c["text"],
+                            d.destroy)
+
+    def _on_dialog_activate(self, dialog):
+        dialog.destroy()
+        self.root.after(100, self._open_settings_license)
+
+    def _open_settings_license(self):
+        if hasattr(self, '_nav_click'):
+            self._nav_click("settings")
+        elif hasattr(self, 'show_settings'):
+            self.show_settings()
+        if hasattr(self, 'settings_ui') and hasattr(self.settings_ui, 'license_key_entry'):
+            self.root.after(200, self.settings_ui.license_key_entry.focus_set)
 
     # -----------------------------------------------------------------
     # INTERNET CHECK

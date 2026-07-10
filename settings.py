@@ -112,7 +112,10 @@ class AppSettingsService:
         self.settings_manager.set("download_threads", threads)
         
         if hasattr(self.app, 'license_key_var'):
-            self.settings_manager.set("license_key", self.app.license_key_var.get().strip())
+            key_val = self.app.license_key_var.get().strip()
+            if key_val == "Enter your license key":
+                key_val = ""
+            self.settings_manager.set("license_key", key_val)
         
         self.app.log("Settings saved", "info")
         return True

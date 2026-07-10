@@ -20,6 +20,12 @@ class SettingsUI:
         header = tk.Frame(container, bg=self.colors["header_bg"])
         header._role = "header"
         header.pack(fill=tk.X, padx=30, pady=24)
+
+        right_h = tk.Frame(header, bg=self.colors["header_bg"])
+        right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6)
+        if hasattr(self.app, '_build_license_status_widget'):
+            self.app._build_license_status_widget(right_h)
+
         tk.Label(header, text="Settings", font=("SF Pro Display", 26, "bold"),
                  fg=self.colors["text"], bg=self.colors["header_bg"]).pack(anchor=tk.W)
         tk.Label(header, text="Configure your application preferences",
@@ -62,10 +68,92 @@ class SettingsUI:
                      if b.cget("bg") != self.colors["accent"] else None)
             self._nav_buttons[key] = btn
 
+        self._license_card_frame = tk.Frame(body, bg=self.colors["content_bg"], width=250)
+        self._license_card_frame._role = "card"
+        self._license_card_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, 15))
+        self._license_card_frame.pack_propagate(False)
+        self._build_license_overview()
+
         self._content_frame = tk.Frame(body, bg=self.colors["content_bg"])
         self._content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         self._switch_section("general")
+
+    def _build_license_overview(self):
+        c = self.colors
+        card = tk.Frame(self._license_card_frame, bg=c["card_bg"],
+                        highlightbackground=c["border"], highlightthickness=1)
+        card.pack(fill=tk.X, pady=14)
+        card._role = "card"
+
+        bar = tk.Frame(card, bg=c["card_bg"])
+        bar.pack(fill=tk.X, padx=18, pady=(14, 4))
+        tk.Label(bar, text="License Overview", font=("SF Pro Text", 12, "bold"),
+                 fg=c["text"], bg=c["card_bg"]).pack(anchor=tk.W)
+
+        sep = tk.Frame(card, bg=c["border"], height=1)
+        sep.pack(fill=tk.X, padx=18)
+
+        self._lo_container = tk.Frame(card, bg=c["card_bg"], padx=18, pady=12)
+        self._lo_container.pack(fill=tk.X)
+
+        self._update_license_overview()
+
+    def _update_license_overview(self):
+        c = self.colors
+        for w in self._lo_container.winfo_children():
+            w.destroy()
+
+        key = self.app.settings.get("license_key", "")
+        license_data = self.app.settings.get("license_data", {})
+        lic = license_data.get('license', {})
+        active = getattr(self.app, '_license_active', False)
+
+        if active and key:
+            is_trial = lic.get('is_trial', False)
+            lic_type = "Trial" if is_trial else "Licensed"
+            remaining = lic.get('remaining_days', '--')
+            expires_at = lic.get('expires_at', 'N/A')
+            try:
+                from datetime import datetime
+                expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                expires_at = expiry.strftime('%d %b %Y')
+            except:
+                pass
+            rows = [
+                ("Type", lic_type),
+                ("Remaining", f"{remaining} days" if remaining != '--' else '--'),
+                ("Expires", str(expires_at)),
+            ]
+        else:
+            rows = [("Type", "Not Activated")]
+
+        for label, value in rows:
+            row_f = tk.Frame(self._lo_container, bg=c["card_bg"])
+            row_f.pack(fill=tk.X, pady=4)
+            tk.Label(row_f, text=label, font=("SF Pro Text", 10),
+                     fg=c["muted"], bg=c["card_bg"], width=10, anchor=tk.W).pack(side=tk.LEFT)
+            val_color = c["success"] if value not in ("Not Activated", "--", "Trial") else c["text"]
+            tk.Label(row_f, text=value, font=("SF Pro Text", 10, "bold"),
+                     fg=val_color, bg=c["card_bg"]).pack(side=tk.LEFT)
+
+        btn_frame = tk.Frame(self._lo_container, bg=c["card_bg"])
+        btn_frame.pack(fill=tk.X, pady=(14, 0))
+        text = "Activate License" if not active else "Manage License"
+        bg_color = c["accent"] if not active else c["btn_secondary_bg"]
+        fg_color = "#ffffff" if not active else c["text"]
+        tk.Button(btn_frame, text=text, font=("SF Pro Text", 10, "bold"),
+                  fg=fg_color, bg=bg_color, bd=0, cursor="hand2",
+                  padx=16, pady=6, command=self._on_license_overview_activate).pack(fill=tk.X)
+
+    def _on_license_overview_activate(self):
+        if hasattr(self.app, 'show_settings'):
+            self.app._nav_click("settings")
+        self.app.root.after(100, self._focus_license_entry)
+
+    def _focus_license_entry(self):
+        if hasattr(self.app, 'settings_ui') and hasattr(self.app.settings_ui, 'license_key_entry'):
+            self.app.settings_ui.license_key_entry.focus_set()
 
     def _switch_section(self, section):
         self._current_section = section
@@ -79,6 +167,7 @@ class SettingsUI:
                 btn.config(bg=self.colors["card_bg"], fg=self.colors["text"])
 
         getattr(self, f"_build_{section}", self._build_general)()
+        self._update_license_overview()
 
     def _card(self, parent, title):
         card = tk.Frame(parent, bg=self.colors["card_bg"], relief=tk.FLAT, bd=0)
@@ -126,13 +215,34 @@ class SettingsUI:
 
         row = self._row(inner, "License Key:")
         saved_key = self.app.settings.get("license_key", "")
-        self.license_key_var = tk.StringVar(value=saved_key)
+        PLACEHOLDER = "Enter your license key"
+        self.license_key_var = tk.StringVar(value=saved_key if saved_key else PLACEHOLDER)
         self.license_key_entry = tk.Entry(row, textvariable=self.license_key_var,
                                           font=("SF Pro Text", 11),
-                                          bg=self.colors["input_bg"], fg=self.colors["input_fg"],
+                                          bg=self.colors["input_bg"],
+                                          fg=self.colors["muted"] if not saved_key else self.colors["input_fg"],
                                           insertbackground=self.colors["accent"],
-                                          bd=1, relief=tk.FLAT)
+                                          relief=tk.SOLID, bd=1,
+                                          highlightthickness=2,
+                                          highlightbackground=self.colors["input_border"],
+                                          highlightcolor=self.colors["accent"])
         self.license_key_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8)
+
+        def _on_lk_focus_in(event):
+            if self.license_key_var.get() == PLACEHOLDER:
+                self.license_key_var.set("")
+                self.license_key_entry.config(fg=self.colors["input_fg"])
+            self.license_key_entry.config(highlightbackground=self.colors["accent"])
+
+        def _on_lk_focus_out(event):
+            if not self.license_key_var.get().strip():
+                self.license_key_var.set(PLACEHOLDER)
+                self.license_key_entry.config(fg=self.colors["muted"])
+            self.license_key_entry.config(highlightbackground=self.colors["input_border"])
+
+        self.license_key_entry.bind("<FocusIn>", _on_lk_focus_in)
+        self.license_key_entry.bind("<FocusOut>", _on_lk_focus_out)
+
         self.license_status_label = tk.Label(row, text="", font=("SF Pro Text", 9),
                                              fg=self.colors["muted"], bg=self.colors["card_bg"])
         self.license_status_label.pack(side=tk.RIGHT, padx=4)
@@ -283,23 +393,37 @@ class SettingsUI:
         inner3 = self._card(self._content_frame, "License")
         license_key = self.app.settings.get("license_key", "")
         license_data = self.app.settings.get("license_data", {})
+        lic = license_data.get('license', {})
         active = getattr(self.app, '_license_active', False)
 
         if active and license_key:
-            lic = license_data.get('license', {})
             status_text = lic.get('status', 'active').capitalize()
+            lic_type = "Trial" if lic.get('is_trial', False) else "Licensed"
+            remaining = lic.get('remaining_days', '--')
             expires_at = lic.get('expires_at', 'N/A')
-            if expires_at and expires_at != 'N/A':
-                try:
-                    from datetime import datetime
+            plan_name = lic.get('plan_name', '--')
+            lic_version = lic.get('license_version', '--')
+            last_val = lic.get('last_validation_at', '--')
+            hardware_fp = getattr(getattr(self.app, '_license_engine', None), '_fingerprint', {})
+            device_id = hardware_fp.get('fingerprint', '--')[:16] + '...' if hardware_fp.get('fingerprint') else '--'
+            try:
+                from datetime import datetime
+                if expires_at and expires_at != 'N/A':
                     expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                    expires_at = expiry.strftime('%Y-%m-%d %H:%M')
-                except:
-                    pass
+                    expires_at = expiry.strftime('%d %b %Y')
+                if last_val and last_val != '--':
+                    lv = datetime.fromisoformat(last_val.replace('Z', '+00:00'))
+                    last_val = lv.strftime('%d %b %Y %H:%M')
+            except:
+                pass
             lic_info = [
                 ("License Status:", status_text),
-                ("License Key:", f"{license_key[:12]}...{license_key[-4:]}" if len(license_key) > 16 else license_key),
-                ("Expires:", str(expires_at)),
+                ("License Type:", lic_type),
+                ("Days Remaining:", f"{remaining} days left" if remaining != '--' else '--'),
+                ("Expiry Date:", str(expires_at)),
+                ("Plan / Version:", f"{plan_name} / {lic_version}" if plan_name != '--' else '--'),
+                ("Device ID:", device_id),
+                ("Last Validation:", str(last_val)),
             ]
         else:
             lic_info = [
@@ -308,9 +432,9 @@ class SettingsUI:
 
         for label, value in lic_info:
             row = self._row(inner3, label)
+            val_color = self.colors["success"] if value in ("Active", "Licensed") else self.colors["text"]
             tk.Label(row, text=value, font=("SF Pro Text", 11, "bold"),
-                     fg=self.colors["success"] if value == "Active" else self.colors["text"],
-                     bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+                     fg=val_color, bg=self.colors["card_bg"]).pack(side=tk.LEFT)
 
         inner4 = self._card(self._content_frame, "Legal")
         tk.Label(inner4, text="ZEMmacOS is a tool for downloading macOS installer packages from Apple's servers.",
@@ -349,8 +473,14 @@ class SettingsUI:
         self.app.log("Performance settings saved", "info")
         messagebox.showinfo("Settings", "Performance settings saved!")
 
+    def _get_license_key(self):
+        val = self.license_key_var.get().strip()
+        if val == "Enter your license key":
+            return ""
+        return val
+
     def _activate_license(self):
-        key = self.license_key_var.get().strip()
+        key = self._get_license_key()
         if not key:
             self.license_status_label.config(text="Enter a key", fg=self.colors["error"])
             return
@@ -358,6 +488,9 @@ class SettingsUI:
             success = self.app._activate_license_key(key)
             if success:
                 self.license_status_label.config(text="Active", fg=self.colors["success"])
+                self._update_license_overview()
+                if self._current_section == "about":
+                    self._switch_section("about")
             else:
                 self.license_status_label.config(text="Failed", fg=self.colors["error"])
         else:
