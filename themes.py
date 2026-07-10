@@ -243,12 +243,14 @@ def _update_widget_colors(widget, colors):
             except:
                 widget.config(bg=colors["btn_secondary_bg"], fg=colors["btn_secondary_fg"])
         elif w_type == "Entry":
-            widget.config(bg=colors["input_bg"], fg=colors["input_fg"], insertbackground=colors["text"])
+            widget.config(bg=colors["input_bg"], fg=colors["input_fg"],
+                          insertbackground=colors["accent"])
         elif w_type == "Text":
             if role == "console":
                 widget.config(bg=colors["console_bg"], fg=colors["console_fg"], insertbackground="white")
             else:
-                widget.config(bg=colors["input_bg"], fg=colors["input_fg"], insertbackground=colors["text"])
+                widget.config(bg=colors["input_bg"], fg=colors["input_fg"],
+                              insertbackground=colors["accent"])
         elif w_type == "Listbox":
             widget.config(bg=colors["input_bg"], fg=colors["input_fg"], selectbackground=colors["accent"])
         elif w_type == "Canvas":

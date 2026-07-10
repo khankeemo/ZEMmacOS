@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
+import math
 import os
 import sys
 import time
@@ -8,6 +9,19 @@ from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _create_roundrect(canvas, x1, y1, x2, y2, r=8, **kwargs):
+    canvas.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r,
+                      start=90, extent=90, **kwargs)
+    canvas.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r,
+                      start=0, extent=90, **kwargs)
+    canvas.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2,
+                      start=180, extent=90, **kwargs)
+    canvas.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2,
+                      start=270, extent=90, **kwargs)
+    canvas.create_rectangle(x1 + r, y1, x2 - r, y2, **kwargs)
+    canvas.create_rectangle(x1, y1 + r, x2, y2 - r, **kwargs)
 
 
 class ZEMmacOSUI:
@@ -232,84 +246,126 @@ class ZEMmacOSUI:
         self.root.after(50, lambda: fade_in(toast, 0))
         self.root.after(duration, lambda: fade_out(toast, 300))
 
-    # ---- Network Recovery Dialog ----
+    # -----------------------------------------------------------------
+    # CUSTOM MODAL DIALOG HELPERS
+    # -----------------------------------------------------------------
+    def _make_modal_dialog(self, w, h, close_cb=None):
+        c = self.colors
+        d = tk.Toplevel(self.root)
+        d.title("")
+        d.overrideredirect(True)
+        d.transient(self.root)
+        d.resizable(False, False)
+        if close_cb:
+            d.protocol("WM_DELETE_WINDOW", close_cb)
 
+        canvas = tk.Canvas(d, width=w, height=h, bg=c["card_bg"],
+                           highlightthickness=0)
+        canvas.pack()
+        _create_roundrect(canvas, 0, 0, w, h, r=16,
+                          fill=c["card_bg"], outline=c["border"], width=1)
+        d.update_idletasks()
+        d.tk.call("tk::PlaceWindow", d, "center")
+        d.lift()
+        d.focus_force()
+        d.grab_set()
+        d.wait_visibility()
+        return d, canvas
+
+    def _make_dialog_button(self, parent, text, bg, fg, cmd, x, y, w, h):
+        btn = tk.Button(parent, text=text, font=("SF Pro Text", 10, "bold"),
+                        fg=fg, bg=bg, bd=0, cursor="hand2",
+                        activebackground=self.colors.get("btn_secondary_hover", "#555"),
+                        command=cmd)
+        btn.place(x=x, y=y, width=w, height=h)
+        return btn
+
+    # -----------------------------------------------------------------
+    # NETWORK LOSS DIALOG
+    # -----------------------------------------------------------------
     def _show_network_dialog(self, retry_count, on_pause_callback=None):
         if hasattr(self, "_net_dialog") and self._net_dialog and self._net_dialog.winfo_exists():
             self._update_network_dialog(retry_count)
             return
         c = self.colors
-        d = tk.Toplevel(self.root)
-        d.title("")
-        d.configure(bg=c["card_bg"], highlightbackground=c["border"], highlightthickness=1)
-        d.resizable(False, False)
-        d.attributes("-topmost", True)
-        d.protocol("WM_DELETE_WINDOW", lambda: None)
-        d.transient(self.root)
-        d.grab_set()
+        W, H = 250, 280
+
+        d, canvas = self._make_modal_dialog(W, H)
         self._net_dialog = d
+        self._net_canvas = canvas
         self._net_countdown_value = 30
 
-        frame = tk.Frame(d, bg=c["card_bg"], padx=24, pady=18)
-        frame.pack()
+        cx = W // 2
 
-        icon = tk.Label(frame, text="\u26a0", font=("SF Pro Display", 22),
-                        fg=c["warning"], bg=c["card_bg"])
-        icon.pack(pady=(0, 6))
+        # Wi-Fi signal icon (3 arcs + ground line, with X overlay)
+        icon_y = 50
+        for r, w in [(22, 3.0), (16, 2.5), (10, 2.0)]:
+            canvas.create_arc(cx - r, icon_y - r, cx + r, icon_y + r,
+                              start=225, extent=90, fill="",
+                              outline=c["warning"], width=w)
+        canvas.create_line(cx - 24, icon_y + 4, cx + 24, icon_y + 4,
+                           fill=c["warning"], width=3, capstyle="round")
 
-        tk.Label(frame, text="Connection Lost",
-                 font=("SF Pro Text", 13, "bold"),
-                 fg=c["text"], bg=c["card_bg"]).pack(pady=(0, 4))
+        # Red X overlay
+        xs = 9
+        x_off = -6
+        canvas.create_line(cx - xs, icon_y - xs + x_off,
+                           cx + xs, icon_y + xs + x_off,
+                           fill=c["error"], width=3, capstyle="round")
+        canvas.create_line(cx + xs, icon_y - xs + x_off,
+                           cx - xs, icon_y + xs + x_off,
+                           fill=c["error"], width=3, capstyle="round")
 
-        tk.Label(frame, text="Auto-retry every 30s",
-                 font=("SF Pro Text", 9),
-                 fg=c["muted"], bg=c["card_bg"]).pack(pady=(0, 8))
+        # Title
+        canvas.create_text(cx, 100, text="Connection Lost",
+                           font=("SF Pro Display", 15, "bold"),
+                           fill=c["text"], anchor="center")
 
-        self._net_retry_label = tk.Label(frame, text=f"Retry {retry_count} / 10",
-                                          font=("SF Pro Text", 11, "bold"),
-                                          fg=c["accent"], bg=c["card_bg"])
-        self._net_retry_label.pack()
+        # Auto retry
+        canvas.create_text(cx, 130, text="Auto retry: 30 s",
+                           font=("SF Pro Text", 11),
+                           fill=c["muted"], anchor="center")
 
-        self._net_countdown_label = tk.Label(frame, text="Next retry in: 30s",
-                                              font=("SF Pro Text", 9),
-                                              fg=c["muted"], bg=c["card_bg"])
-        self._net_countdown_label.pack(pady=(2, 10))
+        # Attempt counter
+        self._net_retry_label_id = canvas.create_text(
+            cx, 158, text=f"Attempt: {retry_count} / 10",
+            font=("SF Pro Text", 12, "bold"),
+            fill=c["accent"], anchor="center")
 
-        btn_frame = tk.Frame(frame, bg=c["card_bg"])
-        btn_frame.pack()
+        # Countdown
+        self._net_countdown_label_id = canvas.create_text(
+            cx, 182, text="Next retry in: 30s",
+            font=("SF Pro Text", 10),
+            fill=c["muted"], anchor="center")
+
+        # Buttons
+        bw, bh = 95, 32
+        by = 222
 
         if on_pause_callback:
-            self._net_pause_btn = tk.Button(btn_frame, text="Pause",
-                                            font=("SF Pro Text", 9, "bold"),
-                                            fg="white", bg=c["warning"],
-                                            activebackground=c["warning_text"],
-                                            bd=0, padx=14, pady=5, cursor="hand2",
-                                            command=lambda: self._on_net_pause(on_pause_callback))
-            self._net_pause_btn.pack(side=tk.LEFT, padx=(0, 6))
-
-        tk.Button(btn_frame, text="Close",
-                  font=("SF Pro Text", 9, "bold"),
-                  fg=c["text"], bg=c["btn_secondary_bg"],
-                  activebackground=c["btn_secondary_hover"],
-                  bd=0, padx=14, pady=5, cursor="hand2",
-                  command=self._close_network_dialog).pack(side=tk.LEFT)
-
-        d.update_idletasks()
-        pw, ph = self.root.winfo_width(), self.root.winfo_height()
-        px, py = self.root.winfo_x(), self.root.winfo_y()
-        dw, dh = d.winfo_width(), d.winfo_height()
-        d.geometry(f"+{px + (pw - dw)//2}+{py + (ph - dh)//2}")
+            self._make_dialog_button(d, "Pause", c["warning"], "white",
+                                     lambda: self._on_net_pause(on_pause_callback),
+                                     cx - bw - 6, by, bw, bh)
+            self._make_dialog_button(d, "Close", c["btn_secondary_bg"], c["text"],
+                                     self._close_network_dialog,
+                                     cx + 6, by, bw, bh)
+        else:
+            self._make_dialog_button(d, "Close", c["btn_secondary_bg"], c["text"],
+                                     self._close_network_dialog,
+                                     cx - bw // 2, by, bw, bh)
 
     def _update_network_dialog(self, retry_count):
-        if hasattr(self, "_net_retry_label") and self._net_retry_label.winfo_exists():
-            self._net_retry_label.config(text=f"Retry {retry_count} / 10")
-        if hasattr(self, "_net_countdown_label") and self._net_countdown_label.winfo_exists():
+        if hasattr(self, "_net_canvas") and self._net_canvas.winfo_exists():
+            self._net_canvas.itemconfig(self._net_retry_label_id,
+                                        text=f"Attempt: {retry_count} / 10")
             self._net_countdown_value = 30
-            self._net_countdown_label.config(text="Next retry in: 30s")
+            self._net_canvas.itemconfig(self._net_countdown_label_id,
+                                        text="Next retry in: 30s")
 
     def _update_dialog_countdown(self, seconds):
-        if hasattr(self, "_net_countdown_label") and self._net_countdown_label.winfo_exists():
-            self._net_countdown_label.config(text=f"Next retry in: {seconds}s")
+        if hasattr(self, "_net_canvas") and self._net_canvas.winfo_exists():
+            self._net_canvas.itemconfig(self._net_countdown_label_id,
+                                        text=f"Next retry in: {seconds}s")
 
     def _auto_close_network_dialog(self):
         self._net_dialog_open = False
@@ -319,6 +375,7 @@ class ZEMmacOSUI:
             except:
                 pass
         self._net_dialog = None
+        self._net_canvas = None
         self.show_toast("\u2705 Internet restored. Resuming download...", "success", 3000)
 
     def _close_network_dialog(self):
@@ -329,11 +386,78 @@ class ZEMmacOSUI:
             except:
                 pass
         self._net_dialog = None
+        self._net_canvas = None
 
     def _on_net_pause(self, callback):
         self._close_network_dialog()
         if callback:
             callback()
+
+    # -----------------------------------------------------------------
+    # CANCEL CONFIRMATION DIALOG
+    # -----------------------------------------------------------------
+    def _show_cancel_confirmation(self, on_yes_callback):
+        if getattr(self, "_cancel_dialog_open", False):
+            return
+        self._cancel_dialog_open = True
+
+        c = self.colors
+        W, H = 280, 195
+
+        def cleanup():
+            self._cancel_dialog_open = False
+            if hasattr(self, "_cancel_dialog") and self._cancel_dialog:
+                try:
+                    self._cancel_dialog.destroy()
+                except:
+                    pass
+                self._cancel_dialog = None
+
+        d, canvas = self._make_modal_dialog(W, H, close_cb=cleanup)
+        self._cancel_dialog = d
+        cx = W // 2
+
+        # Warning triangle icon
+        icon_cx, icon_cy = cx, 36
+        tri = canvas.create_polygon(
+            icon_cx, icon_cy - 14,
+            icon_cx - 14, icon_cy + 8,
+            icon_cx + 14, icon_cy + 8,
+            fill=c["warning"], outline="", tags="icon")
+        # Exclamation bar
+        canvas.create_rectangle(icon_cx - 2.5, icon_cy - 7,
+                                icon_cx + 2.5, icon_cy + 2,
+                                fill="white", outline="", tags="icon")
+        # Exclamation dot
+        canvas.create_rectangle(icon_cx - 2.5, icon_cy + 4.5,
+                                icon_cx + 2.5, icon_cy + 6.5,
+                                fill="white", outline="", tags="icon")
+
+        # Text
+        canvas.create_text(cx, 82,
+                           text="Are you sure you want\nto cancel the download?",
+                           font=("SF Pro Text", 12, "bold"),
+                           fill=c["text"], anchor="center", justify="center")
+
+        canvas.create_text(cx, 120,
+                           text="All downloaded data will be deleted.",
+                           font=("SF Pro Text", 10),
+                           fill=c["muted"], anchor="center")
+
+        # Buttons
+        bw, bh = 100, 32
+        by = 148
+
+        def on_yes():
+            cleanup()
+            on_yes_callback()
+
+        self._make_dialog_button(d, "Yes", c["error"], "white",
+                                 on_yes,
+                                 cx - bw - 8, by, bw, bh)
+        self._make_dialog_button(d, "No", c["btn_secondary_bg"], c["text"],
+                                 cleanup,
+                                 cx + 8, by, bw, bh)
 
     # ---- Dashboard ----
 
@@ -565,7 +689,7 @@ class ZEMmacOSUI:
 
         stats_row = tk.Frame(eng_body, bg=colors["card_bg"])
         stats_row.pack(fill=tk.X, pady=4)
-        self.dl_speed = tk.Label(stats_row, text="Speed: --", font=("SF Pro Text", 10),
+        self.dl_speed = tk.Label(stats_row, text="Download: --", font=("SF Pro Text", 10),
                                  fg=colors["text"], bg=colors["card_bg"])
         self.dl_speed.pack(side=tk.LEFT, padx=8)
         self.dl_eta = tk.Label(stats_row, text="ETA: --", font=("SF Pro Text", 10),
@@ -739,7 +863,7 @@ class ZEMmacOSUI:
             self._resume_callback()
     def _on_cancel_download(self):
         if self._cancel_callback:
-            self._cancel_callback()
+            self._show_cancel_confirmation(self._cancel_callback)
     def _on_clean_temp(self):
         if self._clean_callback:
             self._clean_callback()
@@ -766,16 +890,20 @@ class ZEMmacOSUI:
                 spd = speed
                 for unit in ["B/s", "KB/s", "MB/s", "GB/s"]:
                     if spd < 1024:
-                        self.dl_speed.config(text=f"{spd:.1f} {unit}")
+                        self.dl_speed.config(text=f"Download: {spd:.1f} {unit}")
                         break
                     spd /= 1024
             else:
-                self.dl_speed.config(text="--")
+                self.dl_speed.config(text="Download: --")
             if eta > 0 and status != "completed":
-                hours, minutes, secs = int(eta // 3600), int((eta % 3600) // 60), int(eta % 60)
-                self.dl_eta.config(text=f"{hours:02d}:{minutes:02d}:{secs:02d}" if hours > 0 else f"{minutes:02d}:{secs:02d}")
+                if eta >= 3600:
+                    self.dl_eta.config(text=f"ETA: {eta/3600:.1f} hr")
+                elif eta >= 60:
+                    self.dl_eta.config(text=f"ETA: {eta/60:.1f} min")
+                else:
+                    self.dl_eta.config(text=f"ETA: {eta:.0f} sec")
             else:
-                self.dl_eta.config(text="--")
+                self.dl_eta.config(text="ETA: --")
 
             def fmt(b):
                 if b <= 0:
@@ -834,7 +962,7 @@ class ZEMmacOSUI:
             self.dl_progress.set_value(0, animate=False)
             self.dl_percentage.config(text="0%")
             self.dl_filename.config(text="No active download")
-            self.dl_speed.config(text="Speed: --")
+            self.dl_speed.config(text="Download: --")
             self.dl_eta.config(text="ETA: --")
             self.dl_size.config(text="Size: --")
             self.dl_remaining.config(text="Remaining: --")

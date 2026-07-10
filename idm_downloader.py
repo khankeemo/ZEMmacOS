@@ -32,6 +32,57 @@ def _is_network_error(exc):
     return any(k in name for k in keywords) or isinstance(exc, NETWORK_ERRORS)
 
 
+def probe_optimal_threads(url, headers=None, probe_bytes=4*1024*1024):
+    """Download first probe_bytes with 1,2,4,8,16 threads concurrently, return fastest count."""
+    best = 8
+    best_speed = 0
+
+    def _test(nt):
+        nonlocal best, best_speed
+        seg_size = probe_bytes // nt
+        ret = []
+        s = requests.Session()
+        s.headers.update({"User-Agent": "Mozilla/5.0 ZEMmacOS Probe"})
+
+        def work(seg_id, start, end):
+            try:
+                h = {"Range": f"bytes={start}-{end}"}
+                r = s.get(url, headers=h, stream=True, timeout=15)
+                w = 0
+                for c in r.iter_content(chunk_size=262144):
+                    if c:
+                        w += len(c)
+                ret.append(w)
+            except Exception:
+                ret.append(0)
+
+        t0 = time.time()
+        threads = []
+        for i in range(nt):
+            s_start = i * seg_size
+            s_end = (i + 1) * seg_size - 1 if i < nt - 1 else probe_bytes - 1
+            t = threading.Thread(target=lambda i=i, s=s_start, e=s_end: work(i, s, e))
+            t.start()
+            threads.append(t)
+        for t in threads:
+            t.join(timeout=15)
+        elapsed = time.time() - t0
+        total = sum(ret)
+        speed = total / elapsed if elapsed > 0 else 0
+        if speed > best_speed:
+            best_speed = speed
+            best = nt
+
+    probe_threads = []
+    for nt in [1, 2, 4, 8, 16]:
+        t = threading.Thread(target=_test, args=(nt,))
+        t.start()
+        probe_threads.append(t)
+    for t in probe_threads:
+        t.join(timeout=25)
+    return best
+
+
 class IDMDownloader:
     """Multi-threaded download manager with pause/resume support"""
 
@@ -94,7 +145,7 @@ class IDMDownloader:
         try:
             response = self._session.head(url, headers=headers or {}, timeout=10, allow_redirects=True)
             if response.status_code == 200:
-                supports_range = response.headers.get('Accept-Ranges', '').lower() == 'bytes'
+                supports_range = 'bytes' in response.headers.get('Accept-Ranges', '').lower()
                 return True, supports_range, int(response.headers.get('Content-Length', -1))
             return False, False, -1
         except Exception as e:
@@ -123,14 +174,16 @@ class IDMDownloader:
 
                 bytes_written = 0
                 last_update = time.time()
+                last_reported = 0
 
                 if os.path.exists(part_file):
                     bytes_written = os.path.getsize(part_file)
+                    last_reported = bytes_written
                     if bytes_written >= (end_byte - start_byte + 1):
                         return True, bytes_written
 
                 with open(part_file, 'ab') as f:
-                    for chunk in response.iter_content(chunk_size=65536):
+                    for chunk in response.iter_content(chunk_size=262144):
                         if download_id:
                             with self.lock:
                                 if download_id in self.cancelled:
@@ -144,10 +197,12 @@ class IDMDownloader:
 
                             if download_id and total_size:
                                 now = time.time()
-                                if now - last_update >= 0.5:
+                                if now - last_update >= 1.0:
+                                    delta = bytes_written - last_reported
                                     with self.lock:
                                         if download_id in self.active_downloads:
-                                            self.active_downloads[download_id]["downloaded_bytes"] += len(chunk)
+                                            self.active_downloads[download_id]["downloaded_bytes"] += delta
+                                    last_reported = bytes_written
                                     last_update = now
                 return True, bytes_written
             except Exception as e:
@@ -262,8 +317,9 @@ class IDMDownloader:
             def progress_reporter():
                 last_bytes = downloaded_so_far
                 last_time = time.time()
+                speed_samples = []
                 while not progress_stop.is_set():
-                    time.sleep(0.5)
+                    time.sleep(1.0)
                     with self.lock:
                         if download_id not in self.active_downloads:
                             break
@@ -275,7 +331,12 @@ class IDMDownloader:
                         break
                     now = time.time()
                     elapsed = now - last_time
-                    speed = (current - last_bytes) / elapsed if elapsed > 0 else 0
+                    inst_speed = (current - last_bytes) / elapsed if elapsed > 0 else 0
+                    if inst_speed > 0:
+                        speed_samples.append(inst_speed)
+                        if len(speed_samples) > 5:
+                            speed_samples.pop(0)
+                    speed = sum(speed_samples) / len(speed_samples) if speed_samples else inst_speed
                     eta = (total - current) / speed if speed > 0 else 0
                     last_bytes = current
                     last_time = now
@@ -436,7 +497,7 @@ class IDMDownloader:
 
             mode = 'ab' if start_byte > 0 else 'wb'
             with open(filepath, mode) as f:
-                for chunk in response.iter_content(chunk_size=65536):
+                for chunk in response.iter_content(chunk_size=262144):
                     if url in self.cancelled:
                         return {"status": "cancelled", "filepath": None, "error": None}
                     if url in self.paused:
@@ -446,7 +507,7 @@ class IDMDownloader:
                         f.write(chunk)
                         downloaded += len(chunk)
                         now = time.time()
-                        if now - last_update >= 0.3:
+                        if now - last_update >= 1.0:
                             elapsed = now - start_time
                             speed = (downloaded - start_byte) / elapsed if elapsed > 0 else 0
                             eta = (total_size - downloaded) / speed if speed > 0 else 0
@@ -503,6 +564,9 @@ class IDMDownloader:
             if url in self.active_downloads:
                 self.active_downloads[url]["status"] = "cancelled"
         self._send_log("Cancel signal sent - cleaning up...", "warning")
+        threading.Thread(target=self._cleanup_cancelled, args=(url,), daemon=True).start()
+
+    def _cleanup_cancelled(self, url):
         time.sleep(0.5)
         with self.lock:
             if url in self.active_downloads:
