@@ -170,7 +170,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._license_engine = None
         self._sdk_config = None
         self._license_active = False
-        self._app_locked = True
+        self._app_locked = False
 
         if not self._sdk_available:
             self.log("License SDK not found - running without license check", "warning")
