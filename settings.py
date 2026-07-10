@@ -22,6 +22,9 @@ DEFAULT_CONFIG = {
     "timeout_seconds": 30,
     "notifications_enabled": True,
     "compact_mode": False,
+    "license_key": "",
+    "license_data": {},
+    "license_cached_at": 0,
 }
 
 
@@ -93,18 +96,26 @@ class AppSettingsService:
                 self.app.settings_catalog_var.set(self.settings_manager.get("catalog", "publicrelease"))
             if hasattr(self.app, 'threads_var'):
                 self.app.threads_var.set(str(self.settings_manager.get("download_threads", 8)))
+            if hasattr(self.app, 'license_key_var'):
+                self.app.license_key_var.set(self.settings_manager.get("license_key", ""))
         except Exception as e:
             self.app.log(f"Error loading settings to UI: {e}", "error")
     
     def save_ui_values(self):
         """Save UI values to settings"""
-        dl_dir = self.app.settings_download_dir.get().strip() if hasattr(self.app, 'settings_download_dir') else ""
-        catalog = self.app.settings_catalog_var.get() if hasattr(self.app, 'settings_catalog_var') else "publicrelease"
-        threads = int(self.app.threads_var.get()) if hasattr(self.app, 'threads_var') else 8
+        dl_dir = self.app.settings_download_dir.get().strip() if hasattr(self.app, 'settings_download_dir') and self.app.settings_download_dir is not None else ""
+        catalog = self.app.settings_catalog_var.get() if hasattr(self.app, 'settings_catalog_var') and self.app.settings_catalog_var is not None else "publicrelease"
+        threads = int(self.app.threads_var.get()) if hasattr(self.app, 'threads_var') and self.app.threads_var is not None else 8
         
         self.settings_manager.set("download_directory", dl_dir)
         self.settings_manager.set("catalog", catalog)
         self.settings_manager.set("download_threads", threads)
+        
+        if hasattr(self.app, 'license_key_var'):
+            key_val = self.app.license_key_var.get().strip()
+            if key_val == "Enter your license key":
+                key_val = ""
+            self.settings_manager.set("license_key", key_val)
         
         self.app.log("Settings saved", "info")
         return True
