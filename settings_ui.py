@@ -104,44 +104,44 @@ class SettingsUI:
         for w in self._lo_container.winfo_children():
             w.destroy()
 
-        key = self.app.settings.get("license_key", "")
-        license_data = self.app.settings.get("license_data", {})
-        lic = license_data.get('license', {})
-        active = getattr(self.app, '_license_active', False)
+        status = getattr(self.app, '_license_status', None)
 
-        if active and key:
-            is_trial = lic.get('is_trial', False)
-            lic_type = "Trial" if is_trial else "Licensed"
-            remaining = lic.get('remaining_days', '--')
-            expires_at = lic.get('expires_at', 'N/A')
+        if status and status.valid:
+            lic_type = "Trial" if status.trial_active else "Licensed"
+            remaining = status.days_remaining
+            expires_at = status.expires_at or 'N/A'
             try:
                 from datetime import datetime
-                expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                expires_at = expiry.strftime('%d %b %Y')
+                if expires_at and expires_at != 'N/A':
+                    expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                    expires_at = expiry.strftime('%d %b %Y')
             except:
                 pass
             rows = [
+                ("Status", "Active" if status.valid else "Inactive"),
                 ("Type", lic_type),
-                ("Remaining", f"{remaining} days" if remaining != '--' else '--'),
+                ("Remaining", f"{remaining} day(s)" if remaining is not None else '--'),
                 ("Expires", str(expires_at)),
             ]
         else:
-            rows = [("Type", "Not Activated")]
+            rows = [("Status", "Not Activated")]
 
         for label, value in rows:
             row_f = tk.Frame(self._lo_container, bg=c["card_bg"])
             row_f.pack(fill=tk.X, pady=4)
             tk.Label(row_f, text=label, font=("SF Pro Text", 10),
                      fg=c["muted"], bg=c["card_bg"], width=10, anchor=tk.W).pack(side=tk.LEFT)
-            val_color = c["success"] if value not in ("Not Activated", "--", "Trial") else c["text"]
+            is_active = value in ("Active", "Licensed")
+            val_color = c["success"] if is_active else c["text"]
             tk.Label(row_f, text=value, font=("SF Pro Text", 10, "bold"),
                      fg=val_color, bg=c["card_bg"]).pack(side=tk.LEFT)
 
         btn_frame = tk.Frame(self._lo_container, bg=c["card_bg"])
         btn_frame.pack(fill=tk.X, pady=(14, 0))
-        text = "Activate License" if not active else "Manage License"
-        bg_color = c["accent"] if not active else c["btn_secondary_bg"]
-        fg_color = "#ffffff" if not active else c["text"]
+        has_valid = status and status.valid
+        text = "Activate License" if not has_valid else "Manage License"
+        bg_color = c["accent"] if not has_valid else c["btn_secondary_bg"]
+        fg_color = "#ffffff" if not has_valid else c["text"]
         tk.Button(btn_frame, text=text, font=("SF Pro Text", 10, "bold"),
                   fg=fg_color, bg=bg_color, bd=0, cursor="hand2",
                   padx=16, pady=6, command=self._on_license_overview_activate).pack(fill=tk.X)
@@ -391,50 +391,56 @@ class SettingsUI:
                      fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
 
         inner3 = self._card(self._content_frame, "License")
-        license_key = self.app.settings.get("license_key", "")
-        license_data = self.app.settings.get("license_data", {})
-        lic = license_data.get('license', {})
-        active = getattr(self.app, '_license_active', False)
+        status = getattr(self.app, '_license_status', None)
 
-        if active and license_key:
-            status_text = lic.get('status', 'active').capitalize()
-            lic_type = "Trial" if lic.get('is_trial', False) else "Licensed"
-            remaining = lic.get('remaining_days', '--')
-            expires_at = lic.get('expires_at', 'N/A')
-            plan_name = lic.get('plan_name', '--')
-            lic_version = lic.get('license_version', '--')
-            last_val = lic.get('last_validation_at', '--')
-            hardware_fp = getattr(getattr(self.app, '_license_engine', None), '_fingerprint', {})
-            device_id = hardware_fp.get('fingerprint', '--')[:16] + '...' if hardware_fp.get('fingerprint') else '--'
+        support_email = "support@websmithdigital.com"
+        support_url = "www.websmithdigital.com"
+        if hasattr(self.app, '_engine') and self.app._engine:
+            cfg = getattr(self.app._engine, 'config', {})
+            branding = cfg.get('branding', {})
+            support_email = branding.get('support_email', support_email)
+            support_url = branding.get('support_url', support_url)
+            support_url = support_url.replace('https://', '').replace('http://', '')
+
+        if status and status.valid:
+            lic_type = "Trial License" if status.trial_active else (status.plan + " License" if status.plan else "License")
+            lic_status = "Trial" if status.trial_active else "Active"
+            remaining = status.days_remaining
+            expires_at = status.expires_at or 'N/A'
             try:
                 from datetime import datetime
                 if expires_at and expires_at != 'N/A':
                     expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                    expires_at = expiry.strftime('%d %b %Y')
-                if last_val and last_val != '--':
-                    lv = datetime.fromisoformat(last_val.replace('Z', '+00:00'))
-                    last_val = lv.strftime('%d %b %Y %H:%M')
+                    expires_at = expiry.strftime('%d %B %Y')
             except:
                 pass
             lic_info = [
-                ("License Status:", status_text),
+                ("License Status:", lic_status),
                 ("License Type:", lic_type),
-                ("Days Remaining:", f"{remaining} days left" if remaining != '--' else '--'),
-                ("Expiry Date:", str(expires_at)),
-                ("Plan / Version:", f"{plan_name} / {lic_version}" if plan_name != '--' else '--'),
-                ("Device ID:", device_id),
-                ("Last Validation:", str(last_val)),
+                ("Remaining:", f"{remaining} Day(s)" if remaining is not None else '--'),
+                ("Expires:", str(expires_at)),
             ]
         else:
             lic_info = [
-                ("License Status:", "Not Activated"),
+                ("License Status:", "Inactive"),
+                ("License Type:", "--"),
+                ("Remaining:", "--"),
+                ("Expires:", "--"),
             ]
 
         for label, value in lic_info:
             row = self._row(inner3, label)
-            val_color = self.colors["success"] if value in ("Active", "Licensed") else self.colors["text"]
+            val_color = self.colors["success"] if value in ("Active", "Trial") else self.colors["text"]
             tk.Label(row, text=value, font=("SF Pro Text", 11, "bold"),
                      fg=val_color, bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+
+        row = self._row(inner3, "Support:")
+        val_color = self.colors["accent"]
+        tk.Label(row, text=support_email, font=("SF Pro Text", 11, "bold"),
+                 fg=val_color, bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+        row = self._row(inner3, "Website:")
+        tk.Label(row, text=support_url, font=("SF Pro Text", 11, "bold"),
+                 fg=val_color, bg=self.colors["card_bg"]).pack(side=tk.LEFT)
 
         inner4 = self._card(self._content_frame, "Legal")
         tk.Label(inner4, text="ZEMmacOS is a tool for downloading macOS installer packages from Apple's servers.",
@@ -484,8 +490,8 @@ class SettingsUI:
         if not key:
             self.license_status_label.config(text="Enter a key", fg=self.colors["error"])
             return
-        if hasattr(self.app, '_activate_license_key'):
-            success = self.app._activate_license_key(key)
+        if hasattr(self.app, 'activate_license_key'):
+            success = self.app.activate_license_key(key)
             if success:
                 self.license_status_label.config(text="Active", fg=self.colors["success"])
                 self._update_license_overview()
@@ -498,14 +504,15 @@ class SettingsUI:
             self.license_status_label.config(text="Saved", fg=self.colors["muted"])
 
     def _update_license_status(self):
-        active = getattr(self.app, '_license_active', False)
-        key = self.app.settings.get("license_key", "")
-        if active and key:
+        status = getattr(self.app, '_license_status', None)
+        if status and status.valid:
             self.license_status_label.config(text="Active", fg=self.colors["success"])
-        elif key:
-            self.license_status_label.config(text="Inactive", fg=self.colors["error"])
         else:
-            self.license_status_label.config(text="", fg=self.colors["muted"])
+            key = self.app.settings.get("license_key", "")
+            if key:
+                self.license_status_label.config(text="Inactive", fg=self.colors["error"])
+            else:
+                self.license_status_label.config(text="", fg=self.colors["muted"])
 
     def _check_for_updates(self):
         import webbrowser

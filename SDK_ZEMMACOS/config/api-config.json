@@ -62,8 +62,8 @@
     "primary_color": "#6366f1",
     "secondary_color": "#4f46e5",
     "accent_color": "#8b5cf6",
-    "support_email": "",
-    "support_url": ""
+    "support_email": "support@websmithdigital.com",
+    "support_url": "https://www.websmithdigital.com"
   },
   "ui": {
     "theme": "auto",

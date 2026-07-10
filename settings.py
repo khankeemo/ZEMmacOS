@@ -23,8 +23,6 @@ DEFAULT_CONFIG = {
     "notifications_enabled": True,
     "compact_mode": False,
     "license_key": "",
-    "license_data": {},
-    "license_cached_at": 0,
 }
 
 

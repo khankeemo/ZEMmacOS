@@ -459,38 +459,27 @@ class ZEMmacOSUI:
                                  cleanup,
                                  cx + 8, by, bw, bh)
 
-    # ---- License Status Widget ----
+    # ---- License Status Widget (SDK-powered) ----
 
     def _build_license_status_widget(self, parent):
         c = self.colors
-        active = getattr(self, '_license_active', False)
-        key = ""
-        license_data = {}
-        if hasattr(self, 'settings'):
-            key = self.settings.get("license_key", "")
-            license_data = self.settings.get("license_data", {})
-        lic = license_data.get('license', {})
-        remaining = lic.get('remaining_days')
+        status = getattr(self, '_license_status', None)
 
-        if active and key:
-            is_trial = lic.get('is_trial', False)
-            plan = lic.get('plan_name', '')
-            if is_trial:
-                text = f"Trial \u2022 {remaining} days left" if remaining is not None else "Trial"
+        if status and status.valid:
+            if status.trial_active:
+                text = f"Trial \u2022 {status.days_remaining} days left"
                 fg = c["warning"]
-            else:
+            elif status.license_active:
+                plan = status.plan or ""
                 plan_prefix = f"{plan} " if plan else ""
-                if remaining is not None:
-                    text = f"{plan_prefix}License \u2022 {remaining} days left"
-                else:
-                    text = f"{plan_prefix}License"
+                text = f"{plan_prefix}License \u2022 {status.days_remaining} days left"
                 fg = c["success"]
-        elif key and not active:
-            text = "License Expired"
-            fg = c["error"]
+            else:
+                text = "License expired"
+                fg = c["error"]
         else:
-            text = "Not Activated"
-            fg = c["muted"]
+            text = "License expired"
+            fg = c["error"]
 
         lbl = tk.Label(parent, text=text, font=("SF Pro Text", 10),
                        fg=fg, bg=c["header_bg"])
@@ -534,12 +523,14 @@ class ZEMmacOSUI:
         if getattr(self, '_app_locked', True):
             lock_frame = tk.Frame(body_frame, bg=colors["content_bg"])
             lock_frame.pack(fill=tk.BOTH, expand=True)
+            status = getattr(self, '_license_status', None)
+            lock_msg = status.message if status and status.message else "No active license or trial found."
             tk.Label(lock_frame, text="\U0001f512", font=("SF Pro Display", 48),
                      fg=colors["muted"], bg=colors["content_bg"]).pack(pady=(60, 10))
             tk.Label(lock_frame, text="License Required",
                      font=("SF Pro Display", 20, "bold"),
                      fg=colors["text"], bg=colors["content_bg"]).pack()
-            tk.Label(lock_frame, text="Your license is inactive or has expired.\nPlease activate your license in Settings to continue.",
+            tk.Label(lock_frame, text=lock_msg + "\nPlease activate a license in Settings to continue.",
                      font=("SF Pro Text", 11), fg=colors["muted"],
                      bg=colors["content_bg"], justify=tk.CENTER).pack(pady=8)
             tk.Button(lock_frame, text="Open Settings",
@@ -639,12 +630,14 @@ class ZEMmacOSUI:
         if getattr(self, '_app_locked', True):
             lock_frame = tk.Frame(body, bg=colors["content_bg"])
             lock_frame.pack(fill=tk.BOTH, expand=True)
+            status = getattr(self, '_license_status', None)
+            lock_msg = status.message if status and status.message else "No active license or trial found."
             tk.Label(lock_frame, text="\U0001f512", font=("SF Pro Display", 48),
                      fg=colors["muted"], bg=colors["content_bg"]).pack(pady=(60, 10))
             tk.Label(lock_frame, text="License Required",
                      font=("SF Pro Display", 20, "bold"),
                      fg=colors["text"], bg=colors["content_bg"]).pack()
-            tk.Label(lock_frame, text="Your license is inactive or has expired.\nPlease activate your license in Settings to continue.",
+            tk.Label(lock_frame, text=lock_msg + "\nPlease activate a license in Settings to continue.",
                      font=("SF Pro Text", 11), fg=colors["muted"],
                      bg=colors["content_bg"], justify=tk.CENTER).pack(pady=8)
             tk.Button(lock_frame, text="Open Settings",
