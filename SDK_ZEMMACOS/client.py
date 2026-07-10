@@ -3,7 +3,7 @@ import requests
 from typing import Optional, Dict, Any
 
 class Client:
-    def __init__(self, api_key: str, api_url: str = "https://www.websmithdigital.com"):
+    def __init__(self, api_key: str, api_url: str = "https://websmith-z.vercel.app"):
         self.api_key = api_key
         self.api_url = api_url.rstrip('/')
         self.session = requests.Session()
@@ -37,17 +37,25 @@ class Client:
             'device_id': device_id
         })
 
-    def start_trial(self, product_id: str, email: str, device_id: str) -> Dict:
-        return self._request('POST', '/api/v1/trial/start', {
-            'product_id': product_id,
-            'email': email,
-            'device_id': device_id
+    def start_trial(self, hardware_id: str, email: str, name: str = '') -> Dict:
+        return self._request('POST', '/api/v1/trial', {
+            'action': 'start',
+            'hardware_id': hardware_id,
+            'customer_email': email,
+            'customer_name': name
         })
 
-    def check_trial(self, trial_id: str) -> Dict:
-        return self._request('GET', f'/api/v1/trial/status/{trial_id}')
+    def check_trial(self, hardware_id: str) -> Dict:
+        return self._request('POST', '/api/v1/trial', {
+            'action': 'status',
+            'hardware_id': hardware_id
+        })
 
-    def convert_trial(self, trial_id: str, plan_id: str) -> Dict:
-        return self._request('POST', f'/api/v1/trial/convert/{trial_id}', {
-            'plan_id': plan_id
+    def convert_trial(self, hardware_id: str, plan: str, name: str, email: str) -> Dict:
+        return self._request('POST', '/api/v1/trial', {
+            'action': 'convert',
+            'hardware_id': hardware_id,
+            'plan': plan,
+            'customer_name': name,
+            'customer_email': email
         })

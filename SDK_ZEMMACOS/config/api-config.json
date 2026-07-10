@@ -6,9 +6,9 @@
     "description": "Smart Mac license control"
   },
   "api": {
-    "url": "https://www.websmithdigital.com",
+    "url": "https://websmith-z.vercel.app",
     "version": "v1",
-    "public_key": "pk_zeos_47I2O5ZH0FGLQRK3GTK0LT6953W6HWK2",
+    "public_key": "pk_zeos_E3HWVC5ZWJNJXVOEHD90UDW73ZD3CYRS",
     "timeout": 30000,
     "retry_count": 3
   },
