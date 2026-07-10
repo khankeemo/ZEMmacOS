@@ -486,14 +486,14 @@ class ZEMmacOSUI:
                     text = f"{plan_prefix}License"
                 fg = c["success"]
         elif key and not active:
-            text = "License expired"
+            text = "License Expired"
             fg = c["error"]
         else:
-            text = "Not activated"
+            text = "Not Activated"
             fg = c["muted"]
 
         lbl = tk.Label(parent, text=text, font=("SF Pro Text", 10),
-                       fg=fg, bg=c["header_bg"], padx=8)
+                       fg=fg, bg=c["header_bg"])
         lbl.pack(side=tk.RIGHT, padx=4)
         return lbl
 

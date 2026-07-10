@@ -196,7 +196,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
         stored_key = self.settings.get("license_key")
         if not stored_key:
             self.log("No license key configured", "info")
-            self._app_locked = True
+            self._app_locked = False
             self.root.after(300, self._show_license_startup_dialog)
             return
 
