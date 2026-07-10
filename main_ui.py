@@ -769,6 +769,8 @@ class ZEMmacOSUI:
         self.settings_download_dir = self.settings_ui.settings_download_dir
         self.settings_catalog_var = self.settings_ui.settings_catalog_var
         self.threads_var = self.settings_ui.threads_var
+        if hasattr(self.settings_ui, 'license_key_var'):
+            self.license_key_var = self.settings_ui.license_key_var
 
     # ---- Callbacks ----
 

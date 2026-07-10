@@ -124,6 +124,24 @@ class SettingsUI:
                      values=["publicrelease", "public", "customer", "developer"],
                      state="readonly", font=("SF Pro Text", 11)).pack(fill=tk.X)
 
+        row = self._row(inner, "License Key:")
+        saved_key = self.app.settings.get("license_key", "")
+        self.license_key_var = tk.StringVar(value=saved_key)
+        self.license_key_entry = tk.Entry(row, textvariable=self.license_key_var,
+                                          font=("SF Pro Text", 11),
+                                          bg=self.colors["input_bg"], fg=self.colors["input_fg"],
+                                          insertbackground=self.colors["accent"],
+                                          bd=1, relief=tk.FLAT)
+        self.license_key_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8)
+        self.license_status_label = tk.Label(row, text="", font=("SF Pro Text", 9),
+                                             fg=self.colors["muted"], bg=self.colors["card_bg"])
+        self.license_status_label.pack(side=tk.RIGHT, padx=4)
+        tk.Button(row, text="Activate", command=self._activate_license,
+                  font=("SF Pro Text", 10), fg="white",
+                  bg=self.colors["accent"], bd=1, relief=tk.FLAT,
+                  padx=12, pady=4, cursor="hand2").pack(side=tk.RIGHT)
+        self._update_license_status()
+
         inner2 = self._card(self._content_frame, "Actions")
         tk.Button(inner2, text="Save Settings", command=self._save_settings,
                   font=("SF Pro Text", 11, "bold"),
@@ -262,8 +280,40 @@ class SettingsUI:
             tk.Label(row, text=value, font=("SF Pro Text", 11),
                      fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
 
-        inner3 = self._card(self._content_frame, "Legal")
-        tk.Label(inner3, text="ZEMmacOS is a tool for downloading macOS installer packages from Apple's servers.",
+        inner3 = self._card(self._content_frame, "License")
+        license_key = self.app.settings.get("license_key", "")
+        license_data = self.app.settings.get("license_data", {})
+        active = getattr(self.app, '_license_active', False)
+
+        if active and license_key:
+            lic = license_data.get('license', {})
+            status_text = lic.get('status', 'active').capitalize()
+            expires_at = lic.get('expires_at', 'N/A')
+            if expires_at and expires_at != 'N/A':
+                try:
+                    from datetime import datetime
+                    expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                    expires_at = expiry.strftime('%Y-%m-%d %H:%M')
+                except:
+                    pass
+            lic_info = [
+                ("License Status:", status_text),
+                ("License Key:", f"{license_key[:12]}...{license_key[-4:]}" if len(license_key) > 16 else license_key),
+                ("Expires:", str(expires_at)),
+            ]
+        else:
+            lic_info = [
+                ("License Status:", "Not Activated"),
+            ]
+
+        for label, value in lic_info:
+            row = self._row(inner3, label)
+            tk.Label(row, text=value, font=("SF Pro Text", 11, "bold"),
+                     fg=self.colors["success"] if value == "Active" else self.colors["text"],
+                     bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+
+        inner4 = self._card(self._content_frame, "Legal")
+        tk.Label(inner4, text="ZEMmacOS is a tool for downloading macOS installer packages from Apple's servers.",
                  font=("SF Pro Text", 10), fg=self.colors["text_secondary"],
                  bg=self.colors["card_bg"], wraplength=500, justify=tk.LEFT).pack(anchor=tk.W)
 
@@ -298,6 +348,31 @@ class SettingsUI:
         self.app.settings.set("max_segments", int(self.segments_var.get()))
         self.app.log("Performance settings saved", "info")
         messagebox.showinfo("Settings", "Performance settings saved!")
+
+    def _activate_license(self):
+        key = self.license_key_var.get().strip()
+        if not key:
+            self.license_status_label.config(text="Enter a key", fg=self.colors["error"])
+            return
+        if hasattr(self.app, '_activate_license_key'):
+            success = self.app._activate_license_key(key)
+            if success:
+                self.license_status_label.config(text="Active", fg=self.colors["success"])
+            else:
+                self.license_status_label.config(text="Failed", fg=self.colors["error"])
+        else:
+            self.app.settings.set("license_key", key)
+            self.license_status_label.config(text="Saved", fg=self.colors["muted"])
+
+    def _update_license_status(self):
+        active = getattr(self.app, '_license_active', False)
+        key = self.app.settings.get("license_key", "")
+        if active and key:
+            self.license_status_label.config(text="Active", fg=self.colors["success"])
+        elif key:
+            self.license_status_label.config(text="Inactive", fg=self.colors["error"])
+        else:
+            self.license_status_label.config(text="", fg=self.colors["muted"])
 
     def _check_for_updates(self):
         import webbrowser

@@ -10,6 +10,17 @@ from tkinter import messagebox
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+SDK_AVAILABLE = False
+try:
+    from SDK_ZEMMACOS.client import Client as SDKClient
+    from SDK_ZEMMACOS.license_engine import LicenseEngine
+    from SDK_ZEMMACOS.hardware import HardwareFingerprint
+    SDK_AVAILABLE = True
+except ImportError:
+    pass
+
+SDK_CONFIG_PATH = os.path.join(BASE_DIR, 'SDK_ZEMMACOS', 'config', 'api-config.json')
+
 from main_ui import ZEMmacOSUI
 from gib_macos_wrapper import GibMacOSWrapper
 from logger import get_logger
@@ -17,14 +28,6 @@ from idm_downloader import IDMDownloader
 from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
-
-
-def resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except AttributeError:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
 
 
 def main():
@@ -110,8 +113,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.log(f"Log file: {self.logger.get_log_file_path()}", "info")
         self.log("=" * 60, "info")
 
+        self._init_license_system()
+
         self.root.after(500, self._show_startup_toast)
         self.root.after(1000, self._auto_fetch)
+        self.root.after(1500, self._check_license)
         self.root.after(2000, self._check_internet_on_startup)
         self._start_network_monitor()
 
@@ -155,6 +161,110 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def _stop_network_monitor(self):
         self._network_monitor_stop.set()
+
+    # -----------------------------------------------------------------
+    # LICENSE SYSTEM (SDK Integration)
+    # -----------------------------------------------------------------
+    def _init_license_system(self):
+        self._sdk_available = SDK_AVAILABLE
+        self._license_engine = None
+        self._sdk_config = None
+        self._license_active = False
+
+        if not self._sdk_available:
+            self.log("License SDK not found - running without license check", "warning")
+            return
+
+        try:
+            with open(SDK_CONFIG_PATH, 'r') as f:
+                self._sdk_config = json.load(f)
+            api_key = self._sdk_config['api']['public_key']
+            api_url = self._sdk_config['api']['url']
+            self._sdk_client = SDKClient(api_key, api_url)
+            self._license_engine = LicenseEngine(self._sdk_client)
+            self.log("License SDK initialized", "info")
+        except Exception as e:
+            self.log(f"License SDK initialization failed: {e}", "error")
+            self._sdk_available = False
+
+    def _check_license(self):
+        if not self._sdk_available or not self._license_engine:
+            return
+
+        stored_key = self.settings.get("license_key")
+        if not stored_key:
+            self.log("No license key configured", "info")
+            return
+
+        try:
+            result = self._license_engine.validate(stored_key)
+            if self._license_engine.is_valid():
+                self._license_active = True
+                self.log("License validated successfully", "success")
+                self.debug_log("LICENSE", "SUCCESS", "License validated online")
+                self._update_license_cache(result)
+            else:
+                err = result.get('error', 'invalid')
+                self.log(f"License validation failed: {err}", "warning")
+                self.debug_log("LICENSE", "WARNING", "Online validation failed", err)
+                self._try_offline_cache(stored_key)
+        except Exception:
+            self.debug_log("LICENSE", "WARNING", "Offline - checking cached license")
+            self._try_offline_cache(stored_key)
+
+    def _try_offline_cache(self, key):
+        cached_data = self.settings.get("license_data")
+        cached_at = self.settings.get("license_cached_at", 0)
+        offline_days = 30
+        if self._sdk_config:
+            offline_days = self._sdk_config.get('offline', {}).get('cache_days', 30)
+        if cached_data and cached_at and (time.time() - cached_at) < (offline_days * 86400):
+            expires_at = cached_data.get('license', {}).get('expires_at')
+            if expires_at:
+                from datetime import datetime
+                expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                if expiry > datetime.now(expiry.tzinfo):
+                    self._license_active = True
+                    self.log("License validated from offline cache", "success")
+                    self.debug_log("LICENSE", "SUCCESS", "Offline cache valid")
+                    return
+                self.log("Cached license has expired", "warning")
+            else:
+                self._license_active = True
+                self.log("License validated from offline cache", "success")
+                self.debug_log("LICENSE", "SUCCESS", "Offline cache valid (no expiry)")
+                return
+        self.log("Cached license expired or unavailable", "warning")
+        self._license_active = False
+
+    def _activate_license_key(self, key):
+        import platform
+        if not self._sdk_available or not self._license_engine:
+            self.log("Cannot activate - SDK not available", "error")
+            return False
+        try:
+            device_name = platform.node() or 'ZEMmacOS'
+            result = self._license_engine.activate(key, device_name)
+            if self._license_engine.is_valid():
+                self.settings.set("license_key", key)
+                self._update_license_cache(result)
+                self._license_active = True
+                self.log("License activated successfully", "success")
+                self.debug_log("LICENSE", "SUCCESS", "License activation successful")
+                return True
+            else:
+                error = result.get('error', 'Invalid license key')
+                self.log(f"License activation failed: {error}", "error")
+                self.debug_log("LICENSE", "ERROR", "Activation failed", error)
+                return False
+        except Exception as e:
+            self.log(f"License activation error: {str(e)}", "error")
+            self.debug_log("LICENSE", "ERROR", "Activation error", str(e))
+            return False
+
+    def _update_license_cache(self, result):
+        self.settings.set("license_data", result)
+        self.settings.set("license_cached_at", time.time())
 
     # -----------------------------------------------------------------
     # INTERNET CHECK
