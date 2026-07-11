@@ -40,8 +40,9 @@ def _init_sdk():
     welcome = WelcomeDialog(client)
     if not welcome.is_onboarding_complete():
         result = welcome.show()
-        if result.get('onboarding_complete'):
-            engine.initialize()
+        if not result.get('onboarding_complete'):
+            sys.exit(1)
+        engine.initialize()
 
     return engine
 

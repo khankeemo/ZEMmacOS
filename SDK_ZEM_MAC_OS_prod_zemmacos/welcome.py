@@ -59,7 +59,7 @@ class WelcomeDialog:
         self._load_countries()
 
         self._root.mainloop()
-        return self._result or {'skipped': True}
+        return self._result or {'cancelled': True, 'success': False}
 
     def _center_window(self):
         if not self._root:
