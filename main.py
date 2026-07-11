@@ -1,4 +1,5 @@
 # main.py
+import json
 import os
 import socket
 import sys
@@ -17,6 +18,33 @@ from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 
+from SDK_ZEM_MAC_OS_prod_zemmacos.client import Client
+from SDK_ZEM_MAC_OS_prod_zemmacos.license_engine import LicenseEngine
+from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
+
+
+def _init_sdk():
+    sdk_config_path = os.path.join(
+        BASE_DIR, 'SDK_ZEM_MAC_OS_prod_zemmacos', 'config', 'api-config.json'
+    )
+    with open(sdk_config_path, 'r', encoding='utf-8') as f:
+        sdk_config = json.load(f)
+
+    client = Client(
+        api_key=sdk_config['api']['public_key'],
+        api_url=sdk_config['api']['url']
+    )
+    engine = LicenseEngine(client)
+    engine.initialize()
+
+    welcome = WelcomeDialog(client)
+    if not welcome.is_onboarding_complete():
+        result = welcome.show()
+        if result.get('onboarding_complete'):
+            engine.initialize()
+
+    return engine
+
 
 def main():
     if sys.platform == "win32":
@@ -26,13 +54,15 @@ def main():
         except Exception:
             pass
 
+    engine = _init_sdk()
+
     root = tk.Tk()
     root.title("ZEMmacOS")
     root.geometry("1200x800")
     root.minsize(1000, 700)
     root.state('zoomed')
 
-    app = ZEMmacOSApp(root)
+    app = ZEMmacOSApp(root, engine=engine)
     root.mainloop()
 
 
@@ -50,9 +80,10 @@ def _is_network_error_str(err_str):
 
 
 class ZEMmacOSApp(ZEMmacOSUI):
-    def __init__(self, root, settings=None):
+    def __init__(self, root, settings=None, engine=None):
         super().__init__(root)
 
+        self.engine = engine
         self.settings = settings or SettingsManager()
         self.settings_service = AppSettingsService(self)
         self.updater = AppUpdater()

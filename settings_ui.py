@@ -1,3 +1,4 @@
+import json
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
@@ -42,6 +43,7 @@ class SettingsUI:
             ("appearance", "Appearance"),
             ("performance", "Performance"),
             ("updates", "Updates"),
+            ("license", "License"),
             ("about", "About"),
         ]
         for key, label in sections:
@@ -237,6 +239,79 @@ class SettingsUI:
         tk.Button(inner2, text="Check for Updates Now", command=self._check_for_updates,
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["accent"],
+                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+
+    def _build_license(self):
+        inner = self._card(self._content_frame, "License Information")
+
+        engine = getattr(self.app, 'engine', None)
+        status = engine.get_status() if engine else None
+
+        if status:
+            s = status.to_dict()
+            for label, key in [("Status:", "status"), ("Plan:", "plan"),
+                               ("Days Remaining:", "days_remaining"),
+                               ("Expiry Date:", "expires_at"),
+                               ("Hardware ID:", "hardware_id")]:
+                val = s.get(key)
+                if val is not None and val != "":
+                    row = self._row(inner, label)
+                    tk.Label(row, text=str(val), font=("SF Pro Text", 11, "bold"),
+                             fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+        else:
+            tk.Label(inner, text="SDK not initialized", font=("SF Pro Text", 11),
+                     fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(anchor=tk.W, pady=6)
+
+        if engine:
+            hw = engine.get_hardware_fingerprint()
+            inner2 = self._card(self._content_frame, "Hardware Fingerprint")
+            for label, key in [("Platform:", "platform"), ("OS:", "os"), ("CPU:", "cpu")]:
+                val = hw.get(key)
+                if val:
+                    row = self._row(inner2, label)
+                    tk.Label(row, text=str(val), font=("SF Pro Text", 11),
+                             fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+
+        inner3 = self._card(self._content_frame, "Actions")
+
+        def _open_welcome():
+            sdk_cfg = os.path.join(BASE_DIR, 'SDK_ZEM_MAC_OS_prod_zemmacos',
+                                   'config', 'api-config.json')
+            with open(sdk_cfg, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+            from SDK_ZEM_MAC_OS_prod_zemmacos.client import Client
+            from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
+            cl = Client(api_key=cfg['api']['public_key'], api_url=cfg['api']['url'])
+            WelcomeDialog(cl).show()
+            if engine:
+                engine.initialize()
+
+        def _refresh():
+            if engine:
+                engine.initialize()
+            self._switch_section("license")
+            messagebox.showinfo("License", "Status refreshed")
+
+        def _recheck():
+            if engine:
+                engine.initialize()
+                st = engine.get_status()
+                if st and st.valid:
+                    messagebox.showinfo("License", "License is valid")
+                else:
+                    messagebox.showinfo("License", "No valid license or trial found")
+
+        tk.Button(inner3, text="Open Welcome Dialog", command=_open_welcome,
+                  font=("SF Pro Text", 11, "bold"),
+                  fg="white", bg=self.colors["accent"],
+                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+        tk.Button(inner3, text="Refresh Status", command=_refresh,
+                  font=("SF Pro Text", 11, "bold"),
+                  fg="white", bg=self.colors["success"],
+                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+        tk.Button(inner3, text="Re-check Validity", command=_recheck,
+                  font=("SF Pro Text", 11, "bold"),
+                  fg="white", bg=self.colors["warning"],
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
 
     def _build_about(self):
