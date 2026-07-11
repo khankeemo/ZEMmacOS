@@ -11,10 +11,12 @@ from tkinter import messagebox
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 SDK_AVAILABLE = False
-SDK_CONFIG_PATH = os.path.join(BASE_DIR, 'SDK_ZEMMACOS', 'config', 'api-config.json')
+SDK_CONFIG_PATH = os.path.join(BASE_DIR, 'SDK_ZEM_MAC_OS_prod_zemmacos', 'config', 'api-config.json')
 try:
-    from SDK_ZEMMACOS.license_engine import LicenseEngine, LicenseStatus
-    from SDK_ZEMMACOS.welcome_dialog import show_welcome_dialog
+    from SDK_ZEM_MAC_OS_prod_zemmacos.client import Client
+    from SDK_ZEM_MAC_OS_prod_zemmacos.hardware import HardwareFingerprint
+    from SDK_ZEM_MAC_OS_prod_zemmacos.cache import CacheManager
+    from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
     SDK_AVAILABLE = True
 except ImportError:
     pass
@@ -26,6 +28,87 @@ from idm_downloader import IDMDownloader
 from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
+
+
+class _LicenseStatus:
+    def __init__(self, valid=False, trial_active=False, license_active=False,
+                 days_remaining=0, status="inactive", plan="",
+                 expires_at=None, message=""):
+        self.valid = valid
+        self.trial_active = trial_active
+        self.license_active = license_active
+        self.days_remaining = days_remaining
+        self.status = status
+        self.plan = plan
+        self.expires_at = expires_at
+        self.message = message
+
+
+class _SdkEngine:
+    def __init__(self, client, api_config, hardware_id, cache):
+        self.client = client
+        self.config = api_config
+        self.hardware_id = hardware_id
+        self._license_key = ""
+        self._status = _LicenseStatus(message="Initializing...")
+        self._cache = cache
+
+    def initialize(self):
+        if self._license_key:
+            try:
+                resp = self.client.validate_license(self._license_key, self.hardware_id)
+                if resp.get('valid'):
+                    self._status = _LicenseStatus(
+                        valid=True,
+                        license_active=True,
+                        days_remaining=resp.get('days_remaining', 0),
+                        status="active",
+                        plan=resp.get('plan', ''),
+                        expires_at=resp.get('expires_at'),
+                        message="License active"
+                    )
+                    return self._status
+            except:
+                pass
+        try:
+            trial_resp = self.client.check_trial(self.hardware_id)
+            if trial_resp.get('trial_active'):
+                self._status = _LicenseStatus(
+                    valid=True,
+                    trial_active=True,
+                    days_remaining=trial_resp.get('days_remaining', 0),
+                    status="trial",
+                    expires_at=trial_resp.get('expires_at'),
+                    message="Trial active"
+                )
+                return self._status
+        except:
+            pass
+        self._status = _LicenseStatus(message="No active license or trial")
+        return self._status
+
+    def get_status(self):
+        return self.initialize()
+
+    def activate(self, key):
+        try:
+            device_name = socket.gethostname()
+            result = self.client.activate_license(key, self.hardware_id, device_name)
+            if result.get('success'):
+                self._license_key = key
+                self._status = _LicenseStatus(
+                    valid=True,
+                    license_active=True,
+                    days_remaining=result.get('days_remaining', 365),
+                    status="active",
+                    plan=result.get('plan', ''),
+                    expires_at=result.get('expires_at'),
+                    message="License active"
+                )
+                return {'success': True}
+            return result
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
 
 def main():
@@ -47,7 +130,20 @@ def main():
     print("[DEBUG] SDK initialized")
 
     if SDK_AVAILABLE:
-        engine = LicenseEngine(config_path=SDK_CONFIG_PATH)
+        try:
+            with open(SDK_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                api_config = json.load(f)
+        except:
+            api_config = {}
+
+        api_key = api_config.get('api', {}).get('public_key', '')
+        api_url = api_config.get('api', {}).get('url', 'https://websmith-z.vercel.app')
+
+        sdk_client = Client(api_key=api_key, api_url=api_url)
+        hw_fp = HardwareFingerprint.generate_fingerprint()
+        hw_id = hw_fp['fingerprint']
+        cache = CacheManager(product_name='prod_zemmacos')
+        engine = _SdkEngine(sdk_client, api_config, hw_id, cache)
 
         if stored_key:
             engine._license_key = stored_key
@@ -62,13 +158,15 @@ def main():
 
         if not license_status.valid and not stored_key:
             print("[DEBUG] Opening welcome dialog")
-            success = show_welcome_dialog(engine)
-            if not success:
+            welcome = WelcomeDialog(sdk_client, product_name='ZEM MAC OS', cache=cache)
+            result = welcome.show()
+            if result.get('onboarding_complete'):
+                license_status = engine.initialize()
+                print(f"[DEBUG] Trial active: {license_status.trial_active}")
+                print(f"[DEBUG] Remaining days: {license_status.days_remaining}")
+            elif not result.get('skipped'):
                 print("License required to use ZEMmacOS")
                 sys.exit(1)
-            license_status = engine.get_status()
-            print(f"[DEBUG] Trial active: {license_status.trial_active}")
-            print(f"[DEBUG] Remaining days: {license_status.days_remaining}")
     else:
         print("[DEBUG] SDK not available - running without license check")
 

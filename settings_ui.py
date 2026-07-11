@@ -23,8 +23,8 @@ class SettingsUI:
 
         right_h = tk.Frame(header, bg=self.colors["header_bg"])
         right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6)
-        if hasattr(self.app, '_build_license_status_widget'):
-            self.app._build_license_status_widget(right_h)
+        if hasattr(self.app, '_build_license_widget'):
+            self.app._build_license_widget(right_h)
 
         tk.Label(header, text="Settings", font=("SF Pro Display", 26, "bold"),
                  fg=self.colors["text"], bg=self.colors["header_bg"]).pack(anchor=tk.W)
@@ -47,6 +47,7 @@ class SettingsUI:
             ("appearance", "Appearance"),
             ("performance", "Performance"),
             ("updates", "Updates"),
+            ("license", "License"),
             ("about", "About"),
         ]
         for key, label in sections:
@@ -365,6 +366,126 @@ class SettingsUI:
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["accent"],
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+
+    def _build_license(self):
+        c = self.colors
+        cfg = getattr(self.app, '_engine', None)
+        api_config = cfg.config if cfg else {}
+        product = api_config.get('product', {})
+        status = getattr(self.app, '_license_status', None)
+
+        inner = self._card(self._content_frame, "License Status")
+        rows_data = []
+        if status and status.valid:
+            lic_type = "Trial" if status.trial_active else "Licensed"
+            lic_state = "Active"
+            rows_data = [
+                ("Status", lic_state),
+                ("Type", lic_type),
+                ("Remaining", f"{status.days_remaining} day(s)" if status.days_remaining is not None else "--"),
+            ]
+            if status.expires_at:
+                try:
+                    from datetime import datetime
+                    expiry = status.expires_at.replace('Z', '+00:00')
+                    dt = datetime.fromisoformat(expiry)
+                    rows_data.append(("Expires", dt.strftime('%d %b %Y')))
+                except:
+                    rows_data.append(("Expires", str(status.expires_at)))
+        else:
+            rows_data = [("Status", "No Active License")]
+
+        for label, value in rows_data:
+            row = self._row(inner, label)
+            is_good = value in ("Active", "Licensed", "Trial")
+            val_color = c["success"] if is_good else c["text"]
+            tk.Label(row, text=value, font=("SF Pro Text", 11, "bold"),
+                     fg=val_color, bg=c["card_bg"]).pack(side=tk.LEFT)
+
+        inner2 = self._card(self._content_frame, "Product Info")
+        prod_name = product.get('name', 'ZEM MAC OS')
+        prod_ver = product.get('version', '1.0.0')
+        hw_id = ""
+        if hasattr(self.app, '_engine') and self.app._engine:
+            hw_id = getattr(self.app._engine, 'hardware_id', '')
+        for label, value in [
+            ("Product", prod_name),
+            ("Version", prod_ver),
+            ("Hardware ID", hw_id if hw_id else "Not available"),
+        ]:
+            row = self._row(inner2, label)
+            tk.Label(row, text=value, font=("SF Pro Text", 11, "bold"),
+                     fg=c["text"], bg=c["card_bg"]).pack(side=tk.LEFT)
+            if label == "Hardware ID" and hw_id:
+                tk.Label(row, text="(click to copy)", font=("SF Pro Text", 8),
+                         fg=c["muted"], bg=c["card_bg"], cursor="hand2").pack(side=tk.LEFT, padx=6)
+
+        inner3 = self._card(self._content_frame, "Actions")
+        btn_frame = tk.Frame(inner3, bg=c["card_bg"])
+        btn_frame.pack(fill=tk.X)
+
+        def _activate_license():
+            if hasattr(self, '_on_license_overview_activate'):
+                self._on_license_overview_activate()
+
+        def _refresh_license():
+            engine = getattr(self.app, '_engine', None)
+            if engine:
+                new_status = engine.get_status()
+                self.app._license_status = new_status
+                self.app._app_locked = not (new_status and new_status.valid)
+                if hasattr(self.app, '_refresh_license_widget'):
+                    self.app._refresh_license_widget()
+                self._switch_section("license")
+                self._update_license_overview()
+                self.app.show_toast("License status refreshed", "success", 2500)
+
+        def _open_welcome():
+            engine = getattr(self.app, '_engine', None)
+            if engine and hasattr(engine, 'client') and hasattr(engine, '_cache'):
+                import threading
+                def _show():
+                    try:
+                        from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
+                        welcome = WelcomeDialog(engine.client, product_name='ZEM MAC OS', cache=engine._cache)
+                        result = welcome.show()
+                        if result.get('onboarding_complete'):
+                            new_status = engine.get_status()
+                            self.app._license_status = new_status
+                            self.app._app_locked = not (new_status and new_status.valid)
+                            self.app.root.after(0, lambda: self._switch_section("license"))
+                            self.app.root.after(0, self._update_license_overview)
+                    except:
+                        pass
+                threading.Thread(target=_show, daemon=True).start()
+
+        def _recheck_validity():
+            engine = getattr(self.app, '_engine', None)
+            if engine:
+                try:
+                    new_status = engine.initialize()
+                    self.app._license_status = new_status
+                    self.app._app_locked = not (new_status and new_status.valid)
+                    if hasattr(self.app, '_refresh_license_widget'):
+                        self.app._refresh_license_widget()
+                    self._switch_section("license")
+                    self._update_license_overview()
+                    self.app.show_toast("Validity re-checked", "success", 2500)
+                except:
+                    self.app.show_toast("Validity check failed", "error", 3000)
+
+        for text, cmd, clr in [
+            ("Activate License", _activate_license, c["accent"]),
+            ("Refresh Status", _refresh_license, c["success"]),
+            ("Open Welcome Dialog", _open_welcome, c["warning"]),
+            ("Re-check Validity", _recheck_validity, c["info"]),
+        ]:
+            tk.Button(btn_frame, text=text, command=cmd,
+                      font=("SF Pro Text", 10, "bold"),
+                      fg="white", bg=clr,
+                      activebackground=c["btn_secondary_hover"],
+                      bd=0, padx=14, pady=6, cursor="hand2",
+                      width=22).pack(side=tk.LEFT, padx=4)
 
     def _build_about(self):
         inner = self._card(self._content_frame, "ZEMmacOS")

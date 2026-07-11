@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --card-bg: rgba(255,255,255,0.75);
+    --card-border: rgba(255,255,255,0.3);
+    --card-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    --text: #1a1a2e;
+    --text-secondary: #6b7280;
+    --input-bg: rgba(255,255,255,0.8);
+    --input-border: #d1d5db;
+    --input-focus: #6366f1;
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --success: #10b981;
+    --error: #ef4444;
+    --glass-bg: rgba(255,255,255,0.6);
+    --step-bg: #e0e7ff;
+    --step-text: #6366f1;
+    --dropdown-bg: #fff;
+    --dropdown-hover: #f3f4f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f172a;
+      --card-bg: rgba(30,41,59,0.85);
+      --card-border: rgba(255,255,255,0.08);
+      --card-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      --text: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --input-bg: rgba(30,41,59,0.6);
+      --input-border: #334155;
+      --input-focus: #818cf8;
+      --primary: #818cf8;
+      --primary-hover: #6366f1;
+      --glass-bg: rgba(30,41,59,0.5);
+      --step-bg: rgba(99,102,241,0.15);
+      --step-text: #818cf8;
+      --dropdown-bg: #1e293b;
+      --dropdown-hover: #334155;
+    }
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.4s ease;
+    z-index: 9999;
+  }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+  @keyframes slideUp { from { opacity:0; transform:translateY(30px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+  .card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--card-border);
+    border-radius: 24px;
+    box-shadow: var(--card-shadow);
+    padding: 40px 36px;
+    animation: slideUp 0.5s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 20%, rgba(99,102,241,0.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+    position: relative;
+  }
+  .icon-wrapper {
+    width: 64px;
+    height: 64px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--primary), #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+  }
+  .icon-wrapper svg { width: 32px; height: 32px; fill: white; }
+  .header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .header p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .steps {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 28px;
+  }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: all 0.3s;
+  }
+  .step.active { color: var(--primary); }
+  .step.completed { color: var(--success); }
+  .step-number {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--step-bg);
+    color: var(--step-text);
+    transition: all 0.3s;
+  }
+  .step.active .step-number { background: var(--primary); color: white; }
+  .step.completed .step-number { background: var(--success); color: white; }
+  .step-line {
+    width: 24px;
+    height: 2px;
+    background: var(--input-border);
+    border-radius: 1px;
+  }
+  .step.completed + .step-line { background: var(--success); }
+  .form-section { display: none; animation: slideUp 0.4s ease; }
+  .form-section.active { display: block; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .form-group .optional {
+    font-weight: 400;
+    text-transform: none;
+    color: var(--text-secondary);
+    font-size: 11px;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--input-border);
+    border-radius: 12px;
+    font-size: 14px;
+    background: var(--input-bg);
+    color: var(--text);
+    outline: none;
+    transition: all 0.2s;
+    backdrop-filter: blur(4px);
+  }
+  .form-group input:focus, .form-group select:focus {
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  }
+  .form-group input.error { border-color: var(--error); }
+  .mobile-group { display: flex; gap: 8px; }
+  .mobile-group .country-select {
+    position: relative;
+    width: 140px;
+    flex-shrink: 0;
+  }
+  .mobile-group .country-select select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--input-border);
+    border-radius: 12px;
+    font-size: 13px;
+    background: var(--input-bg);
+    color: var(--text);
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+  }
+  .mobile-group .country-select select:focus {
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  }
+  .mobile-group input { flex: 1; }
+  .otp-group { display: flex; gap: 8px; }
+  .otp-group input {
+    flex: 1;
+    text-align: center;
+    font-size: 20px;
+    letter-spacing: 6px;
+    font-weight: 600;
+  }
+  .btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--primary), #a855f7);
+    color: white;
+    box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+  }
+  .btn-primary:hover { box-shadow: 0 6px 24px rgba(99,102,241,0.4); }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .btn-secondary {
+    background: var(--glass-bg);
+    color: var(--text);
+    border: 1px solid var(--input-border);
+    backdrop-filter: blur(4px);
+  }
+  .btn-secondary:hover { background: var(--input-bg); }
+  .btn-success {
+    background: linear-gradient(135deg, var(--success), #059669);
+    color: white;
+    box-shadow: 0 4px 16px rgba(16,185,129,0.3);
+  }
+  .btn .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  .message {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    margin-top: 12px;
+    display: none;
+    animation: slideUp 0.3s ease;
+  }
+  .message.show { display: block; }
+  .message.success { background: rgba(16,185,129,0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.2); }
+  .message.error { background: rgba(239,68,68,0.1); color: var(--error); border: 1px solid rgba(239,68,68,0.2); }
+  .resend-timer {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 12px;
+  }
+  .resend-timer a {
+    color: var(--primary);
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .resend-timer a:hover { text-decoration: underline; }
+  .resend-timer a:disabled { opacity: 0.5; cursor: not-allowed; text-decoration: none; }
+  .success-screen {
+    text-align: center;
+    padding: 20px 0;
+    display: none;
+  }
+  .success-screen.show { display: block; }
+  .success-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: rgba(16,185,129,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    animation: pulse 2s ease infinite;
+  }
+  .success-icon svg { width: 36px; height: 36px; stroke: var(--success); fill: none; stroke-width: 2.5; }
+  .success-screen h2 { font-size: 22px; color: var(--text); margin-bottom: 8px; }
+  .success-screen p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+  .searchable-select {
+    position: relative;
+  }
+  .searchable-select input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--input-border);
+    border-radius: 12px;
+    font-size: 13px;
+    background: var(--input-bg);
+    color: var(--text);
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .searchable-select input:focus {
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  }
+  .searchable-select .dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--dropdown-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    z-index: 100;
+    display: none;
+  }
+  .searchable-select .dropdown.open { display: block; }
+  .searchable-select .dropdown-item {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
+  }
+  .searchable-select .dropdown-item:hover { background: var(--dropdown-hover); }
+  .searchable-select .dropdown-item .flag { font-size: 16px; }
+  .searchable-select .dropdown-item .dial { color: var(--text-secondary); margin-left: auto; font-size: 12px; }
+  .error-text { font-size: 12px; color: var(--error); margin-top: 4px; display: none; }
+  .error-text.show { display: block; }
+  .product-info {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .product-info .badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--step-bg);
+    color: var(--step-text);
+    font-weight: 600;
+    font-size: 11px;
+  }
+  .loading-dots::after {
+    content: '';
+    animation: dots 1.5s steps(4, end) infinite;
+  }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+</style>
+</head>
+<body>
+<div class="overlay" id="overlay">
+  <div class="card" id="card">
+    <div class="header">
+      <div class="icon-wrapper">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+      </div>
+      <h1 id="welcomeTitle">Welcome</h1>
+      <p id="welcomeDesc">Start your free trial and activate your device.</p>
+    </div>
+
+    <div class="product-info" id="productInfo"></div>
+    <div class="steps" id="steps">
+      <div class="step active" id="step1"><span class="step-number">1</span> Details</div>
+      <div class="step-line"></div>
+      <div class="step" id="step2"><span class="step-number">2</span> Verify</div>
+      <div class="step-line"></div>
+      <div class="step" id="step3"><span class="step-number">3</span> Start</div>
+    </div>
+
+    <!-- Step 1: Customer Details -->
+    <div class="form-section active" id="section1">
+      <div class="form-group">
+        <label>Name *</label>
+        <input type="text" id="name" placeholder="John Doe" autocomplete="name">
+        <div class="error-text" id="nameError">Name is required</div>
+      </div>
+      <div class="form-group">
+        <label>Email *</label>
+        <input type="email" id="email" placeholder="john@example.com" autocomplete="email">
+        <div class="error-text" id="emailError">Valid email is required</div>
+      </div>
+      <div class="form-group">
+        <label>Mobile Number *</label>
+        <div class="mobile-group">
+          <div class="country-select">
+            <div class="searchable-select">
+              <input type="text" id="countrySearch" placeholder="Search country..." readonly>
+              <div class="dropdown" id="countryDropdown"></div>
+            </div>
+          </div>
+          <input type="tel" id="mobile" placeholder="1234567890" autocomplete="tel">
+        </div>
+        <div class="error-text" id="mobileError">Valid mobile number is required</div>
+      </div>
+      <div class="form-group">
+        <label>Company <span class="optional">(optional)</span></label>
+        <input type="text" id="company" placeholder="Acme Inc." autocomplete="organization">
+      </div>
+      <button class="btn btn-primary" id="continueBtn" onclick="goToStep2()">Continue →</button>
+    </div>
+
+    <!-- Step 2: OTP Verification -->
+    <div class="form-section" id="section2">
+      <div class="form-group">
+        <label>Enter OTP sent to <span id="otpEmailDisplay"></span></label>
+        <div class="otp-group">
+          <input type="text" id="otpInput" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]*">
+        </div>
+        <div class="error-text" id="otpError">Invalid OTP code</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="verifyBtn" onclick="verifyOTP()" disabled>
+          Verify OTP
+        </button>
+      </div>
+      <div class="message" id="otpMessage"></div>
+      <div class="resend-timer" id="resendTimer">
+        Resend code in <span id="countdown">30</span>s
+      </div>
+      <div class="resend-timer" id="resendLink" style="display:none">
+        Didn't receive code? <a onclick="sendOTP()">Resend OTP</a>
+      </div>
+    </div>
+
+    <!-- Step 3: Success -->
+    <div class="success-screen" id="section3">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h2>Trial Activated!</h2>
+      <p>Your free trial has started successfully.<br>You can now use the software on this device.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+let countries = [];
+let selectedCountry = null;
+let otpSent = false;
+let otpVerified = false;
+
+async function fetchCountries() {
+  try {
+    const resp = await fetch('/api/countries');
+    const json = await resp.json();
+    if (json.success) {
+      countries = json.data;
+      renderCountryDropdown(countries);
+      const india = countries.find(c => c.dial === '+91');
+      if (india) selectCountry(india);
+    }
+  } catch {} finally {
+    document.getElementById('countrySearch').readOnly = false;
+  }
+}
+
+function renderCountryDropdown(list) {
+  const dropdown = document.getElementById('countryDropdown');
+  dropdown.innerHTML = '';
+  list.forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'dropdown-item';
+    item.innerHTML = '<span class="flag">' + (c.flag || '') + '</span>' + c.name + '<span class="dial">' + c.dial + '</span>';
+    item.onclick = function() {
+      selectCountry(c);
+      dropdown.classList.remove('open');
+    };
+    dropdown.appendChild(item);
+  });
+}
+
+function selectCountry(c) {
+  selectedCountry = c;
+  document.getElementById('countrySearch').value = (c.flag || '') + ' ' + c.dial;
+}
+
+document.getElementById('countrySearch').addEventListener('focus', function() {
+  const dropdown = document.getElementById('countryDropdown');
+  dropdown.classList.add('open');
+  renderFilteredCountries('');
+});
+
+document.getElementById('countrySearch').addEventListener('input', function() {
+  renderFilteredCountries(this.value);
+});
+
+document.addEventListener('click', function(e) {
+  const container = document.querySelector('.searchable-select');
+  if (container && !container.contains(e.target)) {
+    document.getElementById('countryDropdown').classList.remove('open');
+  }
+});
+
+function renderFilteredCountries(query) {
+  const filtered = query
+    ? countries.filter(c => c.name.toLowerCase().includes(query.toLowerCase()) || c.dial.includes(query))
+    : countries;
+  renderCountryDropdown(filtered);
+}
+
+function showError(id, show) {
+  document.getElementById(id).classList.toggle('show', show);
+}
+
+function validateStep1() {
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const mobile = document.getElementById('mobile').value.trim();
+  let valid = true;
+
+  if (!name) { showError('nameError', true); valid = false; } else { showError('nameError', false); }
+  if (!email || !/^[^s@]+@[^s@]+.[^s@]+$/.test(email)) { showError('emailError', true); valid = false; } else { showError('emailError', false); }
+  if (!mobile || mobile.length < 4) { showError('mobileError', true); valid = false; } else { showError('mobileError', false); }
+  if (!selectedCountry) { valid = false; alert('Please select your country code'); }
+
+  return valid;
+}
+
+function goToStep2() {
+  if (!validateStep1()) return;
+  document.getElementById('section1').classList.remove('active');
+  document.getElementById('step1').classList.remove('active');
+  document.getElementById('step1').classList.add('completed');
+  document.getElementById('step2').classList.add('active');
+  document.getElementById('section2').classList.add('active');
+  document.getElementById('otpEmailDisplay').textContent = document.getElementById('email').value.trim();
+  sendOTP();
+}
+
+async function sendOTP() {
+  const email = document.getElementById('email').value.trim();
+  const verifyBtn = document.getElementById('verifyBtn');
+  const resendTimer = document.getElementById('resendTimer');
+  const resendLink = document.getElementById('resendLink');
+  const message = document.getElementById('otpMessage');
+
+  verifyBtn.disabled = true;
+  verifyBtn.innerHTML = '<span class="spinner"></span> Sending...';
+  message.className = 'message';
+  message.style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const json = await resp.json();
+    if (json.success) {
+      otpSent = true;
+      verifyBtn.disabled = false;
+      verifyBtn.innerHTML = 'Verify OTP';
+      message.className = 'message success show';
+      message.textContent = 'OTP sent to your email. Check your inbox.';
+      startResendTimer();
+    } else {
+      message.className = 'message error show';
+      message.textContent = json.error || 'Failed to send OTP';
+      verifyBtn.innerHTML = 'Send OTP';
+    }
+  } catch (err) {
+    message.className = 'message error show';
+    message.textContent = 'Network error. Please try again.';
+    verifyBtn.innerHTML = 'Send OTP';
+  }
+}
+
+function startResendTimer() {
+  const resendTimer = document.getElementById('resendTimer');
+  const resendLink = document.getElementById('resendLink');
+  let count = 30;
+  resendTimer.style.display = 'block';
+  resendLink.style.display = 'none';
+  document.getElementById('countdown').textContent = count;
+  const interval = setInterval(() => {
+    count--;
+    document.getElementById('countdown').textContent = count;
+    if (count <= 0) {
+      clearInterval(interval);
+      resendTimer.style.display = 'none';
+      resendLink.style.display = 'block';
+    }
+  }, 1000);
+}
+
+async function verifyOTP() {
+  const email = document.getElementById('email').value.trim();
+  const otp = document.getElementById('otpInput').value.trim();
+  const verifyBtn = document.getElementById('verifyBtn');
+  const message = document.getElementById('otpMessage');
+
+  if (!otp || otp.length < 4) {
+    showError('otpError', true);
+    return;
+  }
+  showError('otpError', false);
+
+  verifyBtn.disabled = true;
+  verifyBtn.innerHTML = '<span class="spinner"></span> Verifying...';
+  message.className = 'message';
+  message.style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp })
+    });
+    const json = await resp.json();
+    if (json.success) {
+      otpVerified = true;
+      message.className = 'message success show';
+      message.textContent = 'OTP verified!';
+      completeOnboarding();
+    } else {
+      message.className = 'message error show';
+      message.textContent = json.error || 'Invalid OTP code';
+      verifyBtn.disabled = false;
+      verifyBtn.innerHTML = 'Verify OTP';
+    }
+  } catch (err) {
+    message.className = 'message error show';
+    message.textContent = 'Network error. Please try again.';
+    verifyBtn.disabled = false;
+    verifyBtn.innerHTML = 'Verify OTP';
+  }
+}
+
+async function completeOnboarding() {
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const mobile = document.getElementById('mobile').value.trim();
+  const company = document.getElementById('company').value.trim();
+  const countryCode = selectedCountry ? selectedCountry.dial : '+91';
+
+  const verifyBtn = document.getElementById('verifyBtn');
+  verifyBtn.innerHTML = '<span class="spinner"></span> Activating trial...';
+
+  try {
+    const resp = await fetch('/api/complete-onboarding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name, email, mobile, country_code: countryCode,
+        company_name: company
+      })
+    });
+    const json = await resp.json();
+    if (json.success) {
+      document.getElementById('section2').classList.remove('active');
+      document.getElementById('step2').classList.remove('active');
+      document.getElementById('step2').classList.add('completed');
+      document.getElementById('step3').classList.add('completed');
+      document.getElementById('section3').classList.add('show');
+      document.getElementById('step3').classList.add('active');
+      setTimeout(() => window.close(), 3000);
+    } else {
+      const message = document.getElementById('otpMessage');
+      message.className = 'message error show';
+      message.textContent = json.error || 'Failed to activate trial';
+      verifyBtn.disabled = false;
+      verifyBtn.innerHTML = 'Verify OTP';
+    }
+  } catch (err) {
+    const message = document.getElementById('otpMessage');
+    message.className = 'message error show';
+    message.textContent = 'Network error during activation.';
+    verifyBtn.disabled = false;
+    verifyBtn.innerHTML = 'Verify OTP';
+  }
+}
+
+function initProductConfig() {
+  const cfg = typeof PRODUCT_CONFIG !== 'undefined' ? PRODUCT_CONFIG : {};
+  const title = document.getElementById('welcomeTitle');
+  const desc = document.getElementById('welcomeDesc');
+  const info = document.getElementById('productInfo');
+  if (title) title.textContent = 'Welcome to ' + (cfg.product_name || 'Software');
+  if (desc) desc.textContent = 'Start your ' + (cfg.trial_days || 7) + '-day free trial. Up to ' + (cfg.max_devices || 1) + ' device(s).';
+  if (info) {
+    const parts = [];
+    if (cfg.company) parts.push('<span class="badge">' + cfg.company + '</span>');
+    if (cfg.product_version) parts.push('<span class="badge">v' + cfg.product_version + '</span>');
+    if (cfg.trial_days) parts.push('<span class="badge">' + cfg.trial_days + '-day trial</span>');
+    if (cfg.max_devices) parts.push('<span class="badge">' + cfg.max_devices + ' device(s)</span>');
+    info.innerHTML = parts.join('');
+  }
+}
+initProductConfig();
+fetchCountries();
+</script>
+</body>
+</html>
