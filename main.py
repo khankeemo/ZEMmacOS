@@ -10,16 +10,13 @@ from tkinter import messagebox
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-SDK_AVAILABLE = False
 SDK_CONFIG_PATH = os.path.join(BASE_DIR, 'SDK_ZEM_MAC_OS_prod_zemmacos', 'config', 'api-config.json')
-try:
-    from SDK_ZEM_MAC_OS_prod_zemmacos.client import Client
-    from SDK_ZEM_MAC_OS_prod_zemmacos.hardware import HardwareFingerprint
-    from SDK_ZEM_MAC_OS_prod_zemmacos.cache import CacheManager
-    from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
-    SDK_AVAILABLE = True
-except ImportError:
-    pass
+SDK_AVAILABLE = os.path.exists(SDK_CONFIG_PATH)
+if SDK_AVAILABLE:
+    try:
+        from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, LicenseStatus, WelcomeDialog
+    except ImportError:
+        SDK_AVAILABLE = False
 
 from main_ui import ZEMmacOSUI
 from gib_macos_wrapper import GibMacOSWrapper
@@ -42,66 +39,23 @@ def main():
     # PHASE 1 — SDK INITIALIZATION (BEFORE ANY UI)
     # ----------------------------------------------------------------
     settings = SettingsManager()
-    sdk_client = None
-    api_config = {}
-    hw_id = ''
-    cache = None
-    license_status = None
+    engine = None
+    license_status = LicenseStatus()
     stored_key = settings.get("license_key", "")
 
-    print("[DEBUG] SDK initialized")
-
     if SDK_AVAILABLE:
-        try:
-            with open(SDK_CONFIG_PATH, 'r', encoding='utf-8') as f:
-                api_config = json.load(f)
-        except:
-            api_config = {}
+        engine = LicenseEngine(SDK_CONFIG_PATH)
+        license_status = engine.initialize()
 
-        api_key = api_config.get('api', {}).get('public_key', '')
-        api_url = api_config.get('api', {}).get('url', 'https://websmith-z.vercel.app')
+        print(f"[DEBUG] Valid: {license_status.valid}, Trial: {license_status.trial_active}, Days: {license_status.days_remaining}")
 
-        sdk_client = Client(api_key=api_key, api_url=api_url)
-        hw_fp = HardwareFingerprint.generate_fingerprint()
-        hw_id = hw_fp['fingerprint']
-        cache = CacheManager(product_name='prod_zemmacos')
-
-        print("[DEBUG] SDK cache loaded")
-
-        license_data = {}
-
-        if stored_key:
-            try:
-                result = sdk_client.validate_license(stored_key, hw_id)
-                if result.get('valid'):
-                    license_data = result
-            except:
-                pass
-
-        if not license_data.get('valid'):
-            try:
-                trial_result = sdk_client.check_trial(hw_id)
-                if trial_result.get('trial_active'):
-                    license_data = trial_result
-            except:
-                pass
-
-        license_status = license_data
-
-        print(f"[DEBUG] Trial active: {license_data.get('trial_active')}")
-        print(f"[DEBUG] Remaining days: {license_data.get('days_remaining')}")
-
-        if not license_data.get('valid') and not stored_key:
+        if not license_status.valid and not license_status.trial_active:
             print("[DEBUG] Opening welcome dialog")
-            welcome = WelcomeDialog(sdk_client, product_name='ZEM MAC OS', cache=cache)
+            welcome = WelcomeDialog(engine.client, product_name='ZEM MAC OS', cache=engine.cache)
             result = welcome.show()
             if result.get('onboarding_complete'):
-                try:
-                    license_status = sdk_client.check_trial(hw_id)
-                except:
-                    pass
-                print(f"[DEBUG] Trial active: {license_status.get('trial_active')}")
-                print(f"[DEBUG] Remaining days: {license_status.get('days_remaining')}")
+                license_status = engine.initialize()
+                print(f"[DEBUG] Trial active: {license_status.trial_active}, Days: {license_status.days_remaining}")
             elif not result.get('skipped'):
                 print("License required to use ZEMmacOS")
                 sys.exit(1)
@@ -119,7 +73,7 @@ def main():
     root.minsize(1000, 700)
     root.state('zoomed')
 
-    ZEMmacOSApp(root, sdk_client, license_status, settings, api_config, hw_id, cache)
+    ZEMmacOSApp(root, engine, license_status, settings)
     root.mainloop()
 
 
@@ -137,8 +91,7 @@ def _is_network_error_str(err_str):
 
 
 class ZEMmacOSApp(ZEMmacOSUI):
-    def __init__(self, root, sdk_client=None, license_status=None, settings=None,
-                 api_config=None, hw_id='', cache=None):
+    def __init__(self, root, engine=None, license_status=None, settings=None):
         super().__init__(root)
 
         self.settings = settings or SettingsManager()
@@ -148,12 +101,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.logger = get_logger()
         self.logger.set_console_callback(self._console_output)
 
-        self._sdk_client = sdk_client
-        self._api_config = api_config or {}
-        self._hw_id = hw_id
-        self._cache = cache
-        self._license_status = license_status or {}
-        self._app_locked = not bool(self._license_status.get('valid'))
+        self._engine = engine
+        self._license_status = license_status or LicenseStatus()
+        self._app_locked = not (self._license_status.valid or self._license_status.trial_active)
 
         self._timers = {}
 
@@ -205,21 +155,15 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._start_network_monitor()
 
     def activate_license_key(self, key):
-        if not self._sdk_client:
+        if not self._engine:
             self.log("Cannot activate - SDK not available", "error")
             return False
         try:
-            device_name = socket.gethostname()
-            result = self._sdk_client.activate_license(key, self._hw_id, device_name)
+            result = self._engine.activate(key)
             if result.get('success'):
                 self.settings.set("license_key", key)
-                try:
-                    vr = self._sdk_client.validate_license(key, self._hw_id)
-                    if vr.get('valid'):
-                        self._license_status = vr
-                except:
-                    pass
-                self._app_locked = not bool(self._license_status.get('valid'))
+                self._license_status = self._engine.get_status()
+                self._app_locked = not (self._license_status.valid or self._license_status.trial_active)
                 self.log("License activated successfully", "success")
                 self.debug_log("LICENSE", "SUCCESS", "License activation successful")
                 return True
