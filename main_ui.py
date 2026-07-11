@@ -7,7 +7,6 @@ import time
 from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
-from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseStatus
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -459,41 +458,42 @@ class ZEMmacOSUI:
                                  cleanup,
                                  cx + 8, by, bw, bh)
 
-    # ---- License Widget (SDK-powered, live data) ----
+    # ---- License Widget (displays SDK status values only) ----
 
     def _build_license_widget(self, parent):
         c = self.colors
         frame = tk.Frame(parent, bg=c["header_bg"])
         frame.pack(side=tk.RIGHT, padx=4)
 
-        status = getattr(self, '_license_status', None) or LicenseStatus()
+        status = getattr(self, '_license_status', {}) or {}
 
         badge_fg = c["muted"]
         badge_text = "No License"
         days_text = ""
         expiry_text = ""
 
-        if status.valid and status.trial_active:
+        if status.get('valid') and status.get('trial_active'):
             badge_fg = c["warning"]
             badge_text = "Trial Active"
-            days_text = "%s days remaining" % status.days_remaining
-        elif status.valid:
+            days_text = "%s days remaining" % status.get('days_remaining', 0)
+        elif status.get('valid'):
             badge_fg = c["success"]
             badge_text = "Licensed"
-            days_text = "%s days remaining" % status.days_remaining
-        elif status.trial_active:
+            days_text = "%s days remaining" % status.get('days_remaining', 0)
+        elif status.get('trial_active'):
             badge_fg = c["warning"]
             badge_text = "Trial Active"
-            days_text = "%s days remaining" % status.days_remaining
+            days_text = "%s days remaining" % status.get('days_remaining', 0)
 
-        if status.expires_at:
+        expires_at = status.get('expires_at', '')
+        if expires_at:
             try:
                 from datetime import datetime
-                expiry = status.expires_at.replace('Z', '+00:00')
+                expiry = expires_at.replace('Z', '+00:00')
                 dt = datetime.fromisoformat(expiry)
                 expiry_text = "Expires: %s" % dt.strftime('%d %b %Y')
             except:
-                expiry_text = "Expires: %s" % status.expires_at
+                expiry_text = "Expires: %s" % expires_at
 
         dot = tk.Label(frame, text="\u25cf", font=("SF Pro Text", 10),
                        fg=badge_fg, bg=c["header_bg"])
@@ -520,12 +520,24 @@ class ZEMmacOSUI:
         self._license_refresh_timer = self.root.after(60000, self._refresh_license_widget)
 
     def _refresh_license_widget(self):
-        engine = getattr(self, '_engine', None)
-        if engine:
+        sdk = getattr(self, '_sdk_client', None)
+        hw_id = getattr(self, '_hw_id', '')
+        settings = getattr(self, 'settings', None)
+        stored_key = settings.get('license_key', '') if settings else ''
+        if sdk:
             try:
-                engine.refresh()
-                self._license_status = engine.get_status()
-                self._app_locked = not (self._license_status.valid or self._license_status.trial_active)
+                if stored_key:
+                    vr = sdk.validate_license(stored_key, hw_id)
+                    if vr.get('valid'):
+                        self._license_status = vr
+                    else:
+                        tr = sdk.check_trial(hw_id)
+                        if tr.get('trial_active'):
+                            self._license_status = tr
+                else:
+                    tr = sdk.check_trial(hw_id)
+                    if tr.get('trial_active'):
+                        self._license_status = tr
             except:
                 pass
         if hasattr(self, '_license_widget_frame') and self._license_widget_frame.winfo_exists():
@@ -567,27 +579,6 @@ class ZEMmacOSUI:
 
         body_frame = tk.Frame(self.content_area, bg=colors["content_bg"])
         body_frame.pack(fill=tk.BOTH, expand=True, padx=28, pady=24)
-
-        if getattr(self, '_app_locked', True):
-            lock_frame = tk.Frame(body_frame, bg=colors["content_bg"])
-            lock_frame.pack(fill=tk.BOTH, expand=True)
-            status = getattr(self, '_license_status', None) or LicenseStatus()
-            lock_msg = status.message or 'No active license or trial found.'
-            tk.Label(lock_frame, text="\U0001f512", font=("SF Pro Display", 48),
-                     fg=colors["muted"], bg=colors["content_bg"]).pack(pady=(60, 10))
-            tk.Label(lock_frame, text="License Required",
-                     font=("SF Pro Display", 20, "bold"),
-                     fg=colors["text"], bg=colors["content_bg"]).pack()
-            tk.Label(lock_frame, text=lock_msg + "\nPlease activate a license in Settings to continue.",
-                     font=("SF Pro Text", 11), fg=colors["muted"],
-                     bg=colors["content_bg"], justify=tk.CENTER).pack(pady=8)
-            tk.Button(lock_frame, text="Open Settings",
-                      command=lambda: self._nav_click("settings"),
-                      font=("SF Pro Text", 11, "bold"),
-                      fg="white", bg=colors["accent"],
-                      activebackground="#0056b3",
-                      bd=0, padx=20, pady=8, cursor="hand2").pack(pady=10)
-            return
 
         stats_row = tk.Frame(body_frame, bg=colors["content_bg"])
         stats_row.pack(fill=tk.X, pady=12)
@@ -674,27 +665,6 @@ class ZEMmacOSUI:
 
         body = tk.Frame(self.content_area, bg=colors["content_bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=28, pady=10)
-
-        if getattr(self, '_app_locked', True):
-            lock_frame = tk.Frame(body, bg=colors["content_bg"])
-            lock_frame.pack(fill=tk.BOTH, expand=True)
-            status = getattr(self, '_license_status', None) or LicenseStatus()
-            lock_msg = status.message or 'No active license or trial found.'
-            tk.Label(lock_frame, text="\U0001f512", font=("SF Pro Display", 48),
-                     fg=colors["muted"], bg=colors["content_bg"]).pack(pady=(60, 10))
-            tk.Label(lock_frame, text="License Required",
-                     font=("SF Pro Display", 20, "bold"),
-                     fg=colors["text"], bg=colors["content_bg"]).pack()
-            tk.Label(lock_frame, text=lock_msg + "\nPlease activate a license in Settings to continue.",
-                     font=("SF Pro Text", 11), fg=colors["muted"],
-                     bg=colors["content_bg"], justify=tk.CENTER).pack(pady=8)
-            tk.Button(lock_frame, text="Open Settings",
-                      command=lambda: self._nav_click("settings"),
-                      font=("SF Pro Text", 11, "bold"),
-                      fg="white", bg=colors["accent"],
-                      activebackground="#0056b3",
-                      bd=0, padx=20, pady=8, cursor="hand2").pack(pady=10)
-            return
 
         left_panel = tk.Frame(body, bg=colors["content_bg"])
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
@@ -952,17 +922,11 @@ class ZEMmacOSUI:
                 self.version_listbox.see(idx)
 
     def _on_fetch_clicked(self):
-        if getattr(self, '_app_locked', True):
-            self.show_toast("License required to use Library", "error", 3000)
-            return
         self.index_error_label.config(text="")
         self.set_fetch_state(True)
         if self._fetch_callback:
             self._fetch_callback()
     def _on_download_clicked(self):
-        if getattr(self, '_app_locked', True):
-            self.show_toast("License required to download", "error", 3000)
-            return
         idx = self.index_entry.get().strip() if hasattr(self, "index_entry") else ""
         if not idx:
             self.index_error_label.config(text="Enter an index number")

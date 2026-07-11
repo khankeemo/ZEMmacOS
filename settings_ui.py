@@ -4,7 +4,6 @@ import os
 import platform
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseStatus
 
 
 class SettingsUI:
@@ -106,11 +105,11 @@ class SettingsUI:
         for w in self._lo_container.winfo_children():
             w.destroy()
 
-        status = getattr(self.app, '_license_status', None) or LicenseStatus()
+        status = getattr(self.app, '_license_status', {}) or {}
 
-        if status.valid or status.trial_active:
-            lic_type = "Trial" if status.trial_active else "Licensed"
-            expires_at = status.expires_at or 'N/A'
+        if status.get('valid') or status.get('trial_active'):
+            lic_type = "Trial" if status.get('trial_active') else "Licensed"
+            expires_at = status.get('expires_at', '') or 'N/A'
             try:
                 from datetime import datetime
                 if expires_at and expires_at != 'N/A':
@@ -121,7 +120,7 @@ class SettingsUI:
             rows = [
                 ("Status", "Active"),
                 ("Type", lic_type),
-                ("Remaining", f"{status.days_remaining} day(s)"),
+                ("Remaining", f"{status.get('days_remaining', 0)} day(s)"),
                 ("Expires", str(expires_at)),
             ]
         else:
@@ -139,7 +138,7 @@ class SettingsUI:
 
         btn_frame = tk.Frame(self._lo_container, bg=c["card_bg"])
         btn_frame.pack(fill=tk.X, pady=(14, 0))
-        has_valid = status.valid or status.trial_active
+        has_valid = bool(status.get('valid')) or bool(status.get('trial_active'))
         text = "Activate License" if not has_valid else "Manage License"
         bg_color = c["accent"] if not has_valid else c["btn_secondary_bg"]
         fg_color = "#ffffff" if not has_valid else c["text"]
@@ -369,27 +368,28 @@ class SettingsUI:
 
     def _build_license(self):
         c = self.colors
-        engine = getattr(self.app, '_engine', None)
-        product = engine.config.get('product', {}) if engine else {}
-        status = getattr(self.app, '_license_status', None) or LicenseStatus()
+        api_config = getattr(self.app, '_api_config', {})
+        product = api_config.get('product', {})
+        status = getattr(self.app, '_license_status', {}) or {}
 
         inner = self._card(self._content_frame, "License Status")
         rows_data = []
-        if status.valid or status.trial_active:
-            lic_type = "Trial" if status.trial_active else "Licensed"
+        if status.get('valid') or status.get('trial_active'):
+            lic_type = "Trial" if status.get('trial_active') else "Licensed"
             rows_data = [
                 ("Status", "Active"),
                 ("Type", lic_type),
-                ("Remaining", "%s day(s)" % status.days_remaining),
+                ("Remaining", "%s day(s)" % status.get('days_remaining', 0)),
             ]
-            if status.expires_at:
+            expires_at = status.get('expires_at', '')
+            if expires_at:
                 try:
                     from datetime import datetime
-                    expiry = status.expires_at.replace('Z', '+00:00')
+                    expiry = expires_at.replace('Z', '+00:00')
                     dt = datetime.fromisoformat(expiry)
                     rows_data.append(("Expires", dt.strftime('%d %b %Y')))
                 except:
-                    rows_data.append(("Expires", str(status.expires_at)))
+                    rows_data.append(("Expires", str(expires_at)))
         else:
             rows_data = [("Status", "No Active License")]
 
@@ -403,7 +403,7 @@ class SettingsUI:
         inner2 = self._card(self._content_frame, "Product Info")
         prod_name = product.get('name', 'ZEM MAC OS')
         prod_ver = product.get('version', '1.0.0')
-        hw_id = engine.device_id if engine else ''
+        hw_id = getattr(self.app, '_hw_id', '')
         for label, value in [
             ("Product", prod_name),
             ("Version", prod_ver),
@@ -420,22 +420,30 @@ class SettingsUI:
         btn_frame = tk.Frame(inner3, bg=c["card_bg"])
         btn_frame.pack(fill=tk.X)
 
-        def _activate_license():
-            if hasattr(self, '_on_license_overview_activate'):
-                self._on_license_overview_activate()
-
-        def _refresh_via_engine():
-            engine = getattr(self.app, '_engine', None)
-            if engine:
+        def _refresh_status():
+            sdk = getattr(self.app, '_sdk_client', None)
+            hw_id = getattr(self.app, '_hw_id', '')
+            settings = getattr(self.app, 'settings', None)
+            stored_key = settings.get('license_key', '') if settings else ''
+            if sdk:
                 try:
-                    engine.refresh()
-                    self.app._license_status = engine.get_status()
-                    self.app._app_locked = not (self.app._license_status.valid or self.app._license_status.trial_active)
+                    if stored_key:
+                        vr = sdk.validate_license(stored_key, hw_id)
+                        if vr.get('valid'):
+                            self.app._license_status = vr
+                        else:
+                            tr = sdk.check_trial(hw_id)
+                            if tr.get('trial_active'):
+                                self.app._license_status = tr
+                    else:
+                        tr = sdk.check_trial(hw_id)
+                        if tr.get('trial_active'):
+                            self.app._license_status = tr
                 except:
                     pass
 
         def _refresh_license():
-            _refresh_via_engine()
+            _refresh_status()
             if hasattr(self.app, '_refresh_license_widget'):
                 self.app._refresh_license_widget()
             self._switch_section("license")
@@ -443,16 +451,17 @@ class SettingsUI:
             self.app.show_toast("License status refreshed", "success", 2500)
 
         def _open_welcome():
-            engine = getattr(self.app, '_engine', None)
-            if engine and engine.client:
+            sdk = getattr(self.app, '_sdk_client', None)
+            cache = getattr(self.app, '_cache', None)
+            if sdk:
                 import threading
                 def _show():
                     try:
                         from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
-                        welcome = WelcomeDialog(engine.client, product_name='ZEM MAC OS', cache=engine.cache)
+                        welcome = WelcomeDialog(sdk, product_name='ZEM MAC OS', cache=cache)
                         result = welcome.show()
                         if result.get('onboarding_complete'):
-                            _refresh_via_engine()
+                            _refresh_status()
                             self.app.root.after(0, lambda: self._switch_section("license"))
                             self.app.root.after(0, self._update_license_overview)
                     except:
@@ -461,7 +470,7 @@ class SettingsUI:
 
         def _recheck_validity():
             try:
-                _refresh_via_engine()
+                _refresh_status()
                 if hasattr(self.app, '_refresh_license_widget'):
                     self.app._refresh_license_widget()
                 self._switch_section("license")
@@ -471,7 +480,7 @@ class SettingsUI:
                 self.app.show_toast("Validity check failed", "error", 3000)
 
         for text, cmd, clr in [
-            ("Activate License", _activate_license, c["accent"]),
+            ("Activate License", self._on_license_overview_activate, c["accent"]),
             ("Refresh Status", _refresh_license, c["success"]),
             ("Open Welcome Dialog", _open_welcome, c["warning"]),
             ("Re-check Validity", _recheck_validity, c["info"]),
@@ -508,21 +517,18 @@ class SettingsUI:
                      fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
 
         inner3 = self._card(self._content_frame, "License")
-        status = getattr(self.app, '_license_status', None) or LicenseStatus()
+        status = getattr(self.app, '_license_status', {}) or {}
 
-        engine = getattr(self.app, '_engine', None)
-        support_email = "support@websmithdigital.com"
-        support_url = "www.websmithdigital.com"
-        if engine:
-            branding = engine.config.get('branding', {})
-            support_email = branding.get('support_email', support_email)
-            support_url = branding.get('support_url', support_url)
-            support_url = support_url.replace('https://', '').replace('http://', '')
+        api_config = getattr(self.app, '_api_config', {})
+        branding = api_config.get('branding', {})
+        support_email = branding.get('support_email', "support@websmithdigital.com")
+        support_url = branding.get('support_url', "www.websmithdigital.com")
+        support_url = support_url.replace('https://', '').replace('http://', '')
 
-        if status.valid or status.trial_active:
-            lic_type = "Trial License" if status.trial_active else (status.plan + " License" if status.plan else "License")
-            lic_status = "Trial" if status.trial_active else "Active"
-            expires_at = status.expires_at or 'N/A'
+        if status.get('valid') or status.get('trial_active'):
+            lic_type = "Trial License" if status.get('trial_active') else (status.get('plan', '') + " License" if status.get('plan') else "License")
+            lic_status = "Trial" if status.get('trial_active') else "Active"
+            expires_at = status.get('expires_at', '') or 'N/A'
             try:
                 from datetime import datetime
                 if expires_at and expires_at != 'N/A':
@@ -533,7 +539,7 @@ class SettingsUI:
             lic_info = [
                 ("License Status:", lic_status),
                 ("License Type:", lic_type),
-                ("Remaining:", "%d Day(s)" % status.days_remaining),
+                ("Remaining:", "%d Day(s)" % status.get('days_remaining', 0)),
                 ("Expires:", str(expires_at)),
             ]
         else:
@@ -620,8 +626,8 @@ class SettingsUI:
             self.license_status_label.config(text="Saved", fg=self.colors["muted"])
 
     def _update_license_status(self):
-        status = getattr(self.app, '_license_status', None) or LicenseStatus()
-        if status.valid:
+        status = getattr(self.app, '_license_status', {}) or {}
+        if status.get('valid'):
             self.license_status_label.config(text="Active", fg=self.colors["success"])
         else:
             key = self.app.settings.get("license_key", "")
