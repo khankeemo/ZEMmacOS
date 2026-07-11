@@ -59,7 +59,7 @@ class WelcomeDialog:
         self._load_countries()
 
         self._root.mainloop()
-        return self._result or {'cancelled': True, 'success': False}
+        return self._result or {'skipped': True}
 
     def _center_window(self):
         if not self._root:
@@ -237,9 +237,11 @@ class WelcomeDialog:
             if result.get('success'):
                 self._complete_onboarding()
             else:
-                self._root.destroy()
+                self._show_error(result.get('error', 'Invalid OTP'))
+                self._verify_btn.config(state='normal', text='Verify')
         except Exception as e:
-            self._root.destroy()
+            self._show_error(str(e))
+            self._verify_btn.config(state='normal', text='Verify')
 
     def _complete_onboarding(self):
         name = self._name_entry.get().strip()
@@ -270,8 +272,9 @@ class WelcomeDialog:
             }
             self._status_label.config(text='Trial activated! You can now use the software.', fg='#10b981')
             self._root.after(2000, self._root.destroy)
-        except Exception:
-            self._root.destroy()
+        except Exception as e:
+            self._show_error(str(e))
+            self._verify_btn.config(state='normal', text='Verify')
 
     def _show_error(self, msg):
         self._error_label.config(text=msg)
