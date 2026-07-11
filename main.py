@@ -11,13 +11,13 @@ from tkinter import messagebox
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 SDK_AVAILABLE = False
+SDK_CONFIG_PATH = os.path.join(BASE_DIR, 'SDK_ZEMMACOS', 'config', 'api-config.json')
 try:
     from SDK_ZEMMACOS.license_engine import LicenseEngine, LicenseStatus
+    from SDK_ZEMMACOS.welcome_dialog import show_welcome_dialog
     SDK_AVAILABLE = True
 except ImportError:
     pass
-
-SDK_CONFIG_PATH = os.path.join(BASE_DIR, 'SDK_ZEMMACOS', 'config', 'api-config.json')
 
 from main_ui import ZEMmacOSUI
 from gib_macos_wrapper import GibMacOSWrapper
@@ -36,13 +36,54 @@ def main():
         except Exception:
             pass
 
+    # ----------------------------------------------------------------
+    # PHASE 1 — SDK INITIALIZATION (BEFORE ANY UI)
+    # ----------------------------------------------------------------
+    settings = SettingsManager()
+    engine = None
+    license_status = None
+    stored_key = settings.get("license_key", "")
+
+    print("[DEBUG] SDK initialized")
+
+    if SDK_AVAILABLE:
+        engine = LicenseEngine(config_path=SDK_CONFIG_PATH)
+
+        if stored_key:
+            engine._license_key = stored_key
+
+        print("[DEBUG] SDK cache loaded")
+
+        license_status = engine.initialize()
+
+        print(f"[DEBUG] License status: {license_status.status}")
+        print(f"[DEBUG] Trial active: {license_status.trial_active}")
+        print(f"[DEBUG] Remaining days: {license_status.days_remaining}")
+
+        if not license_status.valid and not stored_key:
+            print("[DEBUG] Opening welcome dialog")
+            success = show_welcome_dialog(engine)
+            if not success:
+                print("License required to use ZEMmacOS")
+                sys.exit(1)
+            license_status = engine.get_status()
+            print(f"[DEBUG] Trial active: {license_status.trial_active}")
+            print(f"[DEBUG] Remaining days: {license_status.days_remaining}")
+    else:
+        print("[DEBUG] SDK not available - running without license check")
+
+    print("[DEBUG] Dashboard unlocked")
+
+    # ----------------------------------------------------------------
+    # PHASE 2 — CREATE MAIN UI
+    # ----------------------------------------------------------------
     root = tk.Tk()
     root.title("ZEMmacOS")
     root.geometry("1200x800")
     root.minsize(1000, 700)
     root.state('zoomed')
 
-    ZEMmacOSApp(root)
+    ZEMmacOSApp(root, engine, license_status, settings)
     root.mainloop()
 
 
@@ -60,15 +101,19 @@ def _is_network_error_str(err_str):
 
 
 class ZEMmacOSApp(ZEMmacOSUI):
-    def __init__(self, root):
+    def __init__(self, root, engine=None, license_status=None, settings=None):
         super().__init__(root)
 
-        self.settings = SettingsManager()
+        self.settings = settings or SettingsManager()
         self.settings_service = AppSettingsService(self)
         self.updater = AppUpdater()
 
         self.logger = get_logger()
         self.logger.set_console_callback(self._console_output)
+
+        self._engine = engine
+        self._license_status = license_status
+        self._app_locked = not (license_status and license_status.valid)
 
         self._timers = {}
 
@@ -111,12 +156,37 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.log(f"Log file: {self.logger.get_log_file_path()}", "info")
         self.log("=" * 60, "info")
 
-        self._init_sdk()
+        # Show the dashboard now (SDK already resolved)
+        self.show_dashboard()
 
         self.root.after(500, self._show_startup_toast)
         self.root.after(1000, self._auto_fetch)
         self.root.after(2000, self._check_internet_on_startup)
         self._start_network_monitor()
+
+    def activate_license_key(self, key):
+        if not self._engine:
+            self.log("Cannot activate - SDK not available", "error")
+            return False
+        try:
+            result = self._engine.activate(key)
+            if result.get('success'):
+                self.settings.set("license_key", key)
+                self._license_status = self._engine.get_status()
+                self._app_locked = not (self._license_status and self._license_status.valid)
+                self.log("License activated successfully", "success")
+                self.debug_log("LICENSE", "SUCCESS", "License activation successful")
+                return True
+            else:
+                err = result.get('error', {})
+                msg = err.get('message', 'Activation failed') if isinstance(err, dict) else str(err)
+                self.log(f"License activation failed: {msg}", "error")
+                self.debug_log("LICENSE", "ERROR", "Activation failed", msg)
+                return False
+        except Exception as e:
+            self.log(f"License activation error: {str(e)}", "error")
+            self.debug_log("LICENSE", "ERROR", "Activation error", str(e))
+            return False
 
     # -----------------------------------------------------------------
     # NETWORK MONITOR — runs continuously in background
@@ -158,86 +228,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def _stop_network_monitor(self):
         self._network_monitor_stop.set()
-
-    # -----------------------------------------------------------------
-    # SDK LICENSE SYSTEM
-    # -----------------------------------------------------------------
-    def _init_sdk(self):
-        self._engine = None
-        self._license_status = None
-        self._app_locked = True
-
-        if not SDK_AVAILABLE:
-            self.log("License SDK not found - running without license check", "warning")
-            self._app_locked = False
-            return
-
-        try:
-            self._engine = LicenseEngine(config_path=SDK_CONFIG_PATH)
-
-            stored_key = self.settings.get("license_key", "")
-            if stored_key:
-                self._engine._license_key = stored_key
-
-            self._license_status = self._engine.initialize()
-            self._app_locked = not self._license_status.valid
-
-            if self._license_status.valid:
-                msg = self._license_status.message
-                self.log(f"License active: {msg}", "success")
-                self.debug_log("LICENSE", "SUCCESS", msg)
-            else:
-                self.log(f"No valid license: {self._license_status.message}", "warning")
-                self.debug_log("LICENSE", "WARNING", self._license_status.message)
-                if not stored_key:
-                    self.root.after(2000, self._show_welcome_dialog)
-        except Exception as e:
-            self.log(f"SDK initialization failed: {e}", "error")
-            self._app_locked = True
-
-    def _show_welcome_dialog(self):
-        if not self._engine:
-            return
-        try:
-            from SDK_ZEMMACOS.welcome_dialog import show_welcome_dialog
-            success = show_welcome_dialog(self._engine)
-            if success:
-                self._license_status = self._engine.get_status()
-                self._app_locked = not (self._license_status and self._license_status.valid)
-                self.log("Trial started successfully", "success")
-                self.debug_log("LICENSE", "SUCCESS", "Trial started from welcome dialog")
-                if self.current_view == "dashboard":
-                    self.show_dashboard()
-                elif self.current_view == "library":
-                    self.show_library()
-            else:
-                self.log("Welcome dialog closed without starting trial", "info")
-        except Exception as e:
-            self.log(f"Welcome dialog error: {e}", "error")
-
-    def activate_license_key(self, key):
-        if not self._engine:
-            self.log("Cannot activate - SDK not available", "error")
-            return False
-        try:
-            result = self._engine.activate(key)
-            if result.get('success'):
-                self.settings.set("license_key", key)
-                self._license_status = self._engine.get_status()
-                self._app_locked = not (self._license_status and self._license_status.valid)
-                self.log("License activated successfully", "success")
-                self.debug_log("LICENSE", "SUCCESS", "License activation successful")
-                return True
-            else:
-                err = result.get('error', {})
-                msg = err.get('message', 'Activation failed') if isinstance(err, dict) else str(err)
-                self.log(f"License activation failed: {msg}", "error")
-                self.debug_log("LICENSE", "ERROR", "Activation failed", msg)
-                return False
-        except Exception as e:
-            self.log(f"License activation error: {str(e)}", "error")
-            self.debug_log("LICENSE", "ERROR", "Activation error", str(e))
-            return False
 
     # -----------------------------------------------------------------
     # INTERNET CHECK
@@ -544,7 +534,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._run_package_loop(download_id)
 
     # -----------------------------------------------------------------
-    # PACKAGE LOOP — single shared loop for both start and resume
+    # PACKAGE LOOP
     # -----------------------------------------------------------------
     _package_loop_running = set()
 

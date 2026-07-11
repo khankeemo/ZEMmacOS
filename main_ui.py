@@ -186,7 +186,6 @@ class ZEMmacOSUI:
         self.content_area = tk.Frame(parent, bg=self.colors["content_bg"])
         self.content_area._role = "content"
         self.content_area.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-        self.show_dashboard()
 
     def clear_content(self):
         for widget in self.content_area.winfo_children():
