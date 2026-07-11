@@ -458,94 +458,6 @@ class ZEMmacOSUI:
                                  cleanup,
                                  cx + 8, by, bw, bh)
 
-    # ---- License Widget (displays SDK status values only) ----
-
-    def _build_license_widget(self, parent):
-        c = self.colors
-        frame = tk.Frame(parent, bg=c["header_bg"])
-        frame.pack(side=tk.RIGHT, padx=4)
-
-        status = getattr(self, '_license_status', {}) or {}
-
-        badge_fg = c["muted"]
-        badge_text = "No License"
-        days_text = ""
-        expiry_text = ""
-
-        if status.get('valid') and status.get('trial_active'):
-            badge_fg = c["warning"]
-            badge_text = "Trial Active"
-            days_text = "%s days remaining" % status.get('days_remaining', 0)
-        elif status.get('valid'):
-            badge_fg = c["success"]
-            badge_text = "Licensed"
-            days_text = "%s days remaining" % status.get('days_remaining', 0)
-        elif status.get('trial_active'):
-            badge_fg = c["warning"]
-            badge_text = "Trial Active"
-            days_text = "%s days remaining" % status.get('days_remaining', 0)
-
-        expires_at = status.get('expires_at', '')
-        if expires_at:
-            try:
-                from datetime import datetime
-                expiry = expires_at.replace('Z', '+00:00')
-                dt = datetime.fromisoformat(expiry)
-                expiry_text = "Expires: %s" % dt.strftime('%d %b %Y')
-            except:
-                expiry_text = "Expires: %s" % expires_at
-
-        dot = tk.Label(frame, text="\u25cf", font=("SF Pro Text", 10),
-                       fg=badge_fg, bg=c["header_bg"])
-        dot.pack(side=tk.LEFT, padx=(0, 2))
-
-        tk.Label(frame, text=badge_text, font=("SF Pro Text", 10, "bold"),
-                 fg=badge_fg, bg=c["header_bg"]).pack(side=tk.LEFT)
-
-        if days_text:
-            tk.Label(frame, text=days_text, font=("SF Pro Text", 9),
-                     fg=c["text_secondary"], bg=c["header_bg"]).pack(side=tk.LEFT, padx=(6, 0))
-
-        if expiry_text:
-            tk.Label(frame, text=expiry_text, font=("SF Pro Text", 8),
-                     fg=c["muted"], bg=c["header_bg"]).pack(side=tk.LEFT, padx=(6, 0))
-
-        self._license_widget_frame = frame
-        self._schedule_license_refresh()
-        return frame
-
-    def _schedule_license_refresh(self):
-        if hasattr(self, '_license_refresh_timer'):
-            self.root.after_cancel(self._license_refresh_timer)
-        self._license_refresh_timer = self.root.after(60000, self._refresh_license_widget)
-
-    def _refresh_license_widget(self):
-        sdk = getattr(self, '_sdk_client', None)
-        hw_id = getattr(self, '_hw_id', '')
-        settings = getattr(self, 'settings', None)
-        stored_key = settings.get('license_key', '') if settings else ''
-        if sdk:
-            try:
-                if stored_key:
-                    vr = sdk.validate_license(stored_key, hw_id)
-                    if vr.get('valid'):
-                        self._license_status = vr
-                    else:
-                        tr = sdk.check_trial(hw_id)
-                        if tr.get('trial_active'):
-                            self._license_status = tr
-                else:
-                    tr = sdk.check_trial(hw_id)
-                    if tr.get('trial_active'):
-                        self._license_status = tr
-            except:
-                pass
-        if hasattr(self, '_license_widget_frame') and self._license_widget_frame.winfo_exists():
-            parent = self._license_widget_frame.master
-            self._license_widget_frame.destroy()
-            self._build_license_widget(parent)
-        self._schedule_license_refresh()
-
     # ---- Dashboard ----
 
     def show_dashboard(self):
@@ -569,7 +481,6 @@ class ZEMmacOSUI:
 
         right_h = tk.Frame(header, bg=colors["header_bg"])
         right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6, padx=4)
-        self._build_license_widget(right_h)
         self._theme_toggle = ThemeToggle(
             right_h,
             command=self._on_theme_toggle,
@@ -652,10 +563,6 @@ class ZEMmacOSUI:
         header = tk.Frame(self.content_area, bg=colors["header_bg"])
         header._role = "header"
         header.pack(fill=tk.X, padx=30, pady=24)
-
-        right_h = tk.Frame(header, bg=colors["header_bg"])
-        right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6)
-        self._build_license_widget(right_h)
 
         tk.Label(header, text="Download Library", font=("SF Pro Display", 26, "bold"),
                  fg=colors["text"], bg=colors["header_bg"]).pack(anchor=tk.W)
@@ -862,8 +769,6 @@ class ZEMmacOSUI:
         self.settings_download_dir = getattr(self.settings_ui, 'settings_download_dir', None)
         self.settings_catalog_var = getattr(self.settings_ui, 'settings_catalog_var', None)
         self.threads_var = getattr(self.settings_ui, 'threads_var', None)
-        if hasattr(self.settings_ui, 'license_key_var'):
-            self.license_key_var = self.settings_ui.license_key_var
 
     # ---- Callbacks ----
 

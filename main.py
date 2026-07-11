@@ -1,5 +1,4 @@
 # main.py
-import json
 import os
 import socket
 import sys
@@ -9,17 +8,6 @@ import tkinter as tk
 from tkinter import messagebox
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-SDK_CONFIG_PATH = os.path.join(BASE_DIR, 'SDK_ZEM_MAC_OS_prod_zemmacos', 'config', 'api-config.json')
-SDK_AVAILABLE = os.path.exists(SDK_CONFIG_PATH)
-if SDK_AVAILABLE:
-    try:
-        from SDK_ZEM_MAC_OS_prod_zemmacos.client import Client
-        from SDK_ZEM_MAC_OS_prod_zemmacos.hardware import HardwareFingerprint
-        from SDK_ZEM_MAC_OS_prod_zemmacos.cache import CacheManager
-        from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
-    except ImportError:
-        SDK_AVAILABLE = False
 
 from main_ui import ZEMmacOSUI
 from gib_macos_wrapper import GibMacOSWrapper
@@ -38,71 +26,13 @@ def main():
         except Exception:
             pass
 
-    # ----------------------------------------------------------------
-    # PHASE 1 — SDK INITIALIZATION (BEFORE ANY UI)
-    # ----------------------------------------------------------------
-    settings = SettingsManager()
-    sdk_client = None
-    api_config = {}
-    hw_id = ''
-    cache = None
-    license_status = {}
-    stored_key = settings.get("license_key", "")
-
-    if SDK_AVAILABLE:
-        try:
-            with open(SDK_CONFIG_PATH, 'r', encoding='utf-8') as f:
-                api_config = json.load(f)
-        except:
-            api_config = {}
-
-        api_key = api_config.get('api', {}).get('public_key', '')
-        api_url = api_config.get('api', {}).get('url', 'https://websmith-z.vercel.app')
-        sdk_client = Client(api_key=api_key, api_url=api_url)
-        hw = HardwareFingerprint.generate_fingerprint()
-        hw_id = hw['fingerprint']
-        cache = CacheManager(product_name='ZEM MAC OS')
-
-        if stored_key:
-            try:
-                result = sdk_client.validate_license(stored_key, hw_id)
-                if result.get('valid'):
-                    license_status = result
-            except:
-                pass
-
-        if not license_status:
-            try:
-                trial = sdk_client.check_trial(hw_id)
-                if trial.get('trial_active'):
-                    license_status = trial
-            except:
-                pass
-
-        if not license_status:
-            print("[DEBUG] Opening welcome dialog")
-            welcome = WelcomeDialog(sdk_client, product_name='ZEM MAC OS', cache=cache)
-            result = welcome.show()
-            if result.get('onboarding_complete'):
-                try:
-                    license_status = sdk_client.check_trial(hw_id)
-                except:
-                    pass
-
-        print(f"[DEBUG] License status: {license_status}")
-    else:
-        print("[DEBUG] SDK not available - running without license check")
-
-    # ----------------------------------------------------------------
-    # PHASE 2 — CREATE MAIN UI
-    # ----------------------------------------------------------------
     root = tk.Tk()
     root.title("ZEMmacOS")
     root.geometry("1200x800")
     root.minsize(1000, 700)
     root.state('zoomed')
 
-    ZEMmacOSApp(root, sdk_client, license_status, settings, api_config, hw_id, cache)
+    app = ZEMmacOSApp(root)
     root.mainloop()
 
 
@@ -120,8 +50,7 @@ def _is_network_error_str(err_str):
 
 
 class ZEMmacOSApp(ZEMmacOSUI):
-    def __init__(self, root, sdk_client=None, license_status=None, settings=None,
-                 api_config=None, hw_id='', cache=None):
+    def __init__(self, root, settings=None):
         super().__init__(root)
 
         self.settings = settings or SettingsManager()
@@ -130,12 +59,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
         self.logger = get_logger()
         self.logger.set_console_callback(self._console_output)
-
-        self._sdk_client = sdk_client
-        self._api_config = api_config or {}
-        self._hw_id = hw_id
-        self._cache = cache
-        self._license_status = license_status or {}
 
         self._timers = {}
 
@@ -185,35 +108,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.root.after(1000, self._auto_fetch)
         self.root.after(2000, self._check_internet_on_startup)
         self._start_network_monitor()
-
-    def activate_license_key(self, key):
-        if not self._sdk_client:
-            self.log("Cannot activate - SDK not available", "error")
-            return False
-        try:
-            device_name = socket.gethostname()
-            result = self._sdk_client.activate_license(key, self._hw_id, device_name)
-            if result.get('success'):
-                self.settings.set("license_key", key)
-                try:
-                    vr = self._sdk_client.validate_license(key, self._hw_id)
-                    if vr.get('valid'):
-                        self._license_status = vr
-                except:
-                    pass
-                self.log("License activated successfully", "success")
-                self.debug_log("LICENSE", "SUCCESS", "License activation successful")
-                return True
-            else:
-                err = result.get('error', {})
-                msg = err.get('message', 'Activation failed') if isinstance(err, dict) else str(err)
-                self.log(f"License activation failed: {msg}", "error")
-                self.debug_log("LICENSE", "ERROR", "Activation failed", msg)
-                return False
-        except Exception as e:
-            self.log(f"License activation error: {str(e)}", "error")
-            self.debug_log("LICENSE", "ERROR", "Activation error", str(e))
-            return False
 
     # -----------------------------------------------------------------
     # NETWORK MONITOR — runs continuously in background
