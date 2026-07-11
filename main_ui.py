@@ -465,38 +465,38 @@ class ZEMmacOSUI:
         frame = tk.Frame(parent, bg=c["header_bg"])
         frame.pack(side=tk.RIGHT, padx=4)
 
-        status = getattr(self, '_license_status', None)
+        status = getattr(self, '_license_status', {}) or {}
 
         badge_fg = c["muted"]
         badge_text = "No License"
         days_text = ""
         expiry_text = ""
 
-        if status:
-            if status.valid:
-                if status.trial_active:
-                    badge_fg = c["warning"]
-                    badge_text = "Trial Active"
-                    days_text = f"{status.days_remaining} days remaining"
-                elif status.license_active:
-                    badge_fg = c["success"]
-                    badge_text = "Licensed"
-                    days_text = f"{status.days_remaining} days remaining"
-                else:
-                    badge_fg = c["error"]
-                    badge_text = "License Expired"
+        if status.get('valid'):
+            if status.get('trial_active'):
+                badge_fg = c["warning"]
+                badge_text = "Trial Active"
+                days_text = "%s days remaining" % status.get('days_remaining', 0)
+            elif status.get('license_active', not status.get('trial_active')):
+                badge_fg = c["success"]
+                badge_text = "Licensed"
+                days_text = "%s days remaining" % status.get('days_remaining', 0)
             else:
                 badge_fg = c["error"]
                 badge_text = "License Expired"
+        else:
+            badge_fg = c["error"]
+            badge_text = "License Expired"
 
-            if status.expires_at:
-                try:
-                    from datetime import datetime
-                    expiry = status.expires_at.replace('Z', '+00:00')
-                    dt = datetime.fromisoformat(expiry)
-                    expiry_text = f"Expires: {dt.strftime('%d %b %Y')}"
-                except:
-                    expiry_text = f"Expires: {status.expires_at}"
+        expires_at = status.get('expires_at')
+        if expires_at:
+            try:
+                from datetime import datetime
+                expiry = expires_at.replace('Z', '+00:00')
+                dt = datetime.fromisoformat(expiry)
+                expiry_text = "Expires: %s" % dt.strftime('%d %b %Y')
+            except:
+                expiry_text = "Expires: %s" % expires_at
 
         if not badge_text:
             badge_fg = c["muted"]
@@ -527,8 +527,27 @@ class ZEMmacOSUI:
         self._license_refresh_timer = self.root.after(60000, self._refresh_license_widget)
 
     def _refresh_license_widget(self):
-        if hasattr(self, 'refresh_license_status'):
-            self.refresh_license_status()
+        sdk = getattr(self, '_sdk_client', None)
+        hw_id = getattr(self, '_hw_id', '')
+        if sdk:
+            settings = getattr(self, 'settings', None)
+            stored_key = settings.get('license_key', '') if settings else ''
+            try:
+                if stored_key:
+                    vr = sdk.validate_license(stored_key, hw_id)
+                    if vr.get('valid'):
+                        self._license_status = vr
+                        self._app_locked = False
+                    else:
+                        tr = sdk.check_trial(hw_id)
+                        self._license_status = tr if tr.get('trial_active') else {}
+                        self._app_locked = not bool(tr.get('trial_active'))
+                else:
+                    tr = sdk.check_trial(hw_id)
+                    self._license_status = tr if tr.get('trial_active') else {}
+                    self._app_locked = not bool(tr.get('trial_active'))
+            except:
+                pass
         if hasattr(self, '_license_widget_frame') and self._license_widget_frame.winfo_exists():
             parent = self._license_widget_frame.master
             self._license_widget_frame.destroy()
@@ -572,8 +591,8 @@ class ZEMmacOSUI:
         if getattr(self, '_app_locked', True):
             lock_frame = tk.Frame(body_frame, bg=colors["content_bg"])
             lock_frame.pack(fill=tk.BOTH, expand=True)
-            status = getattr(self, '_license_status', None)
-            lock_msg = status.message if status and status.message else "No active license or trial found."
+            status = getattr(self, '_license_status', {}) or {}
+            lock_msg = status.get('message', 'No active license or trial found.')
             tk.Label(lock_frame, text="\U0001f512", font=("SF Pro Display", 48),
                      fg=colors["muted"], bg=colors["content_bg"]).pack(pady=(60, 10))
             tk.Label(lock_frame, text="License Required",
@@ -679,8 +698,8 @@ class ZEMmacOSUI:
         if getattr(self, '_app_locked', True):
             lock_frame = tk.Frame(body, bg=colors["content_bg"])
             lock_frame.pack(fill=tk.BOTH, expand=True)
-            status = getattr(self, '_license_status', None)
-            lock_msg = status.message if status and status.message else "No active license or trial found."
+            status = getattr(self, '_license_status', {}) or {}
+            lock_msg = status.get('message', 'No active license or trial found.')
             tk.Label(lock_frame, text="\U0001f512", font=("SF Pro Display", 48),
                      fg=colors["muted"], bg=colors["content_bg"]).pack(pady=(60, 10))
             tk.Label(lock_frame, text="License Required",

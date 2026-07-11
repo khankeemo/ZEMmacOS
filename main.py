@@ -30,29 +30,6 @@ from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 
 
-def _build_status(data):
-    from types import SimpleNamespace
-    return SimpleNamespace(
-        valid=data.get('valid', False),
-        trial_active=data.get('trial_active', False),
-        license_active=data.get('license_active', not data.get('trial_active', False) and data.get('valid', False)),
-        days_remaining=data.get('days_remaining', 0),
-        status='trial' if data.get('trial_active') else 'active' if data.get('valid') else 'inactive',
-        plan=data.get('plan', ''),
-        expires_at=data.get('expires_at'),
-        message=data.get('message', 'No active license or trial'),
-    )
-
-
-def _inactive_status():
-    from types import SimpleNamespace
-    return SimpleNamespace(
-        valid=False, trial_active=False, license_active=False,
-        days_remaining=0, status='inactive', plan='',
-        expires_at=None, message='No active license or trial',
-    )
-
-
 def main():
     if sys.platform == "win32":
         try:
@@ -109,25 +86,22 @@ def main():
             except:
                 pass
 
-        license_status = _build_status(license_data) if license_data else _inactive_status()
+        license_status = license_data
 
-        print(f"[DEBUG] License status: {license_status.status}")
-        print(f"[DEBUG] Trial active: {license_status.trial_active}")
-        print(f"[DEBUG] Remaining days: {license_status.days_remaining}")
+        print(f"[DEBUG] Trial active: {license_data.get('trial_active')}")
+        print(f"[DEBUG] Remaining days: {license_data.get('days_remaining')}")
 
-        if not license_status.valid and not stored_key:
+        if not license_data.get('valid') and not stored_key:
             print("[DEBUG] Opening welcome dialog")
             welcome = WelcomeDialog(sdk_client, product_name='ZEM MAC OS', cache=cache)
             result = welcome.show()
             if result.get('onboarding_complete'):
                 try:
-                    trial_result = sdk_client.check_trial(hw_id)
-                    if trial_result.get('trial_active'):
-                        license_status = _build_status(trial_result)
+                    license_status = sdk_client.check_trial(hw_id)
                 except:
                     pass
-                print(f"[DEBUG] Trial active: {license_status.trial_active}")
-                print(f"[DEBUG] Remaining days: {license_status.days_remaining}")
+                print(f"[DEBUG] Trial active: {license_status.get('trial_active')}")
+                print(f"[DEBUG] Remaining days: {license_status.get('days_remaining')}")
             elif not result.get('skipped'):
                 print("License required to use ZEMmacOS")
                 sys.exit(1)
@@ -178,8 +152,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._api_config = api_config or {}
         self._hw_id = hw_id
         self._cache = cache
-        self._license_status = license_status
-        self._app_locked = not (license_status and license_status.valid)
+        self._license_status = license_status or {}
+        self._app_locked = not bool(self._license_status.get('valid'))
 
         self._timers = {}
 
@@ -230,26 +204,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.root.after(2000, self._check_internet_on_startup)
         self._start_network_monitor()
 
-    def refresh_license_status(self):
-        if not self._sdk_client:
-            return
-        try:
-            if self.settings.get('license_key', ''):
-                vr = self._sdk_client.validate_license(self.settings.get('license_key'), self._hw_id)
-                if vr.get('valid'):
-                    self._license_status = _build_status(vr)
-                    self._app_locked = False
-                    return
-            tr = self._sdk_client.check_trial(self._hw_id)
-            if tr.get('trial_active'):
-                self._license_status = _build_status(tr)
-                self._app_locked = False
-                return
-        except:
-            pass
-        self._license_status = _inactive_status()
-        self._app_locked = True
-
     def activate_license_key(self, key):
         if not self._sdk_client:
             self.log("Cannot activate - SDK not available", "error")
@@ -262,10 +216,10 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 try:
                     vr = self._sdk_client.validate_license(key, self._hw_id)
                     if vr.get('valid'):
-                        self._license_status = _build_status(vr)
+                        self._license_status = vr
                 except:
                     pass
-                self._app_locked = not (self._license_status and self._license_status.valid)
+                self._app_locked = not bool(self._license_status.get('valid'))
                 self.log("License activated successfully", "success")
                 self.debug_log("LICENSE", "SUCCESS", "License activation successful")
                 return True
