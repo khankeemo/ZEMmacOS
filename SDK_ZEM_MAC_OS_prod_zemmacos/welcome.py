@@ -237,11 +237,9 @@ class WelcomeDialog:
             if result.get('success'):
                 self._complete_onboarding()
             else:
-                self._show_error(result.get('error', 'Invalid OTP'))
-                self._verify_btn.config(state='normal', text='Verify')
+                self._root.destroy()
         except Exception as e:
-            self._show_error(str(e))
-            self._verify_btn.config(state='normal', text='Verify')
+            self._root.destroy()
 
     def _complete_onboarding(self):
         name = self._name_entry.get().strip()
@@ -272,9 +270,8 @@ class WelcomeDialog:
             }
             self._status_label.config(text='Trial activated! You can now use the software.', fg='#10b981')
             self._root.after(2000, self._root.destroy)
-        except Exception as e:
-            self._show_error(str(e))
-            self._verify_btn.config(state='normal', text='Verify')
+        except Exception:
+            self._root.destroy()
 
     def _show_error(self, msg):
         self._error_label.config(text=msg)

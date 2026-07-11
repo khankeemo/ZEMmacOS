@@ -47,10 +47,13 @@ class Client:
 
     def start_trial(self, email: str, customer_name: str = '',
                     customer_data: Optional[Dict] = None) -> Dict:
+        from .hardware import HardwareFingerprint
+        hw = HardwareFingerprint.generate_fingerprint()
         payload = {
             'action': 'start',
             'customer_email': email,
             'customer_name': customer_name,
+            'hardware_id': hw['fingerprint'],
             'sdk_version': self.sdk_version,
             'runtime_type': self.runtime_type
         }
