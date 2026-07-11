@@ -30,85 +30,27 @@ from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 
 
-class _LicenseStatus:
-    def __init__(self, valid=False, trial_active=False, license_active=False,
-                 days_remaining=0, status="inactive", plan="",
-                 expires_at=None, message=""):
-        self.valid = valid
-        self.trial_active = trial_active
-        self.license_active = license_active
-        self.days_remaining = days_remaining
-        self.status = status
-        self.plan = plan
-        self.expires_at = expires_at
-        self.message = message
+def _build_status(data):
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        valid=data.get('valid', False),
+        trial_active=data.get('trial_active', False),
+        license_active=data.get('license_active', not data.get('trial_active', False) and data.get('valid', False)),
+        days_remaining=data.get('days_remaining', 0),
+        status='trial' if data.get('trial_active') else 'active' if data.get('valid') else 'inactive',
+        plan=data.get('plan', ''),
+        expires_at=data.get('expires_at'),
+        message=data.get('message', 'No active license or trial'),
+    )
 
 
-class _SdkEngine:
-    def __init__(self, client, api_config, hardware_id, cache):
-        self.client = client
-        self.config = api_config
-        self.hardware_id = hardware_id
-        self._license_key = ""
-        self._status = _LicenseStatus(message="Initializing...")
-        self._cache = cache
-
-    def initialize(self):
-        if self._license_key:
-            try:
-                resp = self.client.validate_license(self._license_key, self.hardware_id)
-                if resp.get('valid'):
-                    self._status = _LicenseStatus(
-                        valid=True,
-                        license_active=True,
-                        days_remaining=resp.get('days_remaining', 0),
-                        status="active",
-                        plan=resp.get('plan', ''),
-                        expires_at=resp.get('expires_at'),
-                        message="License active"
-                    )
-                    return self._status
-            except:
-                pass
-        try:
-            trial_resp = self.client.check_trial(self.hardware_id)
-            if trial_resp.get('trial_active'):
-                self._status = _LicenseStatus(
-                    valid=True,
-                    trial_active=True,
-                    days_remaining=trial_resp.get('days_remaining', 0),
-                    status="trial",
-                    expires_at=trial_resp.get('expires_at'),
-                    message="Trial active"
-                )
-                return self._status
-        except:
-            pass
-        self._status = _LicenseStatus(message="No active license or trial")
-        return self._status
-
-    def get_status(self):
-        return self.initialize()
-
-    def activate(self, key):
-        try:
-            device_name = socket.gethostname()
-            result = self.client.activate_license(key, self.hardware_id, device_name)
-            if result.get('success'):
-                self._license_key = key
-                self._status = _LicenseStatus(
-                    valid=True,
-                    license_active=True,
-                    days_remaining=result.get('days_remaining', 365),
-                    status="active",
-                    plan=result.get('plan', ''),
-                    expires_at=result.get('expires_at'),
-                    message="License active"
-                )
-                return {'success': True}
-            return result
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+def _inactive_status():
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        valid=False, trial_active=False, license_active=False,
+        days_remaining=0, status='inactive', plan='',
+        expires_at=None, message='No active license or trial',
+    )
 
 
 def main():
@@ -123,7 +65,10 @@ def main():
     # PHASE 1 — SDK INITIALIZATION (BEFORE ANY UI)
     # ----------------------------------------------------------------
     settings = SettingsManager()
-    engine = None
+    sdk_client = None
+    api_config = {}
+    hw_id = ''
+    cache = None
     license_status = None
     stored_key = settings.get("license_key", "")
 
@@ -143,14 +88,28 @@ def main():
         hw_fp = HardwareFingerprint.generate_fingerprint()
         hw_id = hw_fp['fingerprint']
         cache = CacheManager(product_name='prod_zemmacos')
-        engine = _SdkEngine(sdk_client, api_config, hw_id, cache)
-
-        if stored_key:
-            engine._license_key = stored_key
 
         print("[DEBUG] SDK cache loaded")
 
-        license_status = engine.initialize()
+        license_data = {}
+
+        if stored_key:
+            try:
+                result = sdk_client.validate_license(stored_key, hw_id)
+                if result.get('valid'):
+                    license_data = result
+            except:
+                pass
+
+        if not license_data.get('valid'):
+            try:
+                trial_result = sdk_client.check_trial(hw_id)
+                if trial_result.get('trial_active'):
+                    license_data = trial_result
+            except:
+                pass
+
+        license_status = _build_status(license_data) if license_data else _inactive_status()
 
         print(f"[DEBUG] License status: {license_status.status}")
         print(f"[DEBUG] Trial active: {license_status.trial_active}")
@@ -161,7 +120,12 @@ def main():
             welcome = WelcomeDialog(sdk_client, product_name='ZEM MAC OS', cache=cache)
             result = welcome.show()
             if result.get('onboarding_complete'):
-                license_status = engine.initialize()
+                try:
+                    trial_result = sdk_client.check_trial(hw_id)
+                    if trial_result.get('trial_active'):
+                        license_status = _build_status(trial_result)
+                except:
+                    pass
                 print(f"[DEBUG] Trial active: {license_status.trial_active}")
                 print(f"[DEBUG] Remaining days: {license_status.days_remaining}")
             elif not result.get('skipped'):
@@ -181,7 +145,7 @@ def main():
     root.minsize(1000, 700)
     root.state('zoomed')
 
-    ZEMmacOSApp(root, engine, license_status, settings)
+    ZEMmacOSApp(root, sdk_client, license_status, settings, api_config, hw_id, cache)
     root.mainloop()
 
 
@@ -199,7 +163,8 @@ def _is_network_error_str(err_str):
 
 
 class ZEMmacOSApp(ZEMmacOSUI):
-    def __init__(self, root, engine=None, license_status=None, settings=None):
+    def __init__(self, root, sdk_client=None, license_status=None, settings=None,
+                 api_config=None, hw_id='', cache=None):
         super().__init__(root)
 
         self.settings = settings or SettingsManager()
@@ -209,7 +174,10 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.logger = get_logger()
         self.logger.set_console_callback(self._console_output)
 
-        self._engine = engine
+        self._sdk_client = sdk_client
+        self._api_config = api_config or {}
+        self._hw_id = hw_id
+        self._cache = cache
         self._license_status = license_status
         self._app_locked = not (license_status and license_status.valid)
 
@@ -262,15 +230,41 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.root.after(2000, self._check_internet_on_startup)
         self._start_network_monitor()
 
+    def refresh_license_status(self):
+        if not self._sdk_client:
+            return
+        try:
+            if self.settings.get('license_key', ''):
+                vr = self._sdk_client.validate_license(self.settings.get('license_key'), self._hw_id)
+                if vr.get('valid'):
+                    self._license_status = _build_status(vr)
+                    self._app_locked = False
+                    return
+            tr = self._sdk_client.check_trial(self._hw_id)
+            if tr.get('trial_active'):
+                self._license_status = _build_status(tr)
+                self._app_locked = False
+                return
+        except:
+            pass
+        self._license_status = _inactive_status()
+        self._app_locked = True
+
     def activate_license_key(self, key):
-        if not self._engine:
+        if not self._sdk_client:
             self.log("Cannot activate - SDK not available", "error")
             return False
         try:
-            result = self._engine.activate(key)
+            device_name = socket.gethostname()
+            result = self._sdk_client.activate_license(key, self._hw_id, device_name)
             if result.get('success'):
                 self.settings.set("license_key", key)
-                self._license_status = self._engine.get_status()
+                try:
+                    vr = self._sdk_client.validate_license(key, self._hw_id)
+                    if vr.get('valid'):
+                        self._license_status = _build_status(vr)
+                except:
+                    pass
                 self._app_locked = not (self._license_status and self._license_status.valid)
                 self.log("License activated successfully", "success")
                 self.debug_log("LICENSE", "SUCCESS", "License activation successful")

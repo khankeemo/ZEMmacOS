@@ -369,8 +369,7 @@ class SettingsUI:
 
     def _build_license(self):
         c = self.colors
-        cfg = getattr(self.app, '_engine', None)
-        api_config = cfg.config if cfg else {}
+        api_config = getattr(self.app, '_api_config', {})
         product = api_config.get('product', {})
         status = getattr(self.app, '_license_status', None)
 
@@ -405,9 +404,7 @@ class SettingsUI:
         inner2 = self._card(self._content_frame, "Product Info")
         prod_name = product.get('name', 'ZEM MAC OS')
         prod_ver = product.get('version', '1.0.0')
-        hw_id = ""
-        if hasattr(self.app, '_engine') and self.app._engine:
-            hw_id = getattr(self.app._engine, 'hardware_id', '')
+        hw_id = getattr(self.app, '_hw_id', '')
         for label, value in [
             ("Product", prod_name),
             ("Version", prod_ver),
@@ -429,11 +426,8 @@ class SettingsUI:
                 self._on_license_overview_activate()
 
         def _refresh_license():
-            engine = getattr(self.app, '_engine', None)
-            if engine:
-                new_status = engine.get_status()
-                self.app._license_status = new_status
-                self.app._app_locked = not (new_status and new_status.valid)
+            if hasattr(self.app, 'refresh_license_status'):
+                self.app.refresh_license_status()
                 if hasattr(self.app, '_refresh_license_widget'):
                     self.app._refresh_license_widget()
                 self._switch_section("license")
@@ -441,18 +435,18 @@ class SettingsUI:
                 self.app.show_toast("License status refreshed", "success", 2500)
 
         def _open_welcome():
-            engine = getattr(self.app, '_engine', None)
-            if engine and hasattr(engine, 'client') and hasattr(engine, '_cache'):
+            sdk = getattr(self.app, '_sdk_client', None)
+            cache = getattr(self.app, '_cache', None)
+            if sdk:
                 import threading
                 def _show():
                     try:
                         from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
-                        welcome = WelcomeDialog(engine.client, product_name='ZEM MAC OS', cache=engine._cache)
+                        welcome = WelcomeDialog(sdk, product_name='ZEM MAC OS', cache=cache)
                         result = welcome.show()
                         if result.get('onboarding_complete'):
-                            new_status = engine.get_status()
-                            self.app._license_status = new_status
-                            self.app._app_locked = not (new_status and new_status.valid)
+                            if hasattr(self.app, 'refresh_license_status'):
+                                self.app.refresh_license_status()
                             self.app.root.after(0, lambda: self._switch_section("license"))
                             self.app.root.after(0, self._update_license_overview)
                     except:
@@ -460,12 +454,9 @@ class SettingsUI:
                 threading.Thread(target=_show, daemon=True).start()
 
         def _recheck_validity():
-            engine = getattr(self.app, '_engine', None)
-            if engine:
+            if hasattr(self.app, 'refresh_license_status'):
                 try:
-                    new_status = engine.initialize()
-                    self.app._license_status = new_status
-                    self.app._app_locked = not (new_status and new_status.valid)
+                    self.app.refresh_license_status()
                     if hasattr(self.app, '_refresh_license_widget'):
                         self.app._refresh_license_widget()
                     self._switch_section("license")
@@ -516,9 +507,9 @@ class SettingsUI:
 
         support_email = "support@websmithdigital.com"
         support_url = "www.websmithdigital.com"
-        if hasattr(self.app, '_engine') and self.app._engine:
-            cfg = getattr(self.app._engine, 'config', {})
-            branding = cfg.get('branding', {})
+        api_config = getattr(self.app, '_api_config', {})
+        if api_config:
+            branding = api_config.get('branding', {})
             support_email = branding.get('support_email', support_email)
             support_url = branding.get('support_url', support_url)
             support_url = support_url.replace('https://', '').replace('http://', '')

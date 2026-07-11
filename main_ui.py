@@ -527,11 +527,8 @@ class ZEMmacOSUI:
         self._license_refresh_timer = self.root.after(60000, self._refresh_license_widget)
 
     def _refresh_license_widget(self):
-        engine = getattr(self, '_engine', None)
-        if engine:
-            new_status = engine.get_status()
-            self._license_status = new_status
-            self._app_locked = not (new_status and new_status.valid)
+        if hasattr(self, 'refresh_license_status'):
+            self.refresh_license_status()
         if hasattr(self, '_license_widget_frame') and self._license_widget_frame.winfo_exists():
             parent = self._license_widget_frame.master
             self._license_widget_frame.destroy()
