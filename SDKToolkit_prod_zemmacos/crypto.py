@@ -27,7 +27,12 @@ def sign_request(
 ) -> str:
     payload_json = json.dumps(payload, separators=(',', ':'))
     body_hash = hashlib.sha256(payload_json.encode('utf-8')).hexdigest()
-    message = f"{method}\n{path}\n{query}\n{body_hash}\n{timestamp}\n{nonce}"
+    message = f"{method}
+{path}
+{query}
+{body_hash}
+{timestamp}
+{nonce}"
     signature = hmac.new(
         secret.encode('utf-8'),
         message.encode('utf-8'),

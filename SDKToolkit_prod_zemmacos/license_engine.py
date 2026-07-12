@@ -83,8 +83,6 @@ class LicenseEngine:
         self._license_key: Optional[str] = None
 
     def _load_config(self, config_path: Optional[str]) -> Dict[str, Any]:
-        if isinstance(config_path, str):
-            config_path = Path(config_path)
         if config_path is None:
             base_dir = Path(__file__).parent.parent
             config_path = base_dir / 'config' / 'api-config.json'
@@ -92,7 +90,8 @@ class LicenseEngine:
                 config_path = Path.cwd() / 'config' / 'api-config.json'
         if not config_path.exists():
             raise FileNotFoundError(
-                f"api-config.json not found at: {config_path}. "
+                f"api-config.json not found at: {{config_path}}
+"
                 "Please ensure the configuration file is present."
             )
         with open(config_path, 'r', encoding='utf-8') as f:

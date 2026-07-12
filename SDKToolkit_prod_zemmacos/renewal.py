@@ -61,10 +61,7 @@ class RenewalDialog:
         if r.get('success'):
             self.plans=r.get('data',r.get('plans',[])); self.lb.delete(0,tk.END)
             for i,p in enumerate(self.plans):
-                plan_name = p.get('name', f'Plan {i+1}')
-                plan_price = p.get('price', '--')
-                plan_days = p.get('duration_days', p.get('default_expiry_days', '--'))
-                self.lb.insert(tk.END, f"{plan_name} - ${plan_price} ({plan_days} days)")
+                self.lb.insert(tk.END,f"{{p.get('name',f'Plan {{i+1}}')}} - ${p.get('price','--')}} ({{p.get('duration_days',p.get('default_expiry_days','--'))}} days)")
             if self.plans: self.lb.selection_set(0)
             self.lb.bind('<<ListboxSelect>>',self._on_select)
         else: self.st.config(text=r.get('message','Failed'),fg="#dc2626")

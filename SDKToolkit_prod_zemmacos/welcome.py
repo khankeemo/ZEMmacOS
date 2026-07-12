@@ -307,11 +307,11 @@ class WelcomeDialog:
         self.engine = engine
         self.support_email = support_email
         self.client = getattr(engine, '_client', None)
-        self.config = getattr(engine, 'config', {})
+        self.config = getattr(engine, 'config', {{}})
         self.result = False
         self._otp_sent = False
         self._otp_verified = False
-        self._customer_data = {}
+        self._customer_data = {{}}
         self.selected_country = COUNTRY_CODES[0]
         self.root = None
 
@@ -321,8 +321,8 @@ class WelcomeDialog:
         return self.result
 
     def _build_ui(self):
-        branding = self.config.get('branding', {})
-        product_name = self.config.get('product', {}).get('name', 'Software')
+        branding = self.config.get('branding', {{}})
+        product_name = self.config.get('product', {{}}).get('name', 'Software')
         primary_color = branding.get('primary_color', '#6366f1')
         bg_color = "#f8f9fa"
 
@@ -335,7 +335,7 @@ class WelcomeDialog:
         self.root.update_idletasks()
         w = self.root.winfo_width(); h = self.root.winfo_height()
         sw = self.root.winfo_screenwidth(); sh = self.root.winfo_screenheight()
-        self.root.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
+        self.root.geometry(f"+{{(sw - w) // 2}}+{{(sh - h) // 2}}")
 
         header = tk.Frame(self.root, bg=primary_color, height=80)
         header.pack(fill=tk.X)
@@ -368,7 +368,7 @@ class WelcomeDialog:
 
         mobile_row = tk.Frame(country_frame, bg=bg_color)
         mobile_row.pack(fill=tk.X, pady=(2, 0))
-        self.country_btn = tk.Button(mobile_row, text=f"{self.selected_country['flag']} {self.selected_country['dial']}",
+        self.country_btn = tk.Button(mobile_row, text=f"{{self.selected_country['flag']}} {{self.selected_country['dial']}}",
                                       font=("Helvetica", 11), relief=tk.SOLID, bd=1, bg="white", fg="#333",
                                       command=self._open_country_selector)
         self.country_btn.pack(side=tk.LEFT, ipady=4)
@@ -429,7 +429,7 @@ class WelcomeDialog:
             listbox.delete(0, tk.END); ft = ft.lower()
             for c in COUNTRY_CODES:
                 if ft in c['name'].lower() or ft in c['dial'] or ft in c['code'].lower():
-                    listbox.insert(tk.END, f"{c['flag']} {c['name']} ({c['dial']})")
+                    listbox.insert(tk.END, f"{{c['flag']}} {{c['name']}} ({{c['dial']}})")
         populate_list()
         search_var.trace("w", lambda *a: populate_list(search_var.get()))
 
@@ -437,8 +437,8 @@ class WelcomeDialog:
             sel = listbox.curselection()
             if not sel: return
             for c in COUNTRY_CODES:
-                if f"{c['flag']} {c['name']} ({c['dial']})" == listbox.get(sel[0]):
-                    self.selected_country = c; self.country_btn.config(text=f"{c['flag']} {c['dial']}")
+                if f"{{c['flag']}} {{c['name']}} ({{c['dial']}})" == listbox.get(sel[0]):
+                    self.selected_country = c; self.country_btn.config(text=f"{{c['flag']}} {{c['dial']}}")
                     top.destroy(); break
         listbox.bind("<<ListboxSelect>>", on_select); listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -456,7 +456,7 @@ class WelcomeDialog:
                 r = self.engine.send_otp(email, purpose='registration')
                 self.root.after(0, lambda: self._on_otp_sent(r))
             except Exception as e:
-                self.root.after(0, lambda e=e: self.otp_status.config(text=f"Error: {str(e)}", fg="#dc2626"))
+                self.root.after(0, lambda: self.otp_status.config(text=f"Error: {{str(e)}}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_otp_sent(self, result):
@@ -477,7 +477,7 @@ class WelcomeDialog:
                 r = self.engine.verify_otp(email, otp)
                 self.root.after(0, lambda: self._on_otp_verified(r))
             except Exception as e:
-                self.root.after(0, lambda e=e: self.otp_status.config(text=f"Error: {str(e)}", fg="#dc2626"))
+                self.root.after(0, lambda: self.otp_status.config(text=f"Error: {{str(e)}}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_otp_verified(self, result):
@@ -496,18 +496,14 @@ class WelcomeDialog:
         def do():
             try:
                 if self.client:
-                    mobile = f"{self.selected_country['dial']}{self.mobile_entry.get().strip()}"
-                    hardware_id = self.engine.get_hardware_id()
-                    self.engine.store_customer({
-                        "name": name, "email": email, "mobile": mobile,
-                        "company_name": self.company_entry.get().strip(),
-                        "country_code": self.selected_country['code'],
-                        "hardware_id": hardware_id,
-                    })
+                    self.engine.store_customer({{
+                        "name": name, "email": email, "phone": f"{{self.selected_country['dial']}}{{self.mobile_entry.get().strip()}}",
+                        "company": self.company_entry.get().strip(), "country": self.selected_country['code'],
+                    }})
                 r = self.engine.start_trial(email=email, name=name, company=self.company_entry.get().strip())
                 self.root.after(0, lambda: self._on_trial_result(r))
             except Exception as e:
-                self.root.after(0, lambda e=e: self.status_label.config(text=f"Error: {str(e)}", fg="#dc2626"))
+                self.root.after(0, lambda: self.status_label.config(text=f"Error: {{str(e)}}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_trial_result(self, result):
