@@ -90,8 +90,7 @@ class LicenseEngine:
                 config_path = Path.cwd() / 'config' / 'api-config.json'
         if not config_path.exists():
             raise FileNotFoundError(
-                f"api-config.json not found at: {{config_path}}
-"
+                f"api-config.json not found at: {config_path}\n"
                 "Please ensure the configuration file is present."
             )
         with open(config_path, 'r', encoding='utf-8') as f:
