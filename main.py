@@ -18,26 +18,6 @@ from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 
-from SDKToolkit_prod_zemmacos import LicenseEngine, WelcomeDialog
-
-
-def _init_sdk():
-    sdk_config_path = os.path.join(
-        BASE_DIR, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json'
-    )
-    engine = LicenseEngine(config_path=sdk_config_path)
-    engine.initialize()
-
-    status = engine.get_status()
-    if not status or not status.valid:
-        welcome = WelcomeDialog(engine)
-        if not welcome.show():
-            sys.exit(1)
-        engine.initialize()
-
-    return engine
-
-
 def main():
     if sys.platform == "win32":
         try:
@@ -46,15 +26,13 @@ def main():
         except Exception:
             pass
 
-    engine = _init_sdk()
-
     root = tk.Tk()
     root.title("ZEMmacOS")
     root.geometry("1200x800")
     root.minsize(1000, 700)
     root.state('zoomed')
 
-    app = ZEMmacOSApp(root, engine=engine)
+    app = ZEMmacOSApp(root)
     root.mainloop()
 
 
@@ -72,10 +50,9 @@ def _is_network_error_str(err_str):
 
 
 class ZEMmacOSApp(ZEMmacOSUI):
-    def __init__(self, root, settings=None, engine=None):
+    def __init__(self, root, settings=None):
         super().__init__(root)
 
-        self.engine = engine
         self.settings = settings or SettingsManager()
         self.settings_service = AppSettingsService(self)
         self.updater = AppUpdater()
@@ -124,7 +101,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.log(f"Log file: {self.logger.get_log_file_path()}", "info")
         self.log("=" * 60, "info")
 
-        # Show the dashboard now (SDK already resolved)
         self.show_dashboard()
 
         self.root.after(500, self._show_startup_toast)

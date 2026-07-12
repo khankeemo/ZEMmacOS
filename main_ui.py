@@ -7,7 +7,6 @@ import time
 from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
-from SDKToolkit_prod_zemmacos.widgets.dashboard_widget import DashboardWidget
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -488,9 +487,6 @@ class ZEMmacOSUI:
             colors=colors,
         )
         self._theme_toggle.pack(side=tk.RIGHT, padx=4)
-        if hasattr(self, 'engine') and self.engine:
-            self._dashboard_widget = DashboardWidget(right_h, self.engine)
-            self._dashboard_widget.build()
 
         body_frame = tk.Frame(self.content_area, bg=colors["content_bg"])
         body_frame.pack(fill=tk.BOTH, expand=True, padx=28, pady=24)

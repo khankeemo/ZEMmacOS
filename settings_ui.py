@@ -43,7 +43,6 @@ class SettingsUI:
             ("appearance", "Appearance"),
             ("performance", "Performance"),
             ("updates", "Updates"),
-            ("license", "License"),
             ("about", "About"),
         ]
         for key, label in sections:
@@ -240,14 +239,6 @@ class SettingsUI:
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["accent"],
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
-
-    def _build_license(self):
-        from SDKToolkit_prod_zemmacos.widgets.settings_widget import SettingsWidget
-        engine = getattr(self.app, 'engine', None)
-        if engine:
-            sw = SettingsWidget(self._content_frame, engine)
-            sw.build()
-
 
     def _build_about(self):
         inner = self._card(self._content_frame, "ZEMmacOS")
