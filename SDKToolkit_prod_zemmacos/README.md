@@ -4,13 +4,13 @@
 ## Installation
 
 ```bash
-pip install SDK_ZEM_MAC_OS_prod_zemmacos
+pip install WSD_SDK_ZEM_MAC_OS_prod_zemmacos
 ```
 
 ## Quick Start
 
 ```python
-from SDK_ZEM_MAC_OS_prod_zemmacos import Client, LicenseEngine, LicenseStatus
+from WSD_SDK_ZEM_MAC_OS_prod_zemmacos import Client, LicenseEngine, LicenseStatus
 
 client = Client("YOUR_API_KEY", "API_URL")
 engine = LicenseEngine(client)

@@ -242,6 +242,12 @@ class SettingsUI:
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
 
     def _build_license(self):
+        from SDKToolkit_prod_zemmacos.widgets.settings_widget import SettingsWidget
+        engine = getattr(self.app, 'engine', None)
+        if engine:
+            sw = SettingsWidget(self._content_frame, engine)
+            sw.build()
+
         inner = self._card(self._content_frame, "License Information")
 
         engine = getattr(self.app, 'engine', None)
@@ -263,26 +269,17 @@ class SettingsUI:
                      fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(anchor=tk.W, pady=6)
 
         if engine:
-            hw = engine.get_hardware_fingerprint()
-            inner2 = self._card(self._content_frame, "Hardware Fingerprint")
-            for label, key in [("Platform:", "platform"), ("OS:", "os"), ("CPU:", "cpu")]:
-                val = hw.get(key)
-                if val:
-                    row = self._row(inner2, label)
-                    tk.Label(row, text=str(val), font=("SF Pro Text", 11),
-                             fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+            hw_id = engine.get_hardware_id()
+            inner2 = self._card(self._content_frame, "Hardware ID")
+            row = self._row(inner2, "Hardware ID:")
+            tk.Label(row, text=hw_id, font=("Courier", 9),
+                     fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
 
         inner3 = self._card(self._content_frame, "Actions")
 
         def _open_welcome():
-            sdk_cfg = os.path.join(BASE_DIR, 'SDK_ZEM_MAC_OS_prod_zemmacos',
-                                   'config', 'api-config.json')
-            with open(sdk_cfg, 'r', encoding='utf-8') as f:
-                cfg = json.load(f)
-            from SDK_ZEM_MAC_OS_prod_zemmacos.client import Client
-            from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
-            cl = Client(api_key=cfg['api']['public_key'], api_url=cfg['api']['url'])
-            WelcomeDialog(cl).show()
+            from SDKToolkit_prod_zemmacos import WelcomeDialog
+            WelcomeDialog(engine).show()
             if engine:
                 engine.initialize()
 

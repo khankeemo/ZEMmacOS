@@ -18,29 +18,20 @@ from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 
-from SDK_ZEM_MAC_OS_prod_zemmacos.client import Client
-from SDK_ZEM_MAC_OS_prod_zemmacos.license_engine import LicenseEngine
-from SDK_ZEM_MAC_OS_prod_zemmacos.welcome import WelcomeDialog
+from SDKToolkit_prod_zemmacos import LicenseEngine, WelcomeDialog
 
 
 def _init_sdk():
     sdk_config_path = os.path.join(
-        BASE_DIR, 'SDK_ZEM_MAC_OS_prod_zemmacos', 'config', 'api-config.json'
+        BASE_DIR, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json'
     )
-    with open(sdk_config_path, 'r', encoding='utf-8') as f:
-        sdk_config = json.load(f)
-
-    client = Client(
-        api_key=sdk_config['api']['public_key'],
-        api_url=sdk_config['api']['url']
-    )
-    engine = LicenseEngine(client)
+    engine = LicenseEngine(config_path=sdk_config_path)
     engine.initialize()
 
-    welcome = WelcomeDialog(client)
-    if not welcome.is_onboarding_complete():
-        result = welcome.show()
-        if not result.get('onboarding_complete'):
+    status = engine.get_status()
+    if not status or not status.valid:
+        welcome = WelcomeDialog(engine)
+        if not welcome.show():
             sys.exit(1)
         engine.initialize()
 

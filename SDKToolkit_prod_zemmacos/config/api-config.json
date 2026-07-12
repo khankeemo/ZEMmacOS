@@ -8,7 +8,7 @@
   "api": {
     "url": "https://websmith-z.vercel.app",
     "version": "v1",
-    "public_key": "pk_zeos_E3HWVC5ZWJNJXVOEHD90UDW73ZD3CYRS",
+    "public_key": "pk_zeos_6d1222642b60654de7bd336b820484d20c01869997b9d557e634240cd0573860",
     "timeout": 30000,
     "retry_count": 3
   },
