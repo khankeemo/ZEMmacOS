@@ -519,42 +519,7 @@ class ZEMmacOSUI:
             tk.Label(card, text=stats_labels[i], font=("SF Pro Text", 10),
                      fg=colors["muted"], bg=colors["card_bg"]).pack()
 
-        license_card = ModernCard(body_frame, colors, title="License Status", padding=18)
-        license_card.pack(fill=tk.X, pady=12)
-        lc_body = license_card.get_body()
-        self._license_labels = {}
-        status = self.engine.get_status() if hasattr(self, 'engine') and self.engine else None
-        if status:
-            s = status.to_dict()
-            st = s.get('status', 'unlicensed')
-            st_map = {
-                'active': (colors["success"], "Active"),
-                'trial': (colors["warning"], "Trial"),
-                'expired': (colors["error"], "Expired"),
-                'unlicensed': (colors["muted"], "Unlicensed"),
-            }
-            sc, sl = st_map.get(st, (colors["muted"], st.capitalize()))
-            row = tk.Frame(lc_body, bg=colors["card_bg"])
-            row.pack(fill=tk.X, pady=2)
-            tk.Label(row, text="Status:", font=("SF Pro Text", 11),
-                     fg=colors["text_secondary"], bg=colors["card_bg"], width=16, anchor="w").pack(side=tk.LEFT)
-            tk.Label(row, text=sl, font=("SF Pro Text", 11, "bold"),
-                     fg=sc, bg=colors["card_bg"]).pack(side=tk.LEFT)
-            self._license_labels["status"] = (sc, sl)
 
-            for label, key in [("Plan:", "plan"), ("Days Remaining:", "days_remaining"),
-                               ("Expires:", "expires_at"), ("Hardware ID:", "hardware_id")]:
-                val = s.get(key)
-                if val is not None and val != "":
-                    row = tk.Frame(lc_body, bg=colors["card_bg"])
-                    row.pack(fill=tk.X, pady=2)
-                    tk.Label(row, text=label, font=("SF Pro Text", 11),
-                             fg=colors["text_secondary"], bg=colors["card_bg"], width=16, anchor="w").pack(side=tk.LEFT)
-                    tk.Label(row, text=str(val), font=("SF Pro Text", 11),
-                             fg=colors["text"], bg=colors["card_bg"]).pack(side=tk.LEFT)
-        else:
-            tk.Label(lc_body, text="SDK not initialized", font=("SF Pro Text", 11),
-                     fg=colors["muted"], bg=colors["card_bg"]).pack(anchor=tk.W, pady=6)
 
         actions_card = ModernCard(body_frame, colors, title="Quick Actions", padding=18)
         actions_card.pack(fill=tk.X, pady=12)

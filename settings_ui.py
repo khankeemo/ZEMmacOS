@@ -248,68 +248,6 @@ class SettingsUI:
             sw = SettingsWidget(self._content_frame, engine)
             sw.build()
 
-        inner = self._card(self._content_frame, "License Information")
-
-        engine = getattr(self.app, 'engine', None)
-        status = engine.get_status() if engine else None
-
-        if status:
-            s = status.to_dict()
-            for label, key in [("Status:", "status"), ("Plan:", "plan"),
-                               ("Days Remaining:", "days_remaining"),
-                               ("Expiry Date:", "expires_at"),
-                               ("Hardware ID:", "hardware_id")]:
-                val = s.get(key)
-                if val is not None and val != "":
-                    row = self._row(inner, label)
-                    tk.Label(row, text=str(val), font=("SF Pro Text", 11, "bold"),
-                             fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
-        else:
-            tk.Label(inner, text="SDK not initialized", font=("SF Pro Text", 11),
-                     fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(anchor=tk.W, pady=6)
-
-        if engine:
-            hw_id = engine.get_hardware_id()
-            inner2 = self._card(self._content_frame, "Hardware ID")
-            row = self._row(inner2, "Hardware ID:")
-            tk.Label(row, text=hw_id, font=("Courier", 9),
-                     fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
-
-        inner3 = self._card(self._content_frame, "Actions")
-
-        def _open_welcome():
-            from SDKToolkit_prod_zemmacos import WelcomeDialog
-            WelcomeDialog(engine).show()
-            if engine:
-                engine.initialize()
-
-        def _refresh():
-            if engine:
-                engine.initialize()
-            self._switch_section("license")
-            messagebox.showinfo("License", "Status refreshed")
-
-        def _recheck():
-            if engine:
-                engine.initialize()
-                st = engine.get_status()
-                if st and st.valid:
-                    messagebox.showinfo("License", "License is valid")
-                else:
-                    messagebox.showinfo("License", "No valid license or trial found")
-
-        tk.Button(inner3, text="Open Welcome Dialog", command=_open_welcome,
-                  font=("SF Pro Text", 11, "bold"),
-                  fg="white", bg=self.colors["accent"],
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
-        tk.Button(inner3, text="Refresh Status", command=_refresh,
-                  font=("SF Pro Text", 11, "bold"),
-                  fg="white", bg=self.colors["success"],
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
-        tk.Button(inner3, text="Re-check Validity", command=_recheck,
-                  font=("SF Pro Text", 11, "bold"),
-                  fg="white", bg=self.colors["warning"],
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
 
     def _build_about(self):
         inner = self._card(self._content_frame, "ZEMmacOS")
