@@ -217,19 +217,19 @@ class ApiClient:
     # =========================================================================
 
     def send_otp(self, email: str, purpose: str = 'registration') -> Dict[str, Any]:
-        payload = {
+        payload = {{
             'action': 'send',
             'email': email,
             'purpose': purpose
-        }
+        }}
         return self._request('auth/otp/send', payload)
 
     def verify_otp(self, email: str, otp_code: str) -> Dict[str, Any]:
-        payload = {
+        payload = {{
             'action': 'verify',
             'email': email,
             'otp_code': otp_code
-        }
+        }}
         return self._request('auth/otp/verify', payload)
 
     # =========================================================================
@@ -247,10 +247,10 @@ class ApiClient:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
 
-        payload = {
+        payload = {{
             'action': 'validate',
             'hardware_id': hardware_id
-        }
+        }}
 
         if self._cache and self._cache.is_valid():
             cached = self._cache.get_license_status()
@@ -259,7 +259,7 @@ class ApiClient:
 
         response = self._request(LICENSE_ENDPOINT, payload)
 
-        if self._cache and response.get('success') and response.get('data', {}).get('valid'):
+        if self._cache and response.get('success') and response.get('data', {{}}).get('valid'):
             self._cache.set_license_status(response)
 
         return response
@@ -269,11 +269,11 @@ class ApiClient:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
 
-        payload = {
+        payload = {{
             'action': 'activate',
             'license_key': license_key,
             'hardware_id': hardware_id
-        }
+        }}
         if device_name:
             payload['device_name'] = device_name
 
@@ -288,11 +288,11 @@ class ApiClient:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
 
-        payload = {
+        payload = {{
             'action': 'deactivate',
             'license_key': license_key,
             'hardware_id': hardware_id
-        }
+        }}
 
         response = self._request(LICENSE_ENDPOINT, payload)
 
@@ -302,17 +302,17 @@ class ApiClient:
         return response
 
     def get_license_details(self, license_key: Optional[str] = None) -> Dict[str, Any]:
-        payload = {}
+        payload = {{}}
         if license_key:
             payload['license_key'] = license_key
         return self._request('license/details', payload)
 
     def renew_license(self, license_key: str, plan_id: Optional[str] = None,
                       extra_days: Optional[int] = None) -> Dict[str, Any]:
-        payload = {
+        payload = {{
             'action': 'renew',
             'license_key': license_key
-        }
+        }}
         if plan_id is not None:
             payload['plan_id'] = plan_id
         if extra_days is not None:
@@ -326,7 +326,7 @@ class ApiClient:
         return response
 
     def get_license_history(self, license_key: Optional[str] = None) -> Dict[str, Any]:
-        payload = {}
+        payload = {{}}
         if license_key:
             payload['license_key'] = license_key
         return self._request('license/history', payload)
@@ -343,12 +343,12 @@ class ApiClient:
     ) -> Dict[str, Any]:
         hardware_id = self._get_hardware_id()
 
-        payload: Dict[str, Any] = {
+        payload: Dict[str, Any] = {{
             'action': 'start',
             'customer_email': email,
             'customer_name': customer_name,
             'hardware_id': hardware_id
-        }
+        }}
         if customer_data:
             payload['customer_data'] = customer_data
 
@@ -358,10 +358,10 @@ class ApiClient:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
 
-        payload = {
+        payload = {{
             'action': 'status',
             'hardware_id': hardware_id
-        }
+        }}
 
         return self._request(TRIAL_ENDPOINT, payload)
 
@@ -374,10 +374,10 @@ class ApiClient:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
 
-        payload = {
+        payload = {{
             'action': 'convert',
             'hardware_id': hardware_id
-        }
+        }}
         if plan:
             payload['plan'] = plan
         if license_key:
@@ -399,11 +399,11 @@ class ApiClient:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
 
-        payload = {
+        payload = {{
             'action': 'bind',
             'license_key': license_key,
             'hardware_id': hardware_id
-        }
+        }}
         if device_name:
             payload['device_name'] = device_name
 
@@ -413,11 +413,11 @@ class ApiClient:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
 
-        payload = {
+        payload = {{
             'action': 'reset',
             'license_key': license_key,
             'hardware_id': hardware_id
-        }
+        }}
 
         return self._request(DEVICE_ENDPOINT, payload)
 
@@ -430,12 +430,12 @@ class ApiClient:
         if old_hardware_id is None:
             raise ValueError("old_hardware_id is required for device replacement")
 
-        payload = {
+        payload = {{
             'action': 'replace',
             'license_key': license_key,
             'old_hardware_id': old_hardware_id,
             'new_hardware_id': new_hardware_id
-        }
+        }}
         if device_name:
             payload['device_name'] = device_name
 
@@ -451,7 +451,7 @@ class ApiClient:
     # =========================================================================
 
     def get_plans(self, product_id: Optional[str] = None) -> Dict[str, Any]:
-        params = {}
+        params = {{}}
         if product_id:
             params['product_id'] = product_id
         return self._request_get('plans', params)

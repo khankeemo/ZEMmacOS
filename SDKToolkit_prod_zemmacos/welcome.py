@@ -5,56 +5,300 @@ from tkinter import ttk
 from typing import Optional, Dict, Any
 
 COUNTRY_CODES = [
-    {"code": "IN", "name": "India", "dial": "+91", "flag": "U0001F1EEU0001F1F3"},
-    {"code": "US", "name": "United States", "dial": "+1", "flag": "U0001F1FAU0001F1F8"},
-    {"code": "GB", "name": "United Kingdom", "dial": "+44", "flag": "U0001F1ECU0001F1E7"},
-    {"code": "CA", "name": "Canada", "dial": "+1", "flag": "U0001F1E8U0001F1E6"},
-    {"code": "AU", "name": "Australia", "dial": "+61", "flag": "U0001F1E6U0001F1FA"},
-    {"code": "DE", "name": "Germany", "dial": "+49", "flag": "U0001F1E9U0001F1EA"},
-    {"code": "FR", "name": "France", "dial": "+33", "flag": "U0001F1EBU0001F1F7"},
-    {"code": "IT", "name": "Italy", "dial": "+39", "flag": "U0001F1EEU0001F1F9"},
-    {"code": "ES", "name": "Spain", "dial": "+34", "flag": "U0001F1EAU0001F1F8"},
-    {"code": "NL", "name": "Netherlands", "dial": "+31", "flag": "U0001F1F3U0001F1F1"},
-    {"code": "BR", "name": "Brazil", "dial": "+55", "flag": "U0001F1E7U0001F1F7"},
-    {"code": "JP", "name": "Japan", "dial": "+81", "flag": "U0001F1EFU0001F1F5"},
-    {"code": "CN", "name": "China", "dial": "+86", "flag": "U0001F1E8U0001F1F3"},
-    {"code": "KR", "name": "South Korea", "dial": "+82", "flag": "U0001F1F0U0001F1F7"},
-    {"code": "SG", "name": "Singapore", "dial": "+65", "flag": "U0001F1F8U0001F1EC"},
-    {"code": "AE", "name": "United Arab Emirates", "dial": "+971", "flag": "U0001F1E6U0001F1EA"},
-    {"code": "ZA", "name": "South Africa", "dial": "+27", "flag": "U0001F1FFU0001F1E6"},
-    {"code": "RU", "name": "Russia", "dial": "+7", "flag": "U0001F1F7U0001F1FA"},
-    {"code": "MX", "name": "Mexico", "dial": "+52", "flag": "U0001F1F2U0001F1FD"},
-    {"code": "AR", "name": "Argentina", "dial": "+54", "flag": "U0001F1E6U0001F1F7"},
-    {"code": "SE", "name": "Sweden", "dial": "+46", "flag": "U0001F1F8U0001F1EA"},
-    {"code": "NO", "name": "Norway", "dial": "+47", "flag": "U0001F1F3U0001F1F4"},
-    {"code": "DK", "name": "Denmark", "dial": "+45", "flag": "U0001F1E9U0001F1F0"},
-    {"code": "FI", "name": "Finland", "dial": "+358", "flag": "U0001F1EBU0001F1EE"},
-    {"code": "CH", "name": "Switzerland", "dial": "+41", "flag": "U0001F1E8U0001F1ED"},
-    {"code": "AT", "name": "Austria", "dial": "+43", "flag": "U0001F1E6U0001F1F9"},
-    {"code": "BE", "name": "Belgium", "dial": "+32", "flag": "U0001F1E7U0001F1EA"},
-    {"code": "IE", "name": "Ireland", "dial": "+353", "flag": "U0001F1EEU0001F1EA"},
-    {"code": "PT", "name": "Portugal", "dial": "+351", "flag": "U0001F1F5U0001F1F9"},
-    {"code": "GR", "name": "Greece", "dial": "+30", "flag": "U0001F1ECU0001F1F7"},
-    {"code": "PL", "name": "Poland", "dial": "+48", "flag": "U0001F1F5U0001F1F1"},
-    {"code": "CZ", "name": "Czech Republic", "dial": "+420", "flag": "U0001F1E8U0001F1FF"},
-    {"code": "HU", "name": "Hungary", "dial": "+36", "flag": "U0001F1EDU0001F1FA"},
-    {"code": "RO", "name": "Romania", "dial": "+40", "flag": "U0001F1F7U0001F1F4"},
-    {"code": "IL", "name": "Israel", "dial": "+972", "flag": "U0001F1EEU0001F1F1"},
-    {"code": "SA", "name": "Saudi Arabia", "dial": "+966", "flag": "U0001F1F8U0001F1E6"},
-    {"code": "NG", "name": "Nigeria", "dial": "+234", "flag": "U0001F1F3U0001F1EC"},
-    {"code": "EG", "name": "Egypt", "dial": "+20", "flag": "U0001F1EAU0001F1EC"},
-    {"code": "KE", "name": "Kenya", "dial": "+254", "flag": "U0001F1F0U0001F1EA"},
-    {"code": "PK", "name": "Pakistan", "dial": "+92", "flag": "U0001F1F5U0001F1F0"},
-    {"code": "BD", "name": "Bangladesh", "dial": "+880", "flag": "U0001F1E7U0001F1E9"},
-    {"code": "PH", "name": "Philippines", "dial": "+63", "flag": "U0001F1F5U0001F1ED"},
-    {"code": "VN", "name": "Vietnam", "dial": "+84", "flag": "U0001F1FBU0001F1F3"},
-    {"code": "TH", "name": "Thailand", "dial": "+66", "flag": "U0001F1F9U0001F1ED"},
-    {"code": "MY", "name": "Malaysia", "dial": "+60", "flag": "U0001F1F2U0001F1FE"},
-    {"code": "ID", "name": "Indonesia", "dial": "+62", "flag": "U0001F1EEU0001F1E9"},
-    {"code": "TW", "name": "Taiwan", "dial": "+886", "flag": "U0001F1F9U0001F1FC"},
-    {"code": "HK", "name": "Hong Kong", "dial": "+852", "flag": "U0001F1EDU0001F1F0"},
-    {"code": "TR", "name": "Turkey", "dial": "+90", "flag": "U0001F1F9U0001F1F7"},
-    {"code": "UA", "name": "Ukraine", "dial": "+380", "flag": "U0001F1FAU0001F1E6"},
+    {
+        "code": "IN",
+        "name": "India",
+        "dial": "+91",
+        "flag": "🇮🇳"
+    },
+    {
+        "code": "US",
+        "name": "United States",
+        "dial": "+1",
+        "flag": "🇺🇸"
+    },
+    {
+        "code": "GB",
+        "name": "United Kingdom",
+        "dial": "+44",
+        "flag": "🇬🇧"
+    },
+    {
+        "code": "AR",
+        "name": "Argentina",
+        "dial": "+54",
+        "flag": "🇦🇷"
+    },
+    {
+        "code": "AU",
+        "name": "Australia",
+        "dial": "+61",
+        "flag": "🇦🇺"
+    },
+    {
+        "code": "AT",
+        "name": "Austria",
+        "dial": "+43",
+        "flag": "🇦🇹"
+    },
+    {
+        "code": "BD",
+        "name": "Bangladesh",
+        "dial": "+880",
+        "flag": "🇧🇩"
+    },
+    {
+        "code": "BE",
+        "name": "Belgium",
+        "dial": "+32",
+        "flag": "🇧🇪"
+    },
+    {
+        "code": "BR",
+        "name": "Brazil",
+        "dial": "+55",
+        "flag": "🇧🇷"
+    },
+    {
+        "code": "CA",
+        "name": "Canada",
+        "dial": "+1",
+        "flag": "🇨🇦"
+    },
+    {
+        "code": "CL",
+        "name": "Chile",
+        "dial": "+56",
+        "flag": "🇨🇱"
+    },
+    {
+        "code": "CN",
+        "name": "China",
+        "dial": "+86",
+        "flag": "🇨🇳"
+    },
+    {
+        "code": "CO",
+        "name": "Colombia",
+        "dial": "+57",
+        "flag": "🇨🇴"
+    },
+    {
+        "code": "DK",
+        "name": "Denmark",
+        "dial": "+45",
+        "flag": "🇩🇰"
+    },
+    {
+        "code": "EG",
+        "name": "Egypt",
+        "dial": "+20",
+        "flag": "🇪🇬"
+    },
+    {
+        "code": "FI",
+        "name": "Finland",
+        "dial": "+358",
+        "flag": "🇫🇮"
+    },
+    {
+        "code": "FR",
+        "name": "France",
+        "dial": "+33",
+        "flag": "🇫🇷"
+    },
+    {
+        "code": "DE",
+        "name": "Germany",
+        "dial": "+49",
+        "flag": "🇩🇪"
+    },
+    {
+        "code": "GR",
+        "name": "Greece",
+        "dial": "+30",
+        "flag": "🇬🇷"
+    },
+    {
+        "code": "HK",
+        "name": "Hong Kong",
+        "dial": "+852",
+        "flag": "🇭🇰"
+    },
+    {
+        "code": "IE",
+        "name": "Ireland",
+        "dial": "+353",
+        "flag": "🇮🇪"
+    },
+    {
+        "code": "IL",
+        "name": "Israel",
+        "dial": "+972",
+        "flag": "🇮🇱"
+    },
+    {
+        "code": "IT",
+        "name": "Italy",
+        "dial": "+39",
+        "flag": "🇮🇹"
+    },
+    {
+        "code": "JP",
+        "name": "Japan",
+        "dial": "+81",
+        "flag": "🇯🇵"
+    },
+    {
+        "code": "KE",
+        "name": "Kenya",
+        "dial": "+254",
+        "flag": "🇰🇪"
+    },
+    {
+        "code": "MY",
+        "name": "Malaysia",
+        "dial": "+60",
+        "flag": "🇲🇾"
+    },
+    {
+        "code": "MX",
+        "name": "Mexico",
+        "dial": "+52",
+        "flag": "🇲🇽"
+    },
+    {
+        "code": "NL",
+        "name": "Netherlands",
+        "dial": "+31",
+        "flag": "🇳🇱"
+    },
+    {
+        "code": "NZ",
+        "name": "New Zealand",
+        "dial": "+64",
+        "flag": "🇳🇿"
+    },
+    {
+        "code": "NG",
+        "name": "Nigeria",
+        "dial": "+234",
+        "flag": "🇳🇬"
+    },
+    {
+        "code": "NO",
+        "name": "Norway",
+        "dial": "+47",
+        "flag": "🇳🇴"
+    },
+    {
+        "code": "PK",
+        "name": "Pakistan",
+        "dial": "+92",
+        "flag": "🇵🇰"
+    },
+    {
+        "code": "PH",
+        "name": "Philippines",
+        "dial": "+63",
+        "flag": "🇵🇭"
+    },
+    {
+        "code": "PL",
+        "name": "Poland",
+        "dial": "+48",
+        "flag": "🇵🇱"
+    },
+    {
+        "code": "PT",
+        "name": "Portugal",
+        "dial": "+351",
+        "flag": "🇵🇹"
+    },
+    {
+        "code": "RO",
+        "name": "Romania",
+        "dial": "+40",
+        "flag": "🇷🇴"
+    },
+    {
+        "code": "RU",
+        "name": "Russia",
+        "dial": "+7",
+        "flag": "🇷🇺"
+    },
+    {
+        "code": "SA",
+        "name": "Saudi Arabia",
+        "dial": "+966",
+        "flag": "🇸🇦"
+    },
+    {
+        "code": "SG",
+        "name": "Singapore",
+        "dial": "+65",
+        "flag": "🇸🇬"
+    },
+    {
+        "code": "ZA",
+        "name": "South Africa",
+        "dial": "+27",
+        "flag": "🇿🇦"
+    },
+    {
+        "code": "KR",
+        "name": "South Korea",
+        "dial": "+82",
+        "flag": "🇰🇷"
+    },
+    {
+        "code": "ES",
+        "name": "Spain",
+        "dial": "+34",
+        "flag": "🇪🇸"
+    },
+    {
+        "code": "SE",
+        "name": "Sweden",
+        "dial": "+46",
+        "flag": "🇸🇪"
+    },
+    {
+        "code": "CH",
+        "name": "Switzerland",
+        "dial": "+41",
+        "flag": "🇨🇭"
+    },
+    {
+        "code": "TH",
+        "name": "Thailand",
+        "dial": "+66",
+        "flag": "🇹🇭"
+    },
+    {
+        "code": "TR",
+        "name": "Turkey",
+        "dial": "+90",
+        "flag": "🇹🇷"
+    },
+    {
+        "code": "UA",
+        "name": "Ukraine",
+        "dial": "+380",
+        "flag": "🇺🇦"
+    },
+    {
+        "code": "AE",
+        "name": "United Arab Emirates",
+        "dial": "+971",
+        "flag": "🇦🇪"
+    },
+    {
+        "code": "VN",
+        "name": "Vietnam",
+        "dial": "+84",
+        "flag": "🇻🇳"
+    }
 ]
 
 
@@ -212,7 +456,7 @@ class WelcomeDialog:
                 r = self.engine.send_otp(email, purpose='registration')
                 self.root.after(0, lambda: self._on_otp_sent(r))
             except Exception as e:
-                self.root.after(0, lambda: self.otp_status.config(text=f"Error: {str(e)}", fg="#dc2626"))
+                self.root.after(0, lambda e=e: self.otp_status.config(text=f"Error: {str(e)}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_otp_sent(self, result):
@@ -233,7 +477,7 @@ class WelcomeDialog:
                 r = self.engine.verify_otp(email, otp)
                 self.root.after(0, lambda: self._on_otp_verified(r))
             except Exception as e:
-                self.root.after(0, lambda: self.otp_status.config(text=f"Error: {str(e)}", fg="#dc2626"))
+                self.root.after(0, lambda e=e: self.otp_status.config(text=f"Error: {str(e)}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_otp_verified(self, result):
@@ -252,14 +496,18 @@ class WelcomeDialog:
         def do():
             try:
                 if self.client:
+                    mobile = f"{self.selected_country['dial']}{self.mobile_entry.get().strip()}"
+                    hardware_id = self.engine.get_hardware_id()
                     self.engine.store_customer({
-                        "name": name, "email": email, "phone": f"{self.selected_country['dial']}{self.mobile_entry.get().strip()}",
-                        "company": self.company_entry.get().strip(), "country": self.selected_country['code'],
+                        "name": name, "email": email, "mobile": mobile,
+                        "company_name": self.company_entry.get().strip(),
+                        "country_code": self.selected_country['code'],
+                        "hardware_id": hardware_id,
                     })
                 r = self.engine.start_trial(email=email, name=name, company=self.company_entry.get().strip())
                 self.root.after(0, lambda: self._on_trial_result(r))
             except Exception as e:
-                self.root.after(0, lambda: self.status_label.config(text=f"Error: {str(e)}", fg="#dc2626"))
+                self.root.after(0, lambda e=e: self.status_label.config(text=f"Error: {str(e)}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_trial_result(self, result):

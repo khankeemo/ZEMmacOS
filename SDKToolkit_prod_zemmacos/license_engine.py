@@ -28,7 +28,7 @@ class LicenseStatus:
         self.license_key = kwargs.get('license_key')
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        return {{
             'valid': self.valid,
             'status': self.status,
             'expires_at': self.expires_at,
@@ -45,7 +45,7 @@ class LicenseStatus:
             'max_devices': self.max_devices,
             'device_count': self.device_count,
             'license_key': self.license_key,
-        }
+        }}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'LicenseStatus':
@@ -83,16 +83,16 @@ class LicenseEngine:
         self._license_key: Optional[str] = None
 
     def _load_config(self, config_path: Optional[str]) -> Dict[str, Any]:
+        if isinstance(config_path, str):
+            config_path = Path(config_path)
         if config_path is None:
             base_dir = Path(__file__).parent.parent
             config_path = base_dir / 'config' / 'api-config.json'
             if not config_path.exists():
                 config_path = Path.cwd() / 'config' / 'api-config.json'
-        else:
-            config_path = Path(config_path)
         if not config_path.exists():
             raise FileNotFoundError(
-                f"api-config.json not found at: {config_path}\n"
+                f"api-config.json not found at: {config_path}. "
                 "Please ensure the configuration file is present."
             )
         with open(config_path, 'r', encoding='utf-8') as f:
@@ -118,7 +118,7 @@ class LicenseEngine:
             trial_expiry = None
 
             if trial_response.get('success'):
-                trial_data = trial_response.get('data', {})
+                trial_data = trial_response.get('data', {{}})
                 if trial_data.get('has_trial') and trial_data.get('status') == 'active':
                     trial_active = True
                     trial_days_left = trial_data.get('days_left', 0)
@@ -140,7 +140,7 @@ class LicenseEngine:
                 try:
                     lic_response = self._client.validate_license(hardware_id)
                     if lic_response.get('success'):
-                        lic_data = lic_response.get('data', {})
+                        lic_data = lic_response.get('data', {{}})
                         license_valid = lic_data.get('valid', False)
                         license_status = lic_data.get('status', 'unlicensed')
                         license_expiry = lic_data.get('expiry_date')
@@ -179,9 +179,9 @@ class LicenseEngine:
 
             msg = ""
             if trial_active:
-                msg = f"Trial active — {trial_days_left} day(s) remaining."
+                msg = f"Trial active — {{trial_days_left}} day(s) remaining."
             elif license_valid:
-                msg = f"License active — {license_days_left} day(s) remaining."
+                msg = f"License active — {{license_days_left}} day(s) remaining."
             else:
                 msg = "No active license or trial found. Please activate or start a trial."
 
@@ -212,14 +212,14 @@ class LicenseEngine:
             cached = self._cache.get_license_status()
             if cached:
                 return LicenseStatus.from_dict(cached)
-            self._status = LicenseStatus(valid=False, status='error', message=f"License validation failed: {e.message}")
+            self._status = LicenseStatus(valid=False, status='error', message=f"License validation failed: {{e.message}}")
             return self._status
 
         except Exception as e:
             cached = self._cache.get_license_status()
             if cached:
                 return LicenseStatus.from_dict(cached)
-            self._status = LicenseStatus(valid=False, status='error', message=f"Unexpected error: {str(e)}")
+            self._status = LicenseStatus(valid=False, status='error', message=f"Unexpected error: {{str(e)}}")
             return self._status
 
     def get_status(self) -> Optional[LicenseStatus]:
@@ -272,7 +272,7 @@ class LicenseEngine:
                     company: Optional[str] = None,
                     mobile: Optional[str] = None,
                     country: Optional[str] = None) -> Dict[str, Any]:
-        customer_data = {}
+        customer_data = {{}}
         if company:
             customer_data['company'] = company
         if mobile:
@@ -361,10 +361,10 @@ class LicenseEngine:
         if not old_hardware_id:
             raise RuntimeError("Current hardware_id unavailable. Cannot replace device.")
         if old_hardware_id == new_hardware_id:
-            return {
+            return {{
                 'success': False,
                 'message': 'Old and new hardware IDs are identical. No replacement needed.'
-            }
+            }}
         result = self._client.replace_device(
             license_key=self._license_key,
             new_hardware_id=new_hardware_id,
@@ -382,7 +382,7 @@ class LicenseEngine:
     # =========================================================================
 
     def get_plans(self) -> Dict[str, Any]:
-        product_id = self.config.get('product', {}).get('id', '')
+        product_id = self.config.get('product', {{}}).get('id', '')
         return self._client.get_plans(product_id)
 
     # =========================================================================

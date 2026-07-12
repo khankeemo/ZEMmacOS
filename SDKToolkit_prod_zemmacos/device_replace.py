@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any
 
 class DeviceReplaceDialog:
     def __init__(self, engine, license_key: str):
-        self.engine=engine; self.config=getattr(engine,'config',{})
+        self.engine=engine; self.config=getattr(engine,'config',{{}})
         self.license_key=license_key; self.engine._license_key=license_key
         self.result=None; self.root=None; self._loading=False
 
@@ -15,7 +15,7 @@ class DeviceReplaceDialog:
         self._build_ui(); self.root.mainloop(); return self.result
 
     def _build_ui(self):
-        branding=self.config.get('branding',{}); primary=branding.get('primary_color','#6366f1'); bg="#f8f9fa"
+        branding=self.config.get('branding',{{}}); primary=branding.get('primary_color','#6366f1'); bg="#f8f9fa"
         s=self.engine.get_status()
         old_hw = (s.hardware_id if s and s.hardware_id else "Unknown").encode() if False else (s.hardware_id if s and s.hardware_id else "Unknown")
         old_hw_str = s.hardware_id if s and s.hardware_id else "Unknown"
@@ -27,7 +27,7 @@ class DeviceReplaceDialog:
         self.root.resizable(False,False); self.root.configure(bg=bg)
         self.root.update_idletasks()
         sw=self.root.winfo_screenwidth(); sh=self.root.winfo_screenheight(); w=self.root.winfo_width(); h=self.root.winfo_height()
-        self.root.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
+        self.root.geometry(f"+{{(sw-w)//2}}+{{(sh-h)//2}}")
         header=tk.Frame(self.root,bg=primary,height=60); header.pack(fill=tk.X); header.pack_propagate(False)
         tk.Label(header,text="Replace Device",fg="white",bg=primary,font=("Helvetica",16,"bold")).pack(expand=True)
         form=tk.Frame(self.root,bg=bg,padx=25,pady=15); form.pack(fill=tk.BOTH,expand=True)
@@ -60,12 +60,12 @@ class DeviceReplaceDialog:
             try:
                 r=self.engine.replace_hardware(device_name=self.dev_name.get().strip() or None)
                 self.root.after(0,lambda: self._on_result(r))
-            except Exception as e: self.root.after(0,lambda: self.st.config(text=f"Error: {str(e)}",fg="#dc2626"))
+            except Exception as e: self.root.after(0,lambda: self.st.config(text=f"Error: {{str(e)}}",fg="#dc2626"))
         threading.Thread(target=do,daemon=True).start()
 
     def _on_result(self,r):
         self._set_loading(False)
         if r.get('success'):
-            self.st.config(text="Device replaced!",fg="#16a34a"); self.result={'action':'device_replaced'}
+            self.st.config(text="Device replaced!",fg="#16a34a"); self.result={{'action':'device_replaced'}}
             self.root.after(500,self.root.destroy)
         else: self.st.config(text=r.get('message','Failed'),fg="#dc2626")

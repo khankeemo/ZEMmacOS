@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 class ActivationDialog:
     def __init__(self, engine, license_key: Optional[str] = None):
         self.engine = engine; self.client = getattr(engine, '_client', None)
-        self.config = getattr(engine, 'config', {})
+        self.config = getattr(engine, 'config', {{}})
         self._license_key = license_key
         self.result = None; self.root = None
         self._loading = False; self.hardware_id = ""
@@ -17,16 +17,16 @@ class ActivationDialog:
         self._build_ui(); self.root.mainloop(); return self.result
 
     def _build_ui(self):
-        branding = self.config.get('branding', {})
-        product_name = self.config.get('product', {}).get('name', 'Software')
+        branding = self.config.get('branding', {{}})
+        product_name = self.config.get('product', {{}}).get('name', 'Software')
         primary_color = branding.get('primary_color', '#6366f1'); bg = "#f8f9fa"
 
-        self.root = tk.Tk(); self.root.title(f"Activate {product_name}")
+        self.root = tk.Tk(); self.root.title(f"Activate {{product_name}}")
         self.root.geometry("500x580"); self.root.resizable(False, False); self.root.configure(bg=bg)
         self.root.update_idletasks()
         sw = self.root.winfo_screenwidth(); sh = self.root.winfo_screenheight()
         w = self.root.winfo_width(); h = self.root.winfo_height()
-        self.root.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
+        self.root.geometry(f"+{{(sw - w) // 2}}+{{(sh - h) // 2}}")
 
         header = tk.Frame(self.root, bg=primary_color, height=70)
         header.pack(fill=tk.X); header.pack_propagate(False)
@@ -37,7 +37,7 @@ class ActivationDialog:
 
         tk.Label(form, text="Product Details", font=("Helvetica", 11, "bold"), bg=bg, fg="#333").pack(anchor=tk.W, pady=(0,5))
         df = tk.Frame(form, bg=bg); df.pack(fill=tk.X, pady=(0,10))
-        for label, value in [("Product", product_name), ("Version", self.config.get('product',{}).get('version','1.0.0'))]:
+        for label, value in [("Product", product_name), ("Version", self.config.get('product',{{}}).get('version','1.0.0'))]:
             r = tk.Frame(df, bg=bg); r.pack(fill=tk.X, pady=1)
             tk.Label(r, text=label+":", font=("Helvetica",10,"bold"), bg=bg, fg="#555", width=12, anchor=tk.W).pack(side=tk.LEFT)
             tk.Label(r, text=value, font=("Helvetica",10), bg=bg, fg="#333").pack(side=tk.LEFT)
@@ -96,11 +96,11 @@ class ActivationDialog:
 
     def _update_details(self, d):
         if d.get('success'):
-            data = d.get('data',{})
-            self.plan_label.config(text=f"Plan: {data.get('plan','--')}")
-            self.expiry_label.config(text=f"Expiry: {data.get('expiry_date','--')}")
-            self.days_label.config(text=f"Remaining days: {data.get('days_left','--')}")
-            self.dev_label.config(text=f"Device usage: {data.get('device_count',0)}/{data.get('max_devices','--')}")
+            data = d.get('data',{{}})
+            self.plan_label.config(text=f"Plan: {{data.get('plan','--')}}")
+            self.expiry_label.config(text=f"Expiry: {{data.get('expiry_date','--')}}")
+            self.days_label.config(text=f"Remaining days: {{data.get('days_left','--')}}")
+            self.dev_label.config(text=f"Device usage: {{data.get('device_count',0)}}/{{data.get('max_devices','--')}}")
 
     def _activate(self):
         key = self.key_entry.get().strip()
@@ -110,14 +110,14 @@ class ActivationDialog:
             try:
                 r = self.engine.activate(key, device_name=self.device_name.get().strip() or None)
                 self.root.after(0, lambda: self._on_result(r))
-            except Exception as e: self.root.after(0, lambda: self.status_label.config(text=f"Error: {str(e)}", fg="#dc2626"))
+            except Exception as e: self.root.after(0, lambda: self.status_label.config(text=f"Error: {{str(e)}}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_result(self, r):
         self._set_loading(False)
         if r.get('success'):
             self.status_label.config(text="Activated!", fg="#16a34a")
-            self.result = {'action': 'activated', 'license_key': self.key_entry.get().strip()}
+            self.result = {{'action': 'activated', 'license_key': self.key_entry.get().strip()}}
             self.root.after(500, self.root.destroy)
         else: self.status_label.config(text=r.get('message','Failed'), fg="#dc2626")
 

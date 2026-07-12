@@ -7,7 +7,7 @@ class DashboardWidget:
     def __init__(self, parent, engine):
         self.parent=parent; self.engine=engine
         self.frame=ttk.Frame(parent)
-        self._w={}
+        self._w={{}}
     def build(self)->ttk.Frame:
         self.frame.pack(fill=tk.BOTH,expand=True)
         tk.Label(self.frame,text="License Status",font=("Helvetica",14,"bold"),fg="#333").pack(pady=(10,5))
@@ -24,10 +24,10 @@ class DashboardWidget:
         s=self.engine.get_status() or self.engine.initialize()
         if s.valid:
             color="#16a34a"; label="Trial Active" if s.trial_active else "Licensed"
-            self._w['s'].config(text=f"Status: {label}",fg=color)
-            self._w['d'].config(text=f"Remaining days: {s.days_remaining}")
-            self._w['e'].config(text=f"Expiry: {s.expires_at or 'N/A'}")
-            self._w['p'].config(text=f"Plan: {s.plan or 'N/A'}")
+            self._w['s'].config(text=f"Status: {{label}}",fg=color)
+            self._w['d'].config(text=f"Remaining days: {{s.days_remaining}}")
+            self._w['e'].config(text=f"Expiry: {{s.expires_at or 'N/A'}}")
+            self._w['p'].config(text=f"Plan: {{s.plan or 'N/A'}}")
         else:
             self._w['s'].config(text="Status: Unlicensed",fg="#dc2626"); self._w['t'].config(text="No active license or trial")
             for k in ['d','e','p']: self._w[k].config(text="")
