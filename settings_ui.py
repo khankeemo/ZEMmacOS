@@ -6,6 +6,11 @@ import platform
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+try:
+    from SDKToolkit_prod_zemmacos.widgets.settings_widget import SettingsWidget as SDKSettingsWidget
+except ImportError:
+    SDKSettingsWidget = None
+
 
 class SettingsUI:
     def __init__(self, parent, app_instance):
@@ -42,6 +47,7 @@ class SettingsUI:
             ("downloads", "Downloads"),
             ("appearance", "Appearance"),
             ("performance", "Performance"),
+            ("license", "License"),
             ("updates", "Updates"),
             ("about", "About"),
         ]
@@ -226,6 +232,25 @@ class SettingsUI:
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["success"],
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+
+    def _build_license(self):
+        engine = getattr(self.app, 'license_engine', None)
+        if SDKSettingsWidget and engine:
+            try:
+                widget_frame = tk.Frame(self._content_frame, bg=self.colors["content_bg"])
+                widget_frame.pack(fill=tk.BOTH, expand=True)
+                self._sdk_settings_widget = SDKSettingsWidget(widget_frame, engine)
+                self._sdk_settings_widget.build()
+                return
+            except Exception:
+                pass
+        inner = self._card(self._content_frame, "License")
+        tk.Label(inner, text="License management is not available.",
+                 font=("SF Pro Text", 11), fg=self.colors["muted"],
+                 bg=self.colors["card_bg"]).pack(anchor=tk.W, pady=10)
+        tk.Label(inner, text="The license SDK could not be loaded. Please restart the application.",
+                 font=("SF Pro Text", 10), fg=self.colors["muted"],
+                 bg=self.colors["card_bg"]).pack(anchor=tk.W)
 
     def _build_updates(self):
         inner = self._card(self._content_frame, "Update Settings")

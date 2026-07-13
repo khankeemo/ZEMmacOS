@@ -17,6 +17,7 @@ from idm_downloader import IDMDownloader
 from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
+from SDKToolkit_prod_zemmacos import LicenseEngine, WelcomeDialog
 
 def main():
     if sys.platform == "win32":
@@ -26,13 +27,32 @@ def main():
         except Exception:
             pass
 
+    license_engine = None
+    try:
+        license_engine = LicenseEngine()
+    except Exception:
+        pass
+
+    if license_engine:
+        try:
+            status = license_engine.initialize()
+            if not status or not status.valid:
+                def run_welcome():
+                    try:
+                        WelcomeDialog(license_engine).show()
+                    except Exception:
+                        pass
+                run_welcome()
+        except Exception:
+            pass
+
     root = tk.Tk()
     root.title("ZEMmacOS")
     root.geometry("1200x800")
     root.minsize(1000, 700)
     root.state('zoomed')
 
-    app = ZEMmacOSApp(root)
+    app = ZEMmacOSApp(root, license_engine=license_engine)
     root.mainloop()
 
 
@@ -50,12 +70,14 @@ def _is_network_error_str(err_str):
 
 
 class ZEMmacOSApp(ZEMmacOSUI):
-    def __init__(self, root, settings=None):
+    def __init__(self, root, settings=None, license_engine=None):
+        self._license_engine = license_engine
         super().__init__(root)
 
         self.settings = settings or SettingsManager()
         self.settings_service = AppSettingsService(self)
         self.updater = AppUpdater()
+        self.license_engine = license_engine
 
         self.logger = get_logger()
         self.logger.set_console_callback(self._console_output)

@@ -8,6 +8,13 @@ from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
 
+try:
+    from SDKToolkit_prod_zemmacos.widgets.status_widget import StatusWidget as SDKStatusWidget
+    from SDKToolkit_prod_zemmacos.widgets.dashboard_widget import DashboardWidget as SDKDashboardWidget
+except ImportError:
+    SDKStatusWidget = None
+    SDKDashboardWidget = None
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -49,6 +56,10 @@ class ZEMmacOSUI:
         self._check_updates_callback = None
         self._nav_buttons = {}
         self._toast_widgets = []
+        if not hasattr(self, '_license_engine'):
+            self._license_engine = None
+        self._sdk_status_widget = None
+        self._sdk_dashboard_widget = None
 
         self._init_light_colors()
         self.setup_styles()
@@ -115,6 +126,29 @@ class ZEMmacOSUI:
         self.create_sidebar(main_container)
         self.create_content_area(main_container)
 
+    def _get_license_engine(self):
+        return self._license_engine
+
+    def set_license_engine(self, engine):
+        self._license_engine = engine
+        if self._sdk_status_widget:
+            try:
+                self._sdk_status_widget.refresh()
+            except Exception:
+                pass
+
+    def refresh_license_widgets(self):
+        if self._sdk_status_widget:
+            try:
+                self._sdk_status_widget.refresh()
+            except Exception:
+                pass
+        if self._sdk_dashboard_widget:
+            try:
+                self._sdk_dashboard_widget.refresh()
+            except Exception:
+                pass
+
     def create_sidebar(self, parent):
         sidebar = tk.Frame(parent, bg=self.colors["sidebar_bg"], width=self.colors.get("sidebar_width", 220))
         sidebar._role = "sidebar"
@@ -162,6 +196,15 @@ class ZEMmacOSUI:
 
         footer = tk.Frame(sidebar, bg=self.colors["sidebar_bg"])
         footer.pack(side=tk.BOTTOM, fill=tk.X, pady=16)
+
+        self._sdk_status_widget = None
+        if SDKStatusWidget and hasattr(self, '_get_license_engine') and self._get_license_engine():
+            try:
+                self._sdk_status_widget = SDKStatusWidget(footer, self._get_license_engine())
+                self._sdk_status_widget.build()
+            except Exception:
+                self._sdk_status_widget = None
+
         tk.Label(footer, text="Version 3.0", font=("SF Pro Text", 9),
                  fg=self.colors["muted"], bg=self.colors["sidebar_bg"]).pack()
 
@@ -514,6 +557,16 @@ class ZEMmacOSUI:
             self._stats_labels[key] = val_label
             tk.Label(card, text=stats_labels[i], font=("SF Pro Text", 10),
                      fg=colors["muted"], bg=colors["card_bg"]).pack()
+
+        self._sdk_dashboard_widget = None
+        if SDKDashboardWidget and self._get_license_engine():
+            try:
+                license_card = ModernCard(body_frame, colors, title="License Status", padding=10)
+                license_card.pack(fill=tk.X, pady=12)
+                self._sdk_dashboard_widget = SDKDashboardWidget(license_card.get_body(), self._get_license_engine())
+                self._sdk_dashboard_widget.build()
+            except Exception:
+                self._sdk_dashboard_widget = None
 
 
 

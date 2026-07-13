@@ -1,0 +1,92 @@
+{
+  "product": {
+    "id": "prod_zemmacos",
+    "name": "ZEM MAC OS",
+    "version": "1.0.0",
+    "description": "Smart Mac license control"
+  },
+  "api": {
+    "url": "https://websmith-z.vercel.app",
+    "version": "v1",
+    "public_key": "pk_zeos_6d1222642b60654de7bd336b820484d20c01869997b9d557e634240cd0573860",
+    "timeout": 30000,
+    "retry_count": 3
+  },
+  "trial": {
+    "enabled": true,
+    "days": 7,
+    "require_email": true,
+    "require_company": false,
+    "auto_convert": false,
+    "message": "Start your 7-day free trial of ZEM MAC OS. No credit card required."
+  },
+  "license": {
+    "enabled": true,
+    "hardware_binding": true,
+    "max_devices": 1,
+    "offline_days": 30,
+    "renewal_reminder_days": 7
+  },
+  "hardware": {
+    "fingerprint": {
+      "include_cpu": true,
+      "include_motherboard": true,
+      "include_mac": true,
+      "include_os": true,
+      "hash_algorithm": "sha256"
+    },
+    "replacement": {
+      "enabled": true,
+      "require_approval": false,
+      "max_replacements_per_year": 2
+    }
+  },
+  "offline": {
+    "enabled": true,
+    "cache_days": 30,
+    "encryption": "AES-256-GCM",
+    "validate_on_reconnect": true
+  },
+  "security": {
+    "hmac_algorithm": "SHA256",
+    "timestamp_window": 300,
+    "require_nonce": true,
+    "rate_limit": {
+      "requests_per_minute": 100,
+      "requests_per_hour": 1000
+    }
+  },
+  "branding": {
+    "company_name": "Websmith Digital ",
+    "logo_url": "/assets/logo.svg",
+    "primary_color": "#6366f1",
+    "secondary_color": "#4f46e5",
+    "accent_color": "#8b5cf6",
+    "support_email": "support@websmithdigital.com",
+    "support_url": ""
+  },
+  "ui": {
+    "theme": "auto",
+    "language": "en",
+    "position": "center",
+    "modal": true,
+    "animations": true,
+    "dialogs": {
+      "trial": true,
+      "activation": true,
+      "renewal": true,
+      "expired": true,
+      "offline": true,
+      "hardware_change": true
+    }
+  },
+  "features": {
+    "trial": true,
+    "license": true,
+    "hardware_binding": true,
+    "offline_mode": true,
+    "renewals": true,
+    "analytics": true,
+    "audit_logs": true
+  }
+}
