@@ -35,9 +35,8 @@ def main():
     splash.pack(fill=tk.BOTH, expand=True)
     tk.Label(splash, text="ZEMmacOS", font=("SF Pro Display", 28, "bold"),
              fg="#1d1d1f", bg="#f5f5f7").pack(expand=True)
-    sp_sub = tk.Label(splash, text="Initializing license\u2026", font=("SF Pro Text", 12),
-                      fg="#6e6e73", bg="#f5f5f7")
-    sp_sub.pack()
+    tk.Label(splash, text="Initializing license\u2026", font=("SF Pro Text", 12),
+             fg="#6e6e73", bg="#f5f5f7").pack()
     root.update()
 
     config_path = os.path.join(BASE_DIR, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json')
@@ -48,18 +47,8 @@ def main():
 
     license_engine = LicenseEngine(config_path)
 
-    def show_welcome():
-        sp_sub.config(text="Activation required \u2014 please complete the form")
-        root.update()
-        dialog = WelcomeDialog(license_engine, parent=root)
-        result = dialog.show()
-        return result
-
-    def build_ui(status):
+    def show_dashboard():
         splash.destroy()
-        if not status or not status.valid:
-            root.destroy()
-            return
         root.title("ZEMmacOS")
         root.geometry("1200x800")
         root.minsize(1000, 700)
@@ -68,16 +57,19 @@ def main():
 
     def on_license_init(status):
         if not status or not status.valid:
-            result = show_welcome()
+            root.attributes("-disabled", True)
+            dialog = WelcomeDialog(license_engine, parent=root)
+            result = dialog.show()
+            root.attributes("-disabled", False)
             if not result:
                 root.destroy()
                 return
             def recheck():
                 s = license_engine.initialize()
-                root.after(0, lambda: build_ui(s))
+                root.after(0, lambda: show_dashboard() if s and s.valid else root.destroy())
             threading.Thread(target=recheck, daemon=True).start()
             return
-        build_ui(status)
+        show_dashboard()
 
     def init_worker():
         try:

@@ -115,13 +115,14 @@ class WelcomeDialog:
         self.otp_status.pack(side=tk.LEFT, padx=(10, 0))
 
         self.otp_entry_frame = tk.Frame(form, bg=bg_color)
+        self.otp_entry_frame.pack(fill=tk.X, pady=(10, 0))
         tk.Label(self.otp_entry_frame, text=labels.get('enter_otp_label', "Enter OTP"), font=("Helvetica", 10), bg=bg_color, fg=colors.get('text_secondary', '#555')).pack(anchor=tk.W)
         otp_row = tk.Frame(self.otp_entry_frame, bg=bg_color)
         otp_row.pack(fill=tk.X, pady=(2, 0))
         self.otp_entry = tk.Entry(otp_row, font=("Helvetica", 14, "bold"), relief=tk.SOLID, bd=1, width=8)
         self.otp_entry.pack(side=tk.LEFT, ipady=4)
         self.verify_btn = tk.Button(otp_row, text=labels.get('verify_otp_btn', "Verify OTP"), command=self._verify_otp,
-                                     font=("Helvetica", 10, "bold"), bg=colors.get('info', '#10b981'), fg="white", relief=tk.FLAT, padx=10, pady=5)
+                                     font=("Helvetica", 10, "bold"), bg=colors.get('info', '#10b981'), fg="white", relief=tk.FLAT, padx=10, pady=5, state=tk.DISABLED)
         self.verify_btn.pack(side=tk.LEFT, padx=(5, 0))
 
         ttk.Separator(form, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=12)
@@ -195,7 +196,7 @@ class WelcomeDialog:
         self._set_loading(False)
         if result.get('success'):
             self._otp_sent = True; self.otp_status.config(text="OTP sent! Check email", fg=colors.get('success', '#16a34a'))
-            self.otp_entry_frame.pack(fill=tk.X, pady=(10, 0))
+            self.verify_btn.config(state=tk.NORMAL)
         else:
             self.otp_status.config(text=result.get('message', 'Failed to send'), fg=colors.get('error', '#dc2626'))
 
