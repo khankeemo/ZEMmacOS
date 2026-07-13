@@ -26,62 +26,53 @@ def main():
         except Exception:
             pass
 
-    root = tk.Tk()
-    root.title("ZEMmacOS")
-    root.geometry("1200x800")
-    root.minsize(1000, 700)
-
-    splash = tk.Frame(root, bg="#f5f5f7")
-    splash.pack(fill=tk.BOTH, expand=True)
-    tk.Label(splash, text="ZEMmacOS", font=("SF Pro Display", 28, "bold"),
-             fg="#1d1d1f", bg="#f5f5f7").pack(expand=True)
-    tk.Label(splash, text="Initializing license\u2026", font=("SF Pro Text", 12),
-             fg="#6e6e73", bg="#f5f5f7").pack()
-    root.update()
-
     config_path = os.path.join(BASE_DIR, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json')
     if not os.path.exists(config_path):
         print("FATAL: api-config.json not found at", config_path)
-        root.destroy()
         sys.exit(1)
 
     license_engine = LicenseEngine(config_path)
 
-    def show_dashboard():
-        splash.destroy()
-        root.title("ZEMmacOS")
-        root.geometry("1200x800")
-        root.minsize(1000, 700)
-        root.state('zoomed')
-        ZEMmacOSApp(root, license_engine=license_engine)
+    # =========================================================================
+    # PHASE 1 — License / Welcome flow
+    # =========================================================================
+    lic_root = tk.Tk()
+    lic_root.geometry("1x1-2000-2000")
+    lic_root.update()
 
-    def on_license_init(status):
+    def license_check_and_dialog():
+        status = license_engine.initialize()
+
         if not status or not status.valid:
-            root.attributes("-disabled", True)
-            dialog = WelcomeDialog(license_engine, parent=root)
+            dialog = WelcomeDialog(license_engine, parent=lic_root)
             result = dialog.show()
-            root.attributes("-disabled", False)
+
             if not result:
-                root.destroy()
-                return
-            def recheck():
-                s = license_engine.initialize()
-                root.after(0, lambda: show_dashboard() if s and s.valid else root.destroy())
-            threading.Thread(target=recheck, daemon=True).start()
-            return
-        show_dashboard()
+                lic_root.destroy()
+                return False
 
-    def init_worker():
-        try:
-            s = license_engine.initialize()
-            root.after(0, lambda: on_license_init(s))
-        except Exception as e:
-            root.after(0, lambda: splash.destroy() or tk.Label(
-                root, text=f"Initialization error: {e}", fg="#ff3b30",
-                font=("SF Pro Text", 12)).pack(expand=True))
+            status = license_engine.initialize()
+            if not status or not status.valid:
+                lic_root.destroy()
+                return False
 
-    threading.Thread(target=init_worker, daemon=True).start()
-    root.mainloop()
+        lic_root.destroy()
+        return True
+
+    ok = license_check_and_dialog()
+    if not ok:
+        return
+
+    # =========================================================================
+    # PHASE 2 — Main application
+    # =========================================================================
+    app_root = tk.Tk()
+    app_root.title("ZEMmacOS")
+    app_root.geometry("1200x800")
+    app_root.minsize(1000, 700)
+    app_root.state('zoomed')
+    ZEMmacOSApp(app_root, license_engine=license_engine)
+    app_root.mainloop()
 
 
 NETWORK_ERROR_KEYWORDS = [

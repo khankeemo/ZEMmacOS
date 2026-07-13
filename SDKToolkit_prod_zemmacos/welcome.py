@@ -204,6 +204,7 @@ class WelcomeDialog:
         colors = self.config.get('branding', {}).get('colors', {})
         if not self._otp_sent: return
         otp = self.otp_entry.get().strip(); email = self.email_entry.get().strip()
+        print(f"OTP VERIFY: email='{email}' otp='{otp}'", flush=True)
         if not otp: self.otp_status.config(text="Enter OTP", fg=colors.get('error', '#dc2626')); return
         self._set_loading(True); self.otp_status.config(text="Verifying...", fg=colors.get('text_muted', '#888'))
         def do():
