@@ -29,7 +29,7 @@ class WelcomeDialog:
     def show(self) -> bool:
         self._load_countries()
         self._build_ui()
-        self.root.mainloop()
+        self.root.wait_window()
         return self.result
 
     def _load_countries(self):

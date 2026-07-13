@@ -33,11 +33,19 @@ def main():
         except Exception:
             pass
 
-    # Create hidden root window first (required as parent for SDK dialogs)
     root = tk.Tk()
-    root.withdraw()
+    root.title("ZEMmacOS")
+    root.geometry("1200x800")
+    root.minsize(1000, 700)
 
-    # Initialize license engine with correct config path
+    loading = tk.Frame(root, bg="#f5f5f7")
+    loading.pack(fill=tk.BOTH, expand=True)
+    tk.Label(loading, text="ZEMmacOS", font=("SF Pro Display", 28, "bold"),
+             fg="#1d1d1f", bg="#f5f5f7").pack(expand=True)
+    tk.Label(loading, text="Initializing license\u2026", font=("SF Pro Text", 12),
+             fg="#6e6e73", bg="#f5f5f7").pack()
+    root.update()
+
     config_path = os.path.join(BASE_DIR, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json')
     if not os.path.exists(config_path):
         print("FATAL: api-config.json not found at", config_path)
@@ -45,27 +53,55 @@ def main():
         sys.exit(1)
 
     license_engine = LicenseEngine(config_path)
-    status = license_engine.initialize()
+    license_engine_ref = [license_engine]
 
-    if not status or not status.valid:
-        result = _show_welcome_dialog(license_engine, root)
-        if not result:
-            root.destroy()
-            sys.exit(0)
+    def on_license_init(status):
+        loading.destroy()
+        if not status or not status.valid:
+            root.withdraw()
+            result = _show_welcome_dialog(license_engine_ref[0], root)
+            if not result:
+                root.destroy()
+                return
 
-        status = license_engine.initialize()
+            def recheck():
+                s = license_engine_ref[0].initialize()
+                root.after(0, lambda: on_recheck(s))
+            threading.Thread(target=recheck, daemon=True).start()
+            return
+
+        _build_main_ui(root, license_engine_ref[0])
+
+    def on_recheck(status):
         if not status or not status.valid:
             root.destroy()
-            sys.exit(0)
+            return
+        root.deiconify()
+        _build_main_ui(root, license_engine_ref[0])
 
-    root.deiconify()
+    def init_worker():
+        try:
+            s = license_engine_ref[0].initialize()
+            root.after(0, lambda: on_license_init(s))
+        except Exception as e:
+            root.after(0, lambda: _on_init_error(loading, root, str(e)))
+
+    threading.Thread(target=init_worker, daemon=True).start()
+    root.mainloop()
+
+
+def _on_init_error(loading, root, msg):
+    loading.destroy()
+    tk.Label(root, text=f"Initialization error: {msg}", fg="#ff3b30",
+             font=("SF Pro Text", 12)).pack(expand=True)
+
+
+def _build_main_ui(root, license_engine):
     root.title("ZEMmacOS")
     root.geometry("1200x800")
     root.minsize(1000, 700)
     root.state('zoomed')
-
-    app = ZEMmacOSApp(root, license_engine=license_engine)
-    root.mainloop()
+    ZEMmacOSApp(root, license_engine=license_engine)
 
 
 NETWORK_ERROR_KEYWORDS = [
