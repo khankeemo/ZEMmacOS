@@ -51,16 +51,16 @@ class ApiClient:
                        method: str = 'POST',
                        path: str = '',
                        query: str = '') -> Dict[str, str]:
-        timestamp = generate_timestamp()
-        nonce = generate_nonce()
-        signature = sign_request(payload, self.api_secret, timestamp, nonce,
-                                  method=method, path=path, query=query)
-        return {
-            'x-api-key': self.api_key,
-            'x-timestamp': timestamp,
-            'x-nonce': nonce,
-            'x-signature': signature
-        }
+        headers = {'x-api-key': self.api_key}
+        if self.api_secret:
+            timestamp = generate_timestamp()
+            nonce = generate_nonce()
+            signature = sign_request(payload, self.api_secret, timestamp, nonce,
+                                      method=method, path=path, query=query)
+            headers['x-timestamp'] = timestamp
+            headers['x-nonce'] = nonce
+            headers['x-signature'] = signature
+        return headers
 
     def _request(
         self,

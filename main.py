@@ -19,6 +19,12 @@ from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 from SDKToolkit_prod_zemmacos import LicenseEngine, WelcomeDialog
 
+def _show_welcome_dialog(engine, parent):
+    dialog = WelcomeDialog(engine, parent=parent)
+    result = dialog.show()
+    return result
+
+
 def main():
     if sys.platform == "win32":
         try:
@@ -27,26 +33,32 @@ def main():
         except Exception:
             pass
 
-    license_engine = None
-    try:
-        license_engine = LicenseEngine()
-    except Exception:
-        pass
-
-    if license_engine:
-        try:
-            status = license_engine.initialize()
-            if not status or not status.valid:
-                def run_welcome():
-                    try:
-                        WelcomeDialog(license_engine).show()
-                    except Exception:
-                        pass
-                run_welcome()
-        except Exception:
-            pass
-
+    # Create hidden root window first (required as parent for SDK dialogs)
     root = tk.Tk()
+    root.withdraw()
+
+    # Initialize license engine with correct config path
+    config_path = os.path.join(BASE_DIR, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json')
+    if not os.path.exists(config_path):
+        print("FATAL: api-config.json not found at", config_path)
+        root.destroy()
+        sys.exit(1)
+
+    license_engine = LicenseEngine(config_path)
+    status = license_engine.initialize()
+
+    if not status or not status.valid:
+        result = _show_welcome_dialog(license_engine, root)
+        if not result:
+            root.destroy()
+            sys.exit(0)
+
+        status = license_engine.initialize()
+        if not status or not status.valid:
+            root.destroy()
+            sys.exit(0)
+
+    root.deiconify()
     root.title("ZEMmacOS")
     root.geometry("1200x800")
     root.minsize(1000, 700)
