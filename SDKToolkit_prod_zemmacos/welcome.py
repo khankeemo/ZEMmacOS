@@ -4,307 +4,17 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Dict, Any
 
-COUNTRY_CODES = [
-    {
-        "code": "IN",
-        "name": "India",
-        "dial": "+91",
-        "flag": "🇮🇳"
-    },
-    {
-        "code": "US",
-        "name": "United States",
-        "dial": "+1",
-        "flag": "🇺🇸"
-    },
-    {
-        "code": "GB",
-        "name": "United Kingdom",
-        "dial": "+44",
-        "flag": "🇬🇧"
-    },
-    {
-        "code": "AR",
-        "name": "Argentina",
-        "dial": "+54",
-        "flag": "🇦🇷"
-    },
-    {
-        "code": "AU",
-        "name": "Australia",
-        "dial": "+61",
-        "flag": "🇦🇺"
-    },
-    {
-        "code": "AT",
-        "name": "Austria",
-        "dial": "+43",
-        "flag": "🇦🇹"
-    },
-    {
-        "code": "BD",
-        "name": "Bangladesh",
-        "dial": "+880",
-        "flag": "🇧🇩"
-    },
-    {
-        "code": "BE",
-        "name": "Belgium",
-        "dial": "+32",
-        "flag": "🇧🇪"
-    },
-    {
-        "code": "BR",
-        "name": "Brazil",
-        "dial": "+55",
-        "flag": "🇧🇷"
-    },
-    {
-        "code": "CA",
-        "name": "Canada",
-        "dial": "+1",
-        "flag": "🇨🇦"
-    },
-    {
-        "code": "CL",
-        "name": "Chile",
-        "dial": "+56",
-        "flag": "🇨🇱"
-    },
-    {
-        "code": "CN",
-        "name": "China",
-        "dial": "+86",
-        "flag": "🇨🇳"
-    },
-    {
-        "code": "CO",
-        "name": "Colombia",
-        "dial": "+57",
-        "flag": "🇨🇴"
-    },
-    {
-        "code": "DK",
-        "name": "Denmark",
-        "dial": "+45",
-        "flag": "🇩🇰"
-    },
-    {
-        "code": "EG",
-        "name": "Egypt",
-        "dial": "+20",
-        "flag": "🇪🇬"
-    },
-    {
-        "code": "FI",
-        "name": "Finland",
-        "dial": "+358",
-        "flag": "🇫🇮"
-    },
-    {
-        "code": "FR",
-        "name": "France",
-        "dial": "+33",
-        "flag": "🇫🇷"
-    },
-    {
-        "code": "DE",
-        "name": "Germany",
-        "dial": "+49",
-        "flag": "🇩🇪"
-    },
-    {
-        "code": "GR",
-        "name": "Greece",
-        "dial": "+30",
-        "flag": "🇬🇷"
-    },
-    {
-        "code": "HK",
-        "name": "Hong Kong",
-        "dial": "+852",
-        "flag": "🇭🇰"
-    },
-    {
-        "code": "IE",
-        "name": "Ireland",
-        "dial": "+353",
-        "flag": "🇮🇪"
-    },
-    {
-        "code": "IL",
-        "name": "Israel",
-        "dial": "+972",
-        "flag": "🇮🇱"
-    },
-    {
-        "code": "IT",
-        "name": "Italy",
-        "dial": "+39",
-        "flag": "🇮🇹"
-    },
-    {
-        "code": "JP",
-        "name": "Japan",
-        "dial": "+81",
-        "flag": "🇯🇵"
-    },
-    {
-        "code": "KE",
-        "name": "Kenya",
-        "dial": "+254",
-        "flag": "🇰🇪"
-    },
-    {
-        "code": "MY",
-        "name": "Malaysia",
-        "dial": "+60",
-        "flag": "🇲🇾"
-    },
-    {
-        "code": "MX",
-        "name": "Mexico",
-        "dial": "+52",
-        "flag": "🇲🇽"
-    },
-    {
-        "code": "NL",
-        "name": "Netherlands",
-        "dial": "+31",
-        "flag": "🇳🇱"
-    },
-    {
-        "code": "NZ",
-        "name": "New Zealand",
-        "dial": "+64",
-        "flag": "🇳🇿"
-    },
-    {
-        "code": "NG",
-        "name": "Nigeria",
-        "dial": "+234",
-        "flag": "🇳🇬"
-    },
-    {
-        "code": "NO",
-        "name": "Norway",
-        "dial": "+47",
-        "flag": "🇳🇴"
-    },
-    {
-        "code": "PK",
-        "name": "Pakistan",
-        "dial": "+92",
-        "flag": "🇵🇰"
-    },
-    {
-        "code": "PH",
-        "name": "Philippines",
-        "dial": "+63",
-        "flag": "🇵🇭"
-    },
-    {
-        "code": "PL",
-        "name": "Poland",
-        "dial": "+48",
-        "flag": "🇵🇱"
-    },
-    {
-        "code": "PT",
-        "name": "Portugal",
-        "dial": "+351",
-        "flag": "🇵🇹"
-    },
-    {
-        "code": "RO",
-        "name": "Romania",
-        "dial": "+40",
-        "flag": "🇷🇴"
-    },
-    {
-        "code": "RU",
-        "name": "Russia",
-        "dial": "+7",
-        "flag": "🇷🇺"
-    },
-    {
-        "code": "SA",
-        "name": "Saudi Arabia",
-        "dial": "+966",
-        "flag": "🇸🇦"
-    },
-    {
-        "code": "SG",
-        "name": "Singapore",
-        "dial": "+65",
-        "flag": "🇸🇬"
-    },
-    {
-        "code": "ZA",
-        "name": "South Africa",
-        "dial": "+27",
-        "flag": "🇿🇦"
-    },
-    {
-        "code": "KR",
-        "name": "South Korea",
-        "dial": "+82",
-        "flag": "🇰🇷"
-    },
-    {
-        "code": "ES",
-        "name": "Spain",
-        "dial": "+34",
-        "flag": "🇪🇸"
-    },
-    {
-        "code": "SE",
-        "name": "Sweden",
-        "dial": "+46",
-        "flag": "🇸🇪"
-    },
-    {
-        "code": "CH",
-        "name": "Switzerland",
-        "dial": "+41",
-        "flag": "🇨🇭"
-    },
-    {
-        "code": "TH",
-        "name": "Thailand",
-        "dial": "+66",
-        "flag": "🇹🇭"
-    },
-    {
-        "code": "TR",
-        "name": "Turkey",
-        "dial": "+90",
-        "flag": "🇹🇷"
-    },
-    {
-        "code": "UA",
-        "name": "Ukraine",
-        "dial": "+380",
-        "flag": "🇺🇦"
-    },
-    {
-        "code": "AE",
-        "name": "United Arab Emirates",
-        "dial": "+971",
-        "flag": "🇦🇪"
-    },
-    {
-        "code": "VN",
-        "name": "Vietnam",
-        "dial": "+84",
-        "flag": "🇻🇳"
-    }
+COUNTRY_FALLBACK = [
+    {"code": "IN", "name": "India", "dial": "+91", "flag": "U0001F1EEU0001F1F3"},
+    {"code": "US", "name": "United States", "dial": "+1", "flag": "U0001F1FAU0001F1F8"},
+    {"code": "GB", "name": "United Kingdom", "dial": "+44", "flag": "U0001F1ECU0001F1E7"},
 ]
 
 
 class WelcomeDialog:
-    def __init__(self, engine, support_email: str = ""):
+    def __init__(self, engine, parent=None, support_email: str = ""):
         self.engine = engine
+        self._parent = parent
         self.support_email = support_email
         self.client = getattr(engine, '_client', None)
         self.config = getattr(engine, 'config', {})
@@ -312,22 +22,41 @@ class WelcomeDialog:
         self._otp_sent = False
         self._otp_verified = False
         self._customer_data = {}
-        self.selected_country = COUNTRY_CODES[0]
+        self._countries = []
+        self.selected_country = None
         self.root = None
 
     def show(self) -> bool:
+        self._load_countries()
         self._build_ui()
         self.root.mainloop()
         return self.result
+
+    def _load_countries(self):
+        try:
+            result = self.engine.get_countries()
+            if result.get('success'):
+                self._countries = result.get('data', result.get('countries', []))
+        except Exception:
+            pass
+        if not self._countries:
+            self._countries = COUNTRY_FALLBACK
+        self.selected_country = self._countries[0]
 
     def _build_ui(self):
         branding = self.config.get('branding', {})
         product_name = self.config.get('product', {}).get('name', 'Software')
         primary_color = branding.get('primary_color', '#6366f1')
         bg_color = "#f8f9fa"
+        labels = branding.get('labels', {})
 
-        self.root = tk.Tk()
-        self.root.title(f"Welcome to {product_name}")
+        if self._parent:
+            self.root = tk.Toplevel(self._parent)
+            self.root.transient(self._parent)
+            self.root.grab_set()
+        else:
+            self.root = tk.Tk()
+        self.root.title(labels.get('welcome_title', f"Welcome to {product_name}"))
         self.root.geometry("480x620")
         self.root.resizable(False, False)
         self.root.configure(bg=bg_color)
@@ -335,19 +64,19 @@ class WelcomeDialog:
         self.root.update_idletasks()
         w = self.root.winfo_width(); h = self.root.winfo_height()
         sw = self.root.winfo_screenwidth(); sh = self.root.winfo_screenheight()
-        self.root.geometry(f"+{{(sw - w) // 2}}+{{(sh - h) // 2}}")
+        self.root.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
 
         header = tk.Frame(self.root, bg=primary_color, height=80)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
-        tk.Label(header, text=f"Welcome to {product_name}",
+        tk.Label(header, text=labels.get('welcome_title', f"Welcome to {product_name}"),
                  fg="white", bg=primary_color,
                  font=("Helvetica", 18, "bold")).pack(expand=True)
 
         form = tk.Frame(self.root, bg=bg_color, padx=30, pady=20)
         form.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(form, text="Customer Information",
+        tk.Label(form, text=labels.get('customer_info_section', "Customer Information"),
                  font=("Helvetica", 12, "bold"), bg=bg_color, fg="#333").pack(anchor=tk.W, pady=(0, 10))
 
         tk.Label(form, text="Full Name *", font=("Helvetica", 10), bg=bg_color, fg="#555").pack(anchor=tk.W)
@@ -364,11 +93,11 @@ class WelcomeDialog:
 
         country_frame = tk.Frame(form, bg=bg_color)
         country_frame.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(country_frame, text="Mobile Number", font=("Helvetica", 10), bg=bg_color, fg="#555").pack(anchor=tk.W)
+        tk.Label(country_frame, text=labels.get('mobile_label', "Mobile Number"), font=("Helvetica", 10), bg=bg_color, fg="#555").pack(anchor=tk.W)
 
         mobile_row = tk.Frame(country_frame, bg=bg_color)
         mobile_row.pack(fill=tk.X, pady=(2, 0))
-        self.country_btn = tk.Button(mobile_row, text=f"{{self.selected_country['flag']}} {{self.selected_country['dial']}}",
+        self.country_btn = tk.Button(mobile_row, text=f"{self.selected_country['flag']} {self.selected_country['dial']}",
                                       font=("Helvetica", 11), relief=tk.SOLID, bd=1, bg="white", fg="#333",
                                       command=self._open_country_selector)
         self.country_btn.pack(side=tk.LEFT, ipady=4)
@@ -379,24 +108,24 @@ class WelcomeDialog:
 
         otp_frame = tk.Frame(form, bg=bg_color)
         otp_frame.pack(fill=tk.X)
-        self.otp_btn = tk.Button(otp_frame, text="Send OTP", command=self._send_otp,
+        self.otp_btn = tk.Button(otp_frame, text=labels.get('send_otp_btn', "Send OTP"), command=self._send_otp,
                                   font=("Helvetica", 10, "bold"), bg=primary_color, fg="white", relief=tk.FLAT, padx=10, pady=5)
         self.otp_btn.pack(side=tk.LEFT)
         self.otp_status = tk.Label(otp_frame, text="", font=("Helvetica", 9), bg=bg_color, fg="#888")
         self.otp_status.pack(side=tk.LEFT, padx=(10, 0))
 
         self.otp_entry_frame = tk.Frame(form, bg=bg_color)
-        tk.Label(self.otp_entry_frame, text="Enter OTP", font=("Helvetica", 10), bg=bg_color, fg="#555").pack(anchor=tk.W)
+        tk.Label(self.otp_entry_frame, text=labels.get('enter_otp_label', "Enter OTP"), font=("Helvetica", 10), bg=bg_color, fg="#555").pack(anchor=tk.W)
         otp_row = tk.Frame(self.otp_entry_frame, bg=bg_color)
         otp_row.pack(fill=tk.X, pady=(2, 0))
         self.otp_entry = tk.Entry(otp_row, font=("Helvetica", 14, "bold"), relief=tk.SOLID, bd=1, width=8)
         self.otp_entry.pack(side=tk.LEFT, ipady=4)
-        self.verify_btn = tk.Button(otp_row, text="Verify OTP", command=self._verify_otp,
+        self.verify_btn = tk.Button(otp_row, text=labels.get('verify_otp_btn', "Verify OTP"), command=self._verify_otp,
                                      font=("Helvetica", 10, "bold"), bg="#10b981", fg="white", relief=tk.FLAT, padx=10, pady=5)
         self.verify_btn.pack(side=tk.LEFT, padx=(5, 0))
 
         ttk.Separator(form, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=12)
-        self.start_btn = tk.Button(form, text="Start Trial", command=self._start_trial,
+        self.start_btn = tk.Button(form, text=labels.get('start_trial_btn', "Start Trial"), command=self._start_trial,
                                     font=("Helvetica", 13, "bold"), bg="#10b981", fg="white", relief=tk.FLAT, padx=20, pady=8)
         self.start_btn.pack(pady=(0, 8))
         self.start_btn.config(state=tk.DISABLED)
@@ -407,8 +136,9 @@ class WelcomeDialog:
         ttk.Separator(form, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=8)
         support_frame = tk.Frame(form, bg=bg_color)
         support_frame.pack(fill=tk.X)
-        tk.Label(support_frame, text="Need a license?", font=("Helvetica", 9), bg=bg_color, fg="#888").pack()
-        tk.Label(support_frame, text=self.support_email or "support@websmithdigital.com",
+        tk.Label(support_frame, text=labels.get('need_license_label', "Need a license?"), font=("Helvetica", 9), bg=bg_color, fg="#888").pack()
+        email_text = branding.get('support_email') or self.support_email or "support@websmithdigital.com"
+        tk.Label(support_frame, text=email_text,
                  font=("Helvetica", 9, "italic"), bg=bg_color, fg=primary_color).pack()
 
         self.root.bind('<Escape>', lambda e: self.root.destroy())
@@ -427,18 +157,18 @@ class WelcomeDialog:
 
         def populate_list(ft=""):
             listbox.delete(0, tk.END); ft = ft.lower()
-            for c in COUNTRY_CODES:
+            for c in self._countries:
                 if ft in c['name'].lower() or ft in c['dial'] or ft in c['code'].lower():
-                    listbox.insert(tk.END, f"{{c['flag']}} {{c['name']}} ({{c['dial']}})")
+                    listbox.insert(tk.END, f"{c['flag']} {c['name']} ({c['dial']})")
         populate_list()
         search_var.trace("w", lambda *a: populate_list(search_var.get()))
 
         def on_select(ev):
             sel = listbox.curselection()
             if not sel: return
-            for c in COUNTRY_CODES:
-                if f"{{c['flag']}} {{c['name']}} ({{c['dial']}})" == listbox.get(sel[0]):
-                    self.selected_country = c; self.country_btn.config(text=f"{{c['flag']}} {{c['dial']}}")
+            for c in self._countries:
+                if f"{c['flag']} {c['name']} ({c['dial']})" == listbox.get(sel[0]):
+                    self.selected_country = c; self.country_btn.config(text=f"{c['flag']} {c['dial']}")
                     top.destroy(); break
         listbox.bind("<<ListboxSelect>>", on_select); listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -456,7 +186,7 @@ class WelcomeDialog:
                 r = self.engine.send_otp(email, purpose='registration')
                 self.root.after(0, lambda: self._on_otp_sent(r))
             except Exception as e:
-                self.root.after(0, lambda: self.otp_status.config(text=f"Error: {{str(e)}}", fg="#dc2626"))
+                self.root.after(0, lambda: self.otp_status.config(text=f"Error: {str(e)}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_otp_sent(self, result):
@@ -477,7 +207,7 @@ class WelcomeDialog:
                 r = self.engine.verify_otp(email, otp)
                 self.root.after(0, lambda: self._on_otp_verified(r))
             except Exception as e:
-                self.root.after(0, lambda: self.otp_status.config(text=f"Error: {{str(e)}}", fg="#dc2626"))
+                self.root.after(0, lambda: self.otp_status.config(text=f"Error: {str(e)}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_otp_verified(self, result):
@@ -497,13 +227,14 @@ class WelcomeDialog:
             try:
                 if self.client:
                     self.engine.store_customer({
-                        "name": name, "email": email, "phone": f"{{self.selected_country['dial']}}{{self.mobile_entry.get().strip()}}",
-                        "company": self.company_entry.get().strip(), "country": self.selected_country['code'],
+                        "name": name, "email": email, "mobile": f"{self.selected_country['dial']}{self.mobile_entry.get().strip()}",
+                        "company_name": self.company_entry.get().strip(), "country_code": self.selected_country['code'],
+                        "hardware_id": self.engine.get_hardware_id(),
                     })
                 r = self.engine.start_trial(email=email, name=name, company=self.company_entry.get().strip())
                 self.root.after(0, lambda: self._on_trial_result(r))
             except Exception as e:
-                self.root.after(0, lambda: self.status_label.config(text=f"Error: {{str(e)}}", fg="#dc2626"))
+                self.root.after(0, lambda: self.status_label.config(text=f"Error: {str(e)}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_trial_result(self, result):

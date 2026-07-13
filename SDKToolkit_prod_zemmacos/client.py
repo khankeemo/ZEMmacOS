@@ -228,7 +228,7 @@ class ApiClient:
         payload = {
             'action': 'verify',
             'email': email,
-            'otp_code': otp_code
+            'otp': otp_code
         }
         return self._request('auth/otp/verify', payload)
 

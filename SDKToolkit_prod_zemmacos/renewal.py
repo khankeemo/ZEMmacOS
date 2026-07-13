@@ -6,9 +6,10 @@ from typing import Optional, Dict, Any
 
 
 class RenewalDialog:
-    def __init__(self, engine, license_key: str):
+    def __init__(self, engine, license_key: str, parent=None):
         self.engine = engine; self.client = getattr(engine, '_client', None)
         self.config = getattr(engine, 'config', {})
+        self._parent = parent
         self.license_key = license_key; self.engine._license_key = license_key
         self.result = None; self.root = None; self.plans = []; self._loading = False
 
@@ -17,30 +18,37 @@ class RenewalDialog:
 
     def _build_ui(self):
         branding = self.config.get('branding',{}); primary = branding.get('primary_color','#6366f1'); bg="#f8f9fa"
-        self.root = tk.Tk(); self.root.title("Renew License"); self.root.geometry("450x500")
+        labels = branding.get('labels', {})
+        if self._parent:
+            self.root = tk.Toplevel(self._parent)
+            self.root.transient(self._parent)
+            self.root.grab_set()
+        else:
+            self.root = tk.Tk()
+        self.root.title(labels.get('renew_title', "Renew License")); self.root.geometry("450x500")
         self.root.resizable(False,False); self.root.configure(bg=bg)
         self.root.update_idletasks()
         sw=self.root.winfo_screenwidth(); sh=self.root.winfo_screenheight(); w=self.root.winfo_width(); h=self.root.winfo_height()
-        self.root.geometry(f"+{{(sw-w)//2}}+{{(sh-h)//2}}")
+        self.root.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
         header=tk.Frame(self.root,bg=primary,height=60); header.pack(fill=tk.X); header.pack_propagate(False)
-        tk.Label(header,text="Renew License",fg="white",bg=primary,font=("Helvetica",16,"bold")).pack(expand=True)
+        tk.Label(header,text=labels.get('renew_title', "Renew License"),fg="white",bg=primary,font=("Helvetica",16,"bold")).pack(expand=True)
         form=tk.Frame(self.root,bg=bg,padx=25,pady=15); form.pack(fill=tk.BOTH,expand=True)
 
-        tk.Label(form,text="Current License",font=("Helvetica",11,"bold"),bg=bg,fg="#333").pack(anchor=tk.W,pady=(0,5))
+        tk.Label(form,text=labels.get('current_license_section', "Current License"),font=("Helvetica",11,"bold"),bg=bg,fg="#333").pack(anchor=tk.W,pady=(0,5))
         cf=tk.Frame(form,bg=bg); cf.pack(fill=tk.X,pady=(0,10))
         s=self.engine.get_status()
-        self.plan_lbl=tk.Label(cf,text=f"Plan: {{s.plan if s else '--'}}",font=("Helvetica",10),bg=bg,fg="#555"); self.plan_lbl.pack(anchor=tk.W)
-        self.exp_lbl=tk.Label(cf,text=f"Expiry: {{s.expires_at if s else '--'}}",font=("Helvetica",10),bg=bg,fg="#555"); self.exp_lbl.pack(anchor=tk.W)
+        self.plan_lbl=tk.Label(cf,text=f"Plan: {s.plan if s else '--'}",font=("Helvetica",10),bg=bg,fg="#555"); self.plan_lbl.pack(anchor=tk.W)
+        self.exp_lbl=tk.Label(cf,text=f"Expiry: {s.expires_at if s else '--'}",font=("Helvetica",10),bg=bg,fg="#555"); self.exp_lbl.pack(anchor=tk.W)
 
         ttk.Separator(form,orient=tk.HORIZONTAL).pack(fill=tk.X,pady=8)
-        tk.Label(form,text="Available Plans",font=("Helvetica",11,"bold"),bg=bg,fg="#333").pack(anchor=tk.W,pady=(0,5))
+        tk.Label(form,text=labels.get('available_plans_section', "Available Plans"),font=("Helvetica",11,"bold"),bg=bg,fg="#333").pack(anchor=tk.W,pady=(0,5))
         lf=tk.Frame(form,bg=bg); lf.pack(fill=tk.BOTH,expand=True,pady=(0,10))
         sb=tk.Scrollbar(lf); sb.pack(side=tk.RIGHT,fill=tk.Y)
         self.lb=tk.Listbox(lf,font=("Helvetica",10),yscrollcommand=sb.set,relief=tk.SOLID,bd=1)
         sb.config(command=self.lb.yview); self.lb.pack(fill=tk.BOTH,expand=True)
 
         ttk.Separator(form,orient=tk.HORIZONTAL).pack(fill=tk.X,pady=5)
-        self.renew_btn=tk.Button(form,text="Renew License",command=self._renew,
+        self.renew_btn=tk.Button(form,text=labels.get('renew_btn', "Renew License"),command=self._renew,
                                   font=("Helvetica",12,"bold"),bg=primary,fg="white",relief=tk.FLAT,padx=15,pady=8)
         self.renew_btn.pack(fill=tk.X,pady=(5,5))
         self.st=tk.Label(form,text="",font=("Helvetica",9),bg=bg,fg="#333",wraplength=400); self.st.pack()
@@ -53,7 +61,7 @@ class RenewalDialog:
         self._set_loading(True); self.st.config(text="Loading plans...",fg="#888")
         def do():
             try: self.root.after(0,lambda: self._on_plans(self.engine.get_plans()))
-            except Exception as e: self.root.after(0,lambda: self.st.config(text=f"Error: {{str(e)}}",fg="#dc2626"))
+            except Exception as e: self.root.after(0,lambda: self.st.config(text=f"Error: {str(e)}",fg="#dc2626"))
         threading.Thread(target=do,daemon=True).start()
 
     def _on_plans(self,r):
@@ -78,7 +86,7 @@ class RenewalDialog:
             try:
                 r=self.engine.renew(plan_id=self.selected_plan)
                 self.root.after(0,lambda: self._on_renew(r))
-            except Exception as e: self.root.after(0,lambda: self.st.config(text=f"Error: {{str(e)}}",fg="#dc2626"))
+            except Exception as e: self.root.after(0,lambda: self.st.config(text=f"Error: {str(e)}",fg="#dc2626"))
         threading.Thread(target=do,daemon=True).start()
 
     def _on_renew(self,r):

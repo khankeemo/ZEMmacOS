@@ -17,7 +17,7 @@ class StatusWidget:
     def refresh(self):
         s=self.engine.get_status() or self.engine.initialize()
         if s and s.valid:
-            t=f"Trial: {{s.days_remaining}}d" if s.trial_active else f"Licensed: {{s.days_remaining}}d"
+            t=f"Trial: {s.days_remaining}d" if s.trial_active else f"Licensed: {s.days_remaining}d"
             c="#f59e0b" if s.trial_active else "#16a34a"
             self.label.config(text=t,fg=c); self.icon.config(fg=c)
         else:

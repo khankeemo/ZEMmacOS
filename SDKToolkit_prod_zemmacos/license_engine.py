@@ -1,11 +1,14 @@
 """License validation engine for ZEM MAC OS"""
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 
 from .client import ApiClient, ApiError
 from .hardware import HardwareDetector
 from .cache import CacheManager
+
+logger = logging.getLogger(__name__)
 
 
 class LicenseStatus:
@@ -150,8 +153,8 @@ class LicenseEngine:
                         license_product = lic_data.get('product')
                         license_version = lic_data.get('product_version')
                         license_key = self._license_key
-                except ApiError:
-                    pass
+                except ApiError as e:
+                    logger.error("License validation failed: %s", e.message)
 
             is_valid = trial_active or license_valid
             if is_valid:
@@ -207,6 +210,7 @@ class LicenseEngine:
             return self._status
 
         except ApiError as e:
+            logger.error("License API error during initialize: %s", e.message)
             cached = self._cache.get_license_status()
             if cached:
                 return LicenseStatus.from_dict(cached)
@@ -214,6 +218,7 @@ class LicenseEngine:
             return self._status
 
         except Exception as e:
+            logger.exception("Unexpected error during license initialization")
             cached = self._cache.get_license_status()
             if cached:
                 return LicenseStatus.from_dict(cached)

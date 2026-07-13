@@ -6,9 +6,10 @@ from typing import Optional, Dict, Any
 
 
 class ActivationDialog:
-    def __init__(self, engine, license_key: Optional[str] = None):
+    def __init__(self, engine, license_key: Optional[str] = None, parent=None):
         self.engine = engine; self.client = getattr(engine, '_client', None)
         self.config = getattr(engine, 'config', {})
+        self._parent = parent
         self._license_key = license_key
         self.result = None; self.root = None
         self._loading = False; self.hardware_id = ""
@@ -20,22 +21,29 @@ class ActivationDialog:
         branding = self.config.get('branding', {})
         product_name = self.config.get('product', {}).get('name', 'Software')
         primary_color = branding.get('primary_color', '#6366f1'); bg = "#f8f9fa"
+        labels = branding.get('labels', {})
 
-        self.root = tk.Tk(); self.root.title(f"Activate {{product_name}}")
+        if self._parent:
+            self.root = tk.Toplevel(self._parent)
+            self.root.transient(self._parent)
+            self.root.grab_set()
+        else:
+            self.root = tk.Tk()
+        self.root.title(labels.get('activation_title', f"Activate {product_name}"))
         self.root.geometry("500x580"); self.root.resizable(False, False); self.root.configure(bg=bg)
         self.root.update_idletasks()
         sw = self.root.winfo_screenwidth(); sh = self.root.winfo_screenheight()
         w = self.root.winfo_width(); h = self.root.winfo_height()
-        self.root.geometry(f"+{{(sw - w) // 2}}+{{(sh - h) // 2}}")
+        self.root.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
 
         header = tk.Frame(self.root, bg=primary_color, height=70)
         header.pack(fill=tk.X); header.pack_propagate(False)
-        tk.Label(header, text="Activate License", fg="white", bg=primary_color,
+        tk.Label(header, text=labels.get('activation_title', "Activate License"), fg="white", bg=primary_color,
                  font=("Helvetica", 16, "bold")).pack(expand=True)
 
         form = tk.Frame(self.root, bg=bg, padx=25, pady=15); form.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(form, text="Product Details", font=("Helvetica", 11, "bold"), bg=bg, fg="#333").pack(anchor=tk.W, pady=(0,5))
+        tk.Label(form, text=labels.get('product_details_section', "Product Details"), font=("Helvetica", 11, "bold"), bg=bg, fg="#333").pack(anchor=tk.W, pady=(0,5))
         df = tk.Frame(form, bg=bg); df.pack(fill=tk.X, pady=(0,10))
         for label, value in [("Product", product_name), ("Version", self.config.get('product',{}).get('version','1.0.0'))]:
             r = tk.Frame(df, bg=bg); r.pack(fill=tk.X, pady=1)
@@ -43,7 +51,7 @@ class ActivationDialog:
             tk.Label(r, text=value, font=("Helvetica",10), bg=bg, fg="#333").pack(side=tk.LEFT)
 
         ttk.Separator(form, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=8)
-        tk.Label(form, text="Hardware", font=("Helvetica",11,"bold"), bg=bg, fg="#333").pack(anchor=tk.W, pady=(0,5))
+        tk.Label(form, text=labels.get('hardware_section', "Hardware"), font=("Helvetica",11,"bold"), bg=bg, fg="#333").pack(anchor=tk.W, pady=(0,5))
         hw = tk.Frame(form, bg=bg); hw.pack(fill=tk.X, pady=(0,10))
         self.hardware_id = self.engine.get_hardware_id()
         tk.Label(hw, text="Hardware ID:", font=("Helvetica",10,"bold"), bg=bg, fg="#555").pack(anchor=tk.W)
@@ -54,13 +62,16 @@ class ActivationDialog:
         import platform; self.device_name.insert(0, platform.node() or "Unknown")
 
         ttk.Separator(form, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=8)
-        tk.Label(form, text="License Key", font=("Helvetica",11,"bold"), bg=bg, fg="#333").pack(anchor=tk.W, pady=(0,5))
+        tk.Label(form, text=labels.get('license_key_section', "License Key"), font=("Helvetica",11,"bold"), bg=bg, fg="#333").pack(anchor=tk.W, pady=(0,5))
         kf = tk.Frame(form, bg=bg); kf.pack(fill=tk.X, pady=(0,10))
         self.key_entry = tk.Entry(kf, font=("Courier",12), relief=tk.SOLID, bd=1)
         self.key_entry.pack(fill=tk.X, ipady=5)
+        if self._license_key:
+            self.key_entry.insert(0, self._license_key)
+            self.key_entry.config(state='disabled')
 
         ttk.Separator(form, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=8)
-        tk.Label(form, text="License Info", font=("Helvetica",11,"bold"), bg=bg, fg="#333").pack(anchor=tk.W, pady=(0,5))
+        tk.Label(form, text=labels.get('license_info_section', "License Info"), font=("Helvetica",11,"bold"), bg=bg, fg="#333").pack(anchor=tk.W, pady=(0,5))
         inf = tk.Frame(form, bg=bg); inf.pack(fill=tk.X, pady=(0,10))
         self.plan_label = tk.Label(inf, text="Plan: --", font=("Helvetica",10), bg=bg, fg="#555"); self.plan_label.pack(anchor=tk.W)
         self.expiry_label = tk.Label(inf, text="Expiry: --", font=("Helvetica",10), bg=bg, fg="#555"); self.expiry_label.pack(anchor=tk.W)
@@ -69,14 +80,14 @@ class ActivationDialog:
 
         ttk.Separator(form, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=8)
         bf = tk.Frame(form, bg=bg); bf.pack(fill=tk.X, pady=(5,0))
-        self.act_btn = tk.Button(bf, text="Activate", command=self._activate,
+        self.act_btn = tk.Button(bf, text=labels.get('activate_btn', "Activate"), command=self._activate,
                                   font=("Helvetica",12,"bold"), bg=primary_color, fg="white", relief=tk.FLAT, padx=15, pady=8)
         self.act_btn.pack(fill=tk.X, pady=(0,5))
         br = tk.Frame(bf, bg=bg); br.pack(fill=tk.X)
-        self.renew_btn = tk.Button(br, text="Renew", command=self._open_renewal,
+        self.renew_btn = tk.Button(br, text=labels.get('renew_btn', "Renew"), command=self._open_renewal,
                                     font=("Helvetica",10), bg="#e5e7eb", fg="#333", relief=tk.FLAT, padx=10, pady=5)
         self.renew_btn.pack(side=tk.LEFT, padx=(0,5))
-        self.repl_btn = tk.Button(br, text="Replace Device", command=self._open_replace,
+        self.repl_btn = tk.Button(br, text=labels.get('replace_btn', "Replace Device"), command=self._open_replace,
                                    font=("Helvetica",10), bg="#e5e7eb", fg="#333", relief=tk.FLAT, padx=10, pady=5)
         self.repl_btn.pack(side=tk.LEFT)
         self.status_label = tk.Label(form, text="", font=("Helvetica",9), bg=bg, fg="#333", wraplength=400)
@@ -97,10 +108,10 @@ class ActivationDialog:
     def _update_details(self, d):
         if d.get('success'):
             data = d.get('data',{})
-            self.plan_label.config(text=f"Plan: {{data.get('plan','--')}}")
-            self.expiry_label.config(text=f"Expiry: {{data.get('expiry_date','--')}}")
-            self.days_label.config(text=f"Remaining days: {{data.get('days_left','--')}}")
-            self.dev_label.config(text=f"Device usage: {{data.get('device_count',0)}}/{{data.get('max_devices','--')}}")
+            self.plan_label.config(text=f"Plan: {data.get('plan','--')}")
+            self.expiry_label.config(text=f"Expiry: {data.get('expiry_date','--')}")
+            self.days_label.config(text=f"Remaining days: {data.get('days_left','--')}")
+            self.dev_label.config(text=f"Device usage: {data.get('device_count',0)}/{data.get('max_devices','--')}")
 
     def _activate(self):
         key = self.key_entry.get().strip()
@@ -110,7 +121,7 @@ class ActivationDialog:
             try:
                 r = self.engine.activate(key, device_name=self.device_name.get().strip() or None)
                 self.root.after(0, lambda: self._on_result(r))
-            except Exception as e: self.root.after(0, lambda: self.status_label.config(text=f"Error: {{str(e)}}", fg="#dc2626"))
+            except Exception as e: self.root.after(0, lambda: self.status_label.config(text=f"Error: {str(e)}", fg="#dc2626"))
         threading.Thread(target=do, daemon=True).start()
 
     def _on_result(self, r):
@@ -123,14 +134,14 @@ class ActivationDialog:
 
     def _open_renewal(self):
         from .renewal import RenewalDialog
-        d = RenewalDialog(self.engine, self.key_entry.get().strip())
+        d = RenewalDialog(self.engine, self.key_entry.get().strip(), parent=self.root)
         self.root.withdraw()
         if d.show(): self.root.destroy()
         else: self.root.deiconify()
 
     def _open_replace(self):
         from .device_replace import DeviceReplaceDialog
-        d = DeviceReplaceDialog(self.engine, self.key_entry.get().strip())
+        d = DeviceReplaceDialog(self.engine, self.key_entry.get().strip(), parent=self.root)
         self.root.withdraw()
         if d.show(): self.root.destroy()
         else: self.root.deiconify()

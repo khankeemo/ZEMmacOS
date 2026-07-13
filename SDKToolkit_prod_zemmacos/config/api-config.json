@@ -63,7 +63,23 @@
     "secondary_color": "#4f46e5",
     "accent_color": "#8b5cf6",
     "support_email": "support@websmithdigital.com",
-    "support_url": ""
+    "support_url": "",
+    "labels": {
+      "activation_title": "Activate License",
+      "renew_title": "Renew License",
+      "replace_title": "Replace Device",
+      "welcome_title": "Welcome",
+      "activate_btn": "Activate",
+      "renew_btn": "Renew",
+      "replace_btn": "Replace Device",
+      "cancel_btn": "Cancel",
+      "refresh_btn": "Refresh",
+      "send_otp_btn": "Send OTP",
+      "verify_otp_btn": "Verify OTP",
+      "start_trial_btn": "Start Trial",
+      "open_welcome_btn": "Open Welcome",
+      "activate_license_btn": "Activate License"
+    }
   },
   "ui": {
     "theme": "auto",
