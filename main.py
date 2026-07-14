@@ -17,13 +17,7 @@ from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, LicenseStatus, WelcomeDialog
-from SDK_ZEM_MAC_OS_prod_zemmacos.client import ApiClient
 
-# Monkey-patch: HMAC secret is empty in generated config, so skip HMAC headers.
-# Server skips HMAC verification when X-Timestamp/X-Nonce/X-Signature are absent.
-ApiClient._sign_request = lambda self, payload, method='POST', path='', query='': {
-    'x-api-key': self.api_key, 'Content-Type': 'application/json'
-}
 
 def main():
     if sys.platform == "win32":
@@ -190,10 +184,18 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.license_engine.initialize()
                 self.set_license_engine(self.license_engine)
                 self.refresh_license_widgets()
-            elif result.get('skipped'):
-                self.log("Onboarding skipped", "info")
+            else:
+                self.log("Onboarding incomplete — exiting application", "warning")
+                self._exit_app()
         except Exception as e:
-            self.log(f"Welcome dialog: {e}", "warning")
+            self.log(f"Welcome dialog error: {e} — exiting application", "warning")
+            self._exit_app()
+
+    def _exit_app(self):
+        self._stop_network_monitor()
+        self.log("Application shutting down...", "info")
+        self.logger.stop()
+        self.root.after(0, self.root.destroy)
 
     # -----------------------------------------------------------------
     # NETWORK MONITOR — runs continuously in background
