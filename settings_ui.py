@@ -228,6 +228,10 @@ class SettingsUI:
                   fg="white", bg=self.colors["success"],
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
 
+    def refresh_license_display(self):
+        if self._current_section == "license":
+            self._switch_section("license")
+
     def _build_license(self):
         c = self.colors
         engine = getattr(self.app, 'license_engine', None)
@@ -240,6 +244,8 @@ class SettingsUI:
                 ("Plan", status.plan or 'N/A'),
                 ("Expires", status.expires_at or 'N/A'),
                 ("Days Remaining", str(status.days_remaining)),
+                ("Customer Email", getattr(status, 'customer_email', '') or 'N/A'),
+                ("Device Bound", "\u2705 Yes" if getattr(status, 'device_bound', False) else "\u274c No"),
                 ("Hardware ID", (status.hardware_id or 'N/A')[:40] + '...' if status.hardware_id and len(status.hardware_id) > 40 else (status.hardware_id or 'N/A')),
                 ("Valid", "\u2705 Yes" if status.valid else "\u274c No"),
                 ("Message", status.message or ''),
@@ -248,6 +254,10 @@ class SettingsUI:
                 row = self._row(inner, label)
                 tk.Label(row, text=val, font=("SF Pro Text", 11),
                          fg=c["text"], bg=c["card_bg"]).pack(side=tk.LEFT)
+        elif engine:
+            tk.Label(inner, text="Initializing license engine...",
+                     font=("SF Pro Text", 11), fg=c["muted"],
+                     bg=c["card_bg"]).pack(anchor=tk.W, pady=10)
         else:
             tk.Label(inner, text="License engine not initialized.",
                      font=("SF Pro Text", 11), fg=c["muted"],
@@ -255,65 +265,141 @@ class SettingsUI:
 
         inner2 = self._card(self._content_frame, "Actions")
         if engine and status:
-            if status.valid:
-                def do_deactivate():
-                    key = engine.get_license_key()
+            state = status.status
+
+            def after_action():
+                self.app.refresh_license_widgets()
+
+            def do_refresh():
+                try:
+                    new_status = engine.initialize()
+                    engine._status = new_status or engine.get_status()
+                    after_action()
+                    self.app.show_toast("License status refreshed", "success", 2000)
+                except Exception as e:
+                    messagebox.showerror("Error", f"Refresh failed: {e}")
+
+            def do_activate():
+                d = tk.Toplevel(self.parent)
+                d.title("Activate License")
+                d.geometry("400x200")
+                d.resizable(False, False)
+                d.transient(self.parent)
+                d.grab_set()
+                tk.Label(d, text="Enter License Key", font=("SF Pro Text", 12, "bold"),
+                         fg=c["text"], bg=c["card_bg"]).pack(pady=15)
+                key_var = tk.StringVar()
+                entry = tk.Entry(d, textvariable=key_var, font=("SF Pro Text", 12),
+                                 bg=c["input_bg"], fg=c["input_fg"],
+                                 bd=1, relief=tk.FLAT, width=30)
+                entry.pack(pady=10)
+                def do_activate():
+                    key = key_var.get().strip()
                     if not key:
-                        messagebox.showerror("Error", "No license key available")
+                        messagebox.showerror("Error", "Enter a license key")
                         return
-                    if messagebox.askyesno("Deactivate", "Deactivate license on this device?"):
-                        try:
-                            result = engine.deactivate(key)
-                            if result.get('success'):
-                                messagebox.showinfo("Success", "License deactivated")
-                                self._switch_section("license")
-                            else:
-                                messagebox.showerror("Error", result.get('message', 'Deactivation failed'))
-                        except Exception as e:
-                            messagebox.showerror("Error", str(e))
+                    try:
+                        result = engine.activate(key)
+                        if result.get('success'):
+                            messagebox.showinfo("Success", "License activated!")
+                            d.destroy()
+                            after_action()
+                        else:
+                            messagebox.showerror("Error", result.get('message', 'Activation failed'))
+                    except Exception as e:
+                        messagebox.showerror("Error", str(e))
+                tk.Button(d, text="Activate", font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["success"], bd=0, padx=20, pady=8,
+                          cursor="hand2", command=do_activate).pack(pady=10)
+
+            def do_deactivate():
+                key = engine.get_license_key()
+                if not key:
+                    messagebox.showerror("Error", "No license key available")
+                    return
+                if messagebox.askyesno("Deactivate", "Deactivate license on this device?"):
+                    try:
+                        result = engine.deactivate(key)
+                        if result.get('success'):
+                            messagebox.showinfo("Success", "License deactivated")
+                            after_action()
+                        else:
+                            messagebox.showerror("Error", result.get('message', 'Deactivation failed'))
+                    except Exception as e:
+                        messagebox.showerror("Error", str(e))
+
+            def do_renew():
+                try:
+                    result = engine.renew()
+                    if result.get('success'):
+                        messagebox.showinfo("Success", "License renewed!")
+                        after_action()
+                    else:
+                        messagebox.showerror("Error", result.get('message', 'Renewal failed'))
+                except Exception as e:
+                    messagebox.showerror("Error", str(e))
+
+            def do_replace_device():
+                if messagebox.askyesno("Replace Device", "Replace device binding for this license?"):
+                    try:
+                        result = engine.replace_hardware()
+                        if result.get('success'):
+                            messagebox.showinfo("Success", "Device replaced!")
+                            after_action()
+                        else:
+                            messagebox.showerror("Error", result.get('message', 'Device replacement failed'))
+                    except Exception as e:
+                        messagebox.showerror("Error", str(e))
+
+            if state == 'trial':
+                tk.Button(inner2, text="Refresh Status",
+                          font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["accent"],
+                          bd=0, padx=20, pady=8, cursor="hand2",
+                          command=do_refresh).pack(side=tk.LEFT, padx=5)
+                tk.Button(inner2, text="Activate License",
+                          font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["success"],
+                          bd=0, padx=20, pady=8, cursor="hand2",
+                          command=do_activate).pack(side=tk.LEFT, padx=5)
+            elif state == 'active' and status.valid:
+                tk.Button(inner2, text="Refresh License",
+                          font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["accent"],
+                          bd=0, padx=20, pady=8, cursor="hand2",
+                          command=do_refresh).pack(side=tk.LEFT, padx=5)
+                tk.Button(inner2, text="Replace Device",
+                          font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["warning"],
+                          bd=0, padx=20, pady=8, cursor="hand2",
+                          command=do_replace_device).pack(side=tk.LEFT, padx=5)
                 tk.Button(inner2, text="Deactivate License",
                           font=("SF Pro Text", 11, "bold"),
                           fg="white", bg=c["error"],
                           bd=0, padx=20, pady=8, cursor="hand2",
                           command=do_deactivate).pack(side=tk.LEFT, padx=5)
+            elif state == 'expired':
+                tk.Button(inner2, text="Renew License",
+                          font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["success"],
+                          bd=0, padx=20, pady=8, cursor="hand2",
+                          command=do_renew).pack(side=tk.LEFT, padx=5)
+                tk.Button(inner2, text="Activate License",
+                          font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["accent"],
+                          bd=0, padx=20, pady=8, cursor="hand2",
+                          command=do_activate).pack(side=tk.LEFT, padx=5)
             else:
-                def open_activate():
-                    d = tk.Toplevel(self.parent)
-                    d.title("Activate License")
-                    d.geometry("400x200")
-                    d.resizable(False, False)
-                    d.transient(self.parent)
-                    d.grab_set()
-                    tk.Label(d, text="Enter License Key", font=("SF Pro Text", 12, "bold"),
-                             fg=c["text"], bg=c["card_bg"]).pack(pady=15)
-                    key_var = tk.StringVar()
-                    entry = tk.Entry(d, textvariable=key_var, font=("SF Pro Text", 12),
-                                     bg=c["input_bg"], fg=c["input_fg"],
-                                     bd=1, relief=tk.FLAT, width=30)
-                    entry.pack(pady=10)
-                    def do_activate():
-                        key = key_var.get().strip()
-                        if not key:
-                            messagebox.showerror("Error", "Enter a license key")
-                            return
-                        try:
-                            result = engine.activate(key)
-                            if result.get('success'):
-                                messagebox.showinfo("Success", "License activated!")
-                                d.destroy()
-                                self._switch_section("license")
-                            else:
-                                messagebox.showerror("Error", result.get('message', 'Activation failed'))
-                        except Exception as e:
-                            messagebox.showerror("Error", str(e))
-                    tk.Button(d, text="Activate", font=("SF Pro Text", 11, "bold"),
-                              fg="white", bg=c["success"], bd=0, padx=20, pady=8,
-                              cursor="hand2", command=do_activate).pack(pady=10)
+                tk.Button(inner2, text="Refresh Status",
+                          font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["accent"],
+                          bd=0, padx=20, pady=8, cursor="hand2",
+                          command=do_refresh).pack(side=tk.LEFT, padx=5)
                 tk.Button(inner2, text="Activate License",
                           font=("SF Pro Text", 11, "bold"),
                           fg="white", bg=c["success"],
                           bd=0, padx=20, pady=8, cursor="hand2",
-                          command=open_activate).pack(side=tk.LEFT, padx=5)
+                          command=do_activate).pack(side=tk.LEFT, padx=5)
 
         inner3 = self._card(self._content_frame, "Support")
         support_email = "support@websmithdigital.com"

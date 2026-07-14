@@ -6,7 +6,7 @@ import sys
 import time
 from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
-from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
+from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole, LicenseWidget
 
 from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine
 
@@ -128,6 +128,11 @@ class ZEMmacOSUI:
 
     def refresh_license_widgets(self):
         self._update_license_display()
+        if hasattr(self, 'settings_ui') and self.settings_ui:
+            try:
+                self.settings_ui.refresh_license_display()
+            except Exception:
+                pass
 
     def _update_license_display(self):
         engine = self._get_license_engine()
@@ -156,6 +161,8 @@ class ZEMmacOSUI:
             self._license_status_label.config(text=txt, fg=fg)
         if hasattr(self, '_license_dash_label') and self._license_dash_label:
             self._license_dash_label.config(text=txt, fg=fg)
+        if hasattr(self, '_license_widget') and self._license_widget:
+            self._license_widget.update_from_engine(engine)
 
     def create_sidebar(self, parent):
         sidebar = tk.Frame(parent, bg=self.colors["sidebar_bg"], width=self.colors.get("sidebar_width", 220))
@@ -524,6 +531,8 @@ class ZEMmacOSUI:
 
         right_h = tk.Frame(header, bg=colors["header_bg"])
         right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6, padx=4)
+        self._license_widget = LicenseWidget(right_h, colors)
+        self._license_widget.pack(side=tk.RIGHT, padx=(0, 8))
         self._theme_toggle = ThemeToggle(
             right_h,
             command=self._on_theme_toggle,

@@ -143,19 +143,26 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 trial_status = LicenseStatus(
                     valid=True, status='trial',
                     days_remaining=days_left, expires_at=expiry,
-                    message=f'Trial active — {days_left} days remaining'
+                    message=f'Trial active — {days_left} days remaining',
+                    customer_email=data.get('email', data.get('customer_email')),
+                    customer_name=data.get('customer_name'),
+                    device_bound=True
                 )
                 engine._cache.set_license_status(trial_status.to_dict())
+                engine._status = trial_status
                 return trial_status
         except Exception:
             pass
-        return LicenseStatus(
+        unlicensed = LicenseStatus(
             valid=False, status='unlicensed',
             message='No license found — start a trial or activate a key'
         )
+        engine._status = unlicensed
+        return unlicensed
 
     def _on_license_init(self, engine, status):
         self.license_engine = engine
+        engine._status = status
         self.set_license_engine(engine)
         self.debug_log("LICENSE", "INFO", f"SDK status: {status.status}")
         if status.status in ('active', 'trial'):
@@ -181,7 +188,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
             result = dialog.show()
             if result.get('onboarding_complete'):
                 self.log("Onboarding complete — trial started", "success")
-                self.license_engine.initialize()
+                new_status = self.license_engine.initialize()
+                self.license_engine._status = new_status or self.license_engine.get_status()
                 self.set_license_engine(self.license_engine)
                 self.refresh_license_widgets()
             else:
