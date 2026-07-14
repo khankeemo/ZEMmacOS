@@ -113,6 +113,18 @@ class LicenseEngine:
     def has_license_key(self) -> bool:
         return self._license_key is not None
 
+    def validate(self, license_key: Optional[str] = None) -> Dict[str, Any]:
+        key = license_key or self._license_key
+        if not key:
+            raise ValueError("License key unavailable. Please activate first.")
+        hardware_id = self._hardware.get_fingerprint()
+        result = self._client.validate_license(key, hardware_id)
+        if result.get('valid'):
+            if result.get('license_key'):
+                self._license_key = result['license_key']
+            self.initialize()
+        return result
+
     def activate(self, license_key: str) -> Dict[str, Any]:
         result = self._client.activate_license(license_key)
         if result.get('success'):

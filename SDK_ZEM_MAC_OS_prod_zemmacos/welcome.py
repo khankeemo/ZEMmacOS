@@ -1,6 +1,7 @@
 """Welcome Dialog - tkinter onboarding dialog (reference implementation)"""
 import json
 import os
+import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Any, Dict, Optional
@@ -70,6 +71,7 @@ class WelcomeDialog:
         self._root.configure(bg=self._bg)
         self._root.transient()  # Make transient to parent
         self._root.grab_set()   # Modal
+        self._root.protocol('WM_DELETE_WINDOW', self._on_closing)
         self._build_ui()
         self._center_window()
         self._load_countries()
@@ -184,6 +186,14 @@ class WelcomeDialog:
                 self._selected_country = countries[idx]
 
         self._country_menu.bind('<<ComboboxSelected>>', on_select)
+
+    def _on_closing(self):
+        self._result = {'skipped': True, 'closed': True}
+        try:
+            self._root.destroy()
+        except Exception:
+            pass
+        sys.exit(0)
 
     def _on_send_otp(self):
         name = self._name_entry.get().strip()

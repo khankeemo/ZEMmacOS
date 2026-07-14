@@ -50,7 +50,7 @@ class ApiClient:
                        query: str = '') -> Dict[str, str]:
         timestamp = generate_timestamp()
         nonce = generate_nonce()
-        signature = sign_request(payload, self.api_secret, timestamp, nonce,
+        signature = sign_request(payload, self.api_key, timestamp, nonce,
                                   method=method, path=path, query=query)
         return {
             'x-api-key': self.api_key,
@@ -120,10 +120,10 @@ class ApiClient:
                 raise ApiError(500, f'Request failed: {str(e)}')
         raise ApiError(500, f'Failed after {max_retries} retries')
 
-    def validate_license(self, hardware_id: Optional[str] = None) -> Dict[str, Any]:
+    def validate_license(self, license_key: str, hardware_id: Optional[str] = None) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
-        payload = {'action': 'validate', 'hardware_id': hardware_id}
+        payload = {'action': 'validate', 'license_key': license_key, 'hardware_id': hardware_id}
         if self._cache and self._cache.is_valid():
             cached = self._cache.get_license_status()
             if cached:
@@ -176,12 +176,16 @@ class ApiClient:
             hardware_id = self._get_hardware_id()
         return self._request('trial', {'action': 'status', 'hardware_id': hardware_id})
 
-    def convert_trial(self, hardware_id: Optional[str] = None, plan: Optional[str] = None) -> Dict[str, Any]:
+    def convert_trial(self, hardware_id: Optional[str] = None, plan: Optional[str] = None, customer_name: str = '', customer_email: str = '') -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
         payload: Dict[str, Any] = {'action': 'convert', 'hardware_id': hardware_id}
         if plan:
             payload['plan'] = plan
+        if customer_name:
+            payload['customer_name'] = customer_name
+        if customer_email:
+            payload['customer_email'] = customer_email
         response = self._request('trial', payload)
         if self._cache:
             self._cache.invalidate_license_status()

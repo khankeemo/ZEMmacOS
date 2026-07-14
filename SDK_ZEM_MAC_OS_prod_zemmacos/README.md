@@ -119,20 +119,20 @@ except ValueError:
 ### Show Welcome Dialog
 
 ```python
-from SDK_ZEM_MAC_OS_prod_zemmacos import WelcomeDialog, ApiClient
-from SDK_ZEM_MAC_OS_prod_zemmacos import CacheManager
+from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, WelcomeDialog
 
-config = {"product": {"id": "prod_1"}}
-client = ApiClient(config)
-cache = CacheManager(config)
-
-dialog = WelcomeDialog(client, product_name="MyApp")
-if not dialog.is_onboarding_complete():
-    result = dialog.show()
+engine = LicenseEngine()
+status = engine.initialize()
+if not status.valid:
+    result = WelcomeDialog(engine._client, product_name="ZEM MAC OS").show()
     if result.get("onboarding_complete"):
-        print("Onboarding done:", result["email"])
+        print("Onboarding done for:", result["email"])
+        status = engine.initialize()
+        print(f"Trial active: {status.days_remaining} days")
     elif result.get("skipped"):
-        print("Onboarding skipped:", result.get("message"))
+        print("Onboarding skipped — application will close")
+        import sys
+        sys.exit(0)
 ```
 
 ### Deactivate License
@@ -174,11 +174,11 @@ feature flags, and security parameters.
 
 ```json
 {
-  "product": { "id": "...", "name": "...", "version": "..." },
-  "api": { "url": "...", "public_key": "...", "secret": "..." },
-  "trial": { "enabled": true, "days": 7 },
-  "license": { "max_devices": 3, "hardware_binding": true },
-  "offline": { "enabled": true, "cache_days": 30 }
+  "product": { "id": "<from_products>", "name": "<from_products>", "version": "<from_products>" },
+  "api": { "url": "<env_WEBSMITH_API_URL>", "public_key": "<from_developer_api_keys>", "secret": "<generated>" },
+  "trial": { "enabled": <from_sdk_runtime_settings>, "days": <from_sdk_runtime_settings> },
+  "license": { "max_devices": <from_sdk_runtime_settings>, "hardware_binding": true },
+  "offline": { "enabled": true, "cache_days": <from_sdk_runtime_settings> }
 }
 ```
 
@@ -241,40 +241,33 @@ Select country
         ↓
 Enter name + mobile
         ↓
-Start trial
+Create customer row in Neon PostgreSQL
         ↓
-Save to Neon PostgreSQL
+Start trial (trials row + otp_verifications updated)
         ↓
 Application opens
 ```
 
 **Rules:**
+- Close dialog (X) → `sys.exit(0)` — entire application closes
+- OTP not verified → Start Trial button stays disabled
+- OTP verified + dialog closed before trial → application exits
+- Trial created → application opens normally
+
+**Integration pattern:**
+
+```python
+from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, WelcomeDialog
+
+engine = LicenseEngine()
+status = engine.initialize()
+if not status.valid:
+    result = WelcomeDialog(engine._client).show()
+    if result.get("skipped") and not result.get("onboarding_complete"):
+        import sys
+        sys.exit(0)  # User closed dialog or declined
+    status = engine.initialize()  # Re-check after onboarding
 ```
-- close dialog → close application
-- OTP not verified → cannot continue
-- trial not created → cannot continue
-```
-
-## SDK Widgets
-
-The SDK provides ready-to-use UI widgets. These are universal and work across any application:
-
-| Widget | Purpose |
-|--------|---------|
-| `DashboardWidget` | Shows license status, days remaining, expiry date, plan |
-| `StatusWidget` | Compact inline status indicator (green/amber/red dot) |
-| `SettingsWidget` | Full license settings panel with activate/renew/replace buttons |
-| `ActivationButton` | One-click activate button that opens the activation dialog |
-
-**Developer rules:**
-- ✅ Integrate SDK widgets into your application UI
-- ✅ Pass the parent window to widgets
-- ✅ Call `engine.initialize()` on startup
-- ❌ Do NOT hardcode trial days
-- ❌ Do NOT hardcode country lists (loaded from `api-config.json`)
-- ❌ Do NOT hardcode license rules
-- ❌ Do NOT bypass OTP verification
-- ❌ Do NOT patch or modify generated SDK files
 
 ## SDK Architecture
 
@@ -298,7 +291,6 @@ The SDK follows this layered architecture:
 
 ## Developer Responsibilities
 
-- ✅ Integrate SDK widgets into your application UI
 - ✅ Call `engine.initialize()` on application startup
 - ✅ Handle the `WelcomeDialog` for new customer onboarding
 - ❌ Do NOT hardcode trial days, country lists, or license rules
