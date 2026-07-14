@@ -4,12 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 import os
 import platform
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-try:
-    from SDKToolkit_prod_zemmacos.widgets.settings_widget import SettingsWidget as SDKSettingsWidget
-except ImportError:
-    SDKSettingsWidget = None
+from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine
 
 
 class SettingsUI:
@@ -234,23 +229,105 @@ class SettingsUI:
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
 
     def _build_license(self):
+        c = self.colors
         engine = getattr(self.app, 'license_engine', None)
-        if SDKSettingsWidget and engine:
-            try:
-                widget_frame = tk.Frame(self._content_frame, bg=self.colors["content_bg"])
-                widget_frame.pack(fill=tk.BOTH, expand=True)
-                self._sdk_settings_widget = SDKSettingsWidget(widget_frame, engine)
-                self._sdk_settings_widget.build()
-                return
-            except Exception:
-                pass
-        inner = self._card(self._content_frame, "License")
-        tk.Label(inner, text="License management is not available.",
-                 font=("SF Pro Text", 11), fg=self.colors["muted"],
-                 bg=self.colors["card_bg"]).pack(anchor=tk.W, pady=10)
-        tk.Label(inner, text="The license SDK could not be loaded. Please restart the application.",
-                 font=("SF Pro Text", 10), fg=self.colors["muted"],
-                 bg=self.colors["card_bg"]).pack(anchor=tk.W)
+        status = engine.get_status() if engine else None
+
+        inner = self._card(self._content_frame, "License Status")
+        if status:
+            rows = [
+                ("Status", status.status.upper()),
+                ("Plan", status.plan or 'N/A'),
+                ("Expires", status.expires_at or 'N/A'),
+                ("Days Remaining", str(status.days_remaining)),
+                ("Hardware ID", (status.hardware_id or 'N/A')[:40] + '...' if status.hardware_id and len(status.hardware_id) > 40 else (status.hardware_id or 'N/A')),
+                ("Valid", "\u2705 Yes" if status.valid else "\u274c No"),
+                ("Message", status.message or ''),
+            ]
+            for label, val in rows:
+                row = self._row(inner, label)
+                tk.Label(row, text=val, font=("SF Pro Text", 11),
+                         fg=c["text"], bg=c["card_bg"]).pack(side=tk.LEFT)
+        else:
+            tk.Label(inner, text="License engine not initialized.",
+                     font=("SF Pro Text", 11), fg=c["muted"],
+                     bg=c["card_bg"]).pack(anchor=tk.W, pady=10)
+
+        inner2 = self._card(self._content_frame, "Actions")
+        if engine and status:
+            if status.valid:
+                def do_deactivate():
+                    key = engine.get_license_key()
+                    if not key:
+                        messagebox.showerror("Error", "No license key available")
+                        return
+                    if messagebox.askyesno("Deactivate", "Deactivate license on this device?"):
+                        try:
+                            result = engine.deactivate(key)
+                            if result.get('success'):
+                                messagebox.showinfo("Success", "License deactivated")
+                                self._switch_section("license")
+                            else:
+                                messagebox.showerror("Error", result.get('message', 'Deactivation failed'))
+                        except Exception as e:
+                            messagebox.showerror("Error", str(e))
+                tk.Button(inner2, text="Deactivate License",
+                          font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["error"],
+                          bd=0, padx=20, pady=8, cursor="hand2",
+                          command=do_deactivate).pack(side=tk.LEFT, padx=5)
+            else:
+                def open_activate():
+                    d = tk.Toplevel(self.parent)
+                    d.title("Activate License")
+                    d.geometry("400x200")
+                    d.resizable(False, False)
+                    d.transient(self.parent)
+                    d.grab_set()
+                    tk.Label(d, text="Enter License Key", font=("SF Pro Text", 12, "bold"),
+                             fg=c["text"], bg=c["card_bg"]).pack(pady=15)
+                    key_var = tk.StringVar()
+                    entry = tk.Entry(d, textvariable=key_var, font=("SF Pro Text", 12),
+                                     bg=c["input_bg"], fg=c["input_fg"],
+                                     bd=1, relief=tk.FLAT, width=30)
+                    entry.pack(pady=10)
+                    def do_activate():
+                        key = key_var.get().strip()
+                        if not key:
+                            messagebox.showerror("Error", "Enter a license key")
+                            return
+                        try:
+                            result = engine.activate(key)
+                            if result.get('success'):
+                                messagebox.showinfo("Success", "License activated!")
+                                d.destroy()
+                                self._switch_section("license")
+                            else:
+                                messagebox.showerror("Error", result.get('message', 'Activation failed'))
+                        except Exception as e:
+                            messagebox.showerror("Error", str(e))
+                    tk.Button(d, text="Activate", font=("SF Pro Text", 11, "bold"),
+                              fg="white", bg=c["success"], bd=0, padx=20, pady=8,
+                              cursor="hand2", command=do_activate).pack(pady=10)
+                tk.Button(inner2, text="Activate License",
+                          font=("SF Pro Text", 11, "bold"),
+                          fg="white", bg=c["success"],
+                          bd=0, padx=20, pady=8, cursor="hand2",
+                          command=open_activate).pack(side=tk.LEFT, padx=5)
+
+        inner3 = self._card(self._content_frame, "Support")
+        support_email = "support@websmithdigital.com"
+        try:
+            if engine and engine.config:
+                support_email = engine.config.get("branding", {}).get("support_email", support_email)
+        except Exception:
+            pass
+        tk.Label(inner3, text=f"For license issues contact: {support_email}",
+                 font=("SF Pro Text", 10), fg=c["text_secondary"],
+                 bg=c["card_bg"]).pack(anchor=tk.W, pady=6)
+        tk.Label(inner3, text="https://websmith-z.vercel.app",
+                 font=("SF Pro Text", 10), fg=c["accent"],
+                 bg=c["card_bg"]).pack(anchor=tk.W)
 
     def _build_updates(self):
         inner = self._card(self._content_frame, "Update Settings")

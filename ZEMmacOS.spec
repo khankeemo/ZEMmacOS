@@ -16,6 +16,8 @@ a = Analysis(
         ('config.json', '.'),
         ('public/images', 'public/images'),
         ('help', 'help'),
+        # License SDK (entire package with config/assets)
+        ('SDK_ZEM_MAC_OS_prod_zemmacos', 'SDK_ZEM_MAC_OS_prod_zemmacos'),
     ],
     # CRITICAL: Hidden imports for PyInstaller to include these modules
     hiddenimports=[
@@ -41,6 +43,14 @@ a = Analysis(
         'themes',
         'modern_widgets',
         'gibMacOS',
+        # SDK modules
+        'SDK_ZEM_MAC_OS_prod_zemmacos',
+        'SDK_ZEM_MAC_OS_prod_zemmacos.client',
+        'SDK_ZEM_MAC_OS_prod_zemmacos.crypto',
+        'SDK_ZEM_MAC_OS_prod_zemmacos.hardware',
+        'SDK_ZEM_MAC_OS_prod_zemmacos.cache',
+        'SDK_ZEM_MAC_OS_prod_zemmacos.license_engine',
+        'SDK_ZEM_MAC_OS_prod_zemmacos.welcome',
         # Scripts subfolder modules
         'Scripts.run',
         'Scripts.utils',

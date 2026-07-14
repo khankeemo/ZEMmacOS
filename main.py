@@ -7,7 +7,7 @@ import threading
 import tkinter as tk
 from tkinter import messagebox
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+import threading as _threading
 
 from main_ui import ZEMmacOSUI
 from gib_macos_wrapper import GibMacOSWrapper
@@ -16,8 +16,7 @@ from idm_downloader import IDMDownloader
 from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
-from SDKToolkit_prod_zemmacos import LicenseEngine, WelcomeDialog
-
+from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, WelcomeDialog
 def main():
     if sys.platform == "win32":
         try:
@@ -26,53 +25,13 @@ def main():
         except Exception:
             pass
 
-    config_path = os.path.join(BASE_DIR, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json')
-    if not os.path.exists(config_path):
-        print("FATAL: api-config.json not found at", config_path)
-        sys.exit(1)
-
-    license_engine = LicenseEngine(config_path)
-
-    # =========================================================================
-    # PHASE 1 — License / Welcome flow
-    # =========================================================================
-    lic_root = tk.Tk()
-    lic_root.geometry("1x1-2000-2000")
-    lic_root.update()
-
-    def license_check_and_dialog():
-        status = license_engine.initialize()
-
-        if not status or not status.valid:
-            dialog = WelcomeDialog(license_engine, parent=lic_root)
-            result = dialog.show()
-
-            if not result:
-                lic_root.destroy()
-                return False
-
-            status = license_engine.initialize()
-            if not status or not status.valid:
-                lic_root.destroy()
-                return False
-
-        lic_root.destroy()
-        return True
-
-    ok = license_check_and_dialog()
-    if not ok:
-        return
-
-    # =========================================================================
-    # PHASE 2 — Main application
-    # =========================================================================
-    app_root = tk.Tk()
-    app_root.title("ZEMmacOS")
-    app_root.geometry("1200x800")
-    app_root.minsize(1000, 700)
-    app_root.state('zoomed')
-    ZEMmacOSApp(app_root, license_engine=license_engine)
-    app_root.mainloop()
+    root = tk.Tk()
+    root.title("ZEMmacOS")
+    root.geometry("1200x800")
+    root.minsize(1000, 700)
+    root.state('zoomed')
+    ZEMmacOSApp(root)
+    root.mainloop()
 
 
 NETWORK_ERROR_KEYWORDS = [
@@ -89,14 +48,12 @@ def _is_network_error_str(err_str):
 
 
 class ZEMmacOSApp(ZEMmacOSUI):
-    def __init__(self, root, settings=None, license_engine=None):
-        self._license_engine = license_engine
+    def __init__(self, root, settings=None):
         super().__init__(root)
 
         self.settings = settings or SettingsManager()
         self.settings_service = AppSettingsService(self)
         self.updater = AppUpdater()
-        self.license_engine = license_engine
 
         self.logger = get_logger()
         self.logger.set_console_callback(self._console_output)
@@ -147,7 +104,60 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.root.after(500, self._show_startup_toast)
         self.root.after(1000, self._auto_fetch)
         self.root.after(2000, self._check_internet_on_startup)
+        self.root.after(3000, self._start_license_system)
         self._start_network_monitor()
+
+    # -----------------------------------------------------------------
+    # LICENSE SYSTEM — SDK initialization + welcome flow
+    # -----------------------------------------------------------------
+    def _start_license_system(self):
+        _threading.Thread(target=self._init_license_worker, daemon=True).start()
+
+    def _init_license_worker(self):
+        try:
+            base = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(base, 'SDK_ZEM_MAC_OS_prod_zemmacos', 'config', 'api-config.json')
+            engine = LicenseEngine(config_path=config_path)
+            status = engine.initialize()
+            self.root.after(0, lambda: self._on_license_init(engine, status))
+        except Exception as e:
+            self.log(f"License init: {e}", "warning")
+            self.root.after(0, lambda: self.log("License system unavailable - app runs unlicensed", "warning"))
+
+    def _on_license_init(self, engine, status):
+        self.license_engine = engine
+        self.set_license_engine(engine)
+        self.debug_log("LICENSE", "INFO", f"SDK status: {status.status}")
+        if status.status in ('active', 'trial'):
+            msg = f"License: {status.status.upper()} — {status.days_remaining}d remaining"
+            if status.plan:
+                msg += f" ({status.plan})"
+            self.log(msg, "success")
+            return
+        self.log("No active license — starting onboarding", "info")
+        self.root.after(1000, self._show_welcome_dialog)
+
+    def _show_welcome_dialog(self):
+        try:
+            engine = getattr(self, 'license_engine', None)
+            if not engine:
+                return
+            client = engine._client
+            cache = engine._cache
+            dialog = WelcomeDialog(client, product_name='ZEMmacOS', cache=cache)
+            if dialog.is_onboarding_complete():
+                self.log("Onboarding already completed (cached)", "info")
+                return
+            result = dialog.show()
+            if result.get('onboarding_complete'):
+                self.log("Onboarding complete — trial started", "success")
+                self.license_engine.initialize()
+                self.set_license_engine(self.license_engine)
+                self.refresh_license_widgets()
+            elif result.get('skipped'):
+                self.log("Onboarding skipped", "info")
+        except Exception as e:
+            self.log(f"Welcome dialog: {e}", "warning")
 
     # -----------------------------------------------------------------
     # NETWORK MONITOR — runs continuously in background

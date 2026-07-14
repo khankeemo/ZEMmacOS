@@ -5,7 +5,7 @@ import hmac
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 def generate_timestamp() -> str:

@@ -8,12 +8,7 @@ from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
 
-try:
-    from SDKToolkit_prod_zemmacos.widgets.status_widget import StatusWidget as SDKStatusWidget
-    from SDKToolkit_prod_zemmacos.widgets.dashboard_widget import DashboardWidget as SDKDashboardWidget
-except ImportError:
-    SDKStatusWidget = None
-    SDKDashboardWidget = None
+from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -58,8 +53,6 @@ class ZEMmacOSUI:
         self._toast_widgets = []
         if not hasattr(self, '_license_engine'):
             self._license_engine = None
-        self._sdk_status_widget = None
-        self._sdk_dashboard_widget = None
 
         self._init_light_colors()
         self.setup_styles()
@@ -131,23 +124,38 @@ class ZEMmacOSUI:
 
     def set_license_engine(self, engine):
         self._license_engine = engine
-        if self._sdk_status_widget:
-            try:
-                self._sdk_status_widget.refresh()
-            except Exception:
-                pass
+        self._update_license_display()
 
     def refresh_license_widgets(self):
-        if self._sdk_status_widget:
-            try:
-                self._sdk_status_widget.refresh()
-            except Exception:
-                pass
-        if self._sdk_dashboard_widget:
-            try:
-                self._sdk_dashboard_widget.refresh()
-            except Exception:
-                pass
+        self._update_license_display()
+
+    def _update_license_display(self):
+        engine = self._get_license_engine()
+        if not engine:
+            return
+        status = engine.get_status()
+        if not status:
+            return
+        c = self.colors
+        if status.valid:
+            txt = f"\u2705 Active - {status.plan or 'N/A'} - {status.days_remaining}d remaining"
+            fg = c["success"]
+        elif status.status == 'trial':
+            txt = f"\U0001f3b5 Trial - {status.days_remaining}d remaining"
+            fg = c["warning"]
+        elif status.status == 'expired':
+            txt = "\u26a0 License expired"
+            fg = c["error"]
+        elif status.status == 'unlicensed':
+            txt = "\U0001f512 Not activated"
+            fg = c["muted"]
+        else:
+            txt = f"License: {status.status}"
+            fg = c["muted"]
+        if hasattr(self, '_license_status_label') and self._license_status_label:
+            self._license_status_label.config(text=txt, fg=fg)
+        if hasattr(self, '_license_dash_label') and self._license_dash_label:
+            self._license_dash_label.config(text=txt, fg=fg)
 
     def create_sidebar(self, parent):
         sidebar = tk.Frame(parent, bg=self.colors["sidebar_bg"], width=self.colors.get("sidebar_width", 220))
@@ -196,14 +204,6 @@ class ZEMmacOSUI:
 
         footer = tk.Frame(sidebar, bg=self.colors["sidebar_bg"])
         footer.pack(side=tk.BOTTOM, fill=tk.X, pady=16)
-
-        self._sdk_status_widget = None
-        if SDKStatusWidget and hasattr(self, '_get_license_engine') and self._get_license_engine():
-            try:
-                self._sdk_status_widget = SDKStatusWidget(footer, self._get_license_engine())
-                self._sdk_status_widget.build()
-            except Exception:
-                self._sdk_status_widget = None
 
         tk.Label(footer, text="Version 3.0", font=("SF Pro Text", 9),
                  fg=self.colors["muted"], bg=self.colors["sidebar_bg"]).pack()
@@ -558,17 +558,18 @@ class ZEMmacOSUI:
             tk.Label(card, text=stats_labels[i], font=("SF Pro Text", 10),
                      fg=colors["muted"], bg=colors["card_bg"]).pack()
 
-        self._sdk_dashboard_widget = None
-        if SDKDashboardWidget and self._get_license_engine():
-            try:
-                license_card = ModernCard(body_frame, colors, title="License Status", padding=10)
-                license_card.pack(fill=tk.X, pady=12)
-                self._sdk_dashboard_widget = SDKDashboardWidget(license_card.get_body(), self._get_license_engine())
-                self._sdk_dashboard_widget.build()
-            except Exception:
-                self._sdk_dashboard_widget = None
-
-
+        license_card = ModernCard(body_frame, colors, title="License Status", padding=10)
+        license_card.pack(fill=tk.X, pady=12)
+        lc_body = license_card.get_body()
+        c = colors
+        row = tk.Frame(lc_body, bg=c["card_bg"])
+        row.pack(fill=tk.X, pady=4)
+        self._license_dash_label = tk.Label(row, text="Checking license...",
+            font=("SF Pro Text", 12), fg=c["muted"], bg=c["card_bg"])
+        self._license_dash_label.pack(side=tk.LEFT)
+        engine = self._get_license_engine()
+        if engine and engine.get_status():
+            self._update_license_display()
 
         actions_card = ModernCard(body_frame, colors, title="Quick Actions", padding=18)
         actions_card.pack(fill=tk.X, pady=12)
