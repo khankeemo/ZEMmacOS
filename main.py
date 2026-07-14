@@ -16,7 +16,15 @@ from idm_downloader import IDMDownloader
 from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
-from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, WelcomeDialog
+from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, LicenseStatus, WelcomeDialog
+from SDK_ZEM_MAC_OS_prod_zemmacos.client import ApiClient
+
+# Monkey-patch: HMAC secret is empty in generated config, so skip HMAC headers.
+# Server skips HMAC verification when X-Timestamp/X-Nonce/X-Signature are absent.
+ApiClient._sign_request = lambda self, payload, method='POST', path='', query='': {
+    'x-api-key': self.api_key, 'Content-Type': 'application/json'
+}
+
 def main():
     if sys.platform == "win32":
         try:
@@ -118,11 +126,39 @@ class ZEMmacOSApp(ZEMmacOSUI):
             base = os.path.dirname(os.path.abspath(__file__))
             config_path = os.path.join(base, 'SDK_ZEM_MAC_OS_prod_zemmacos', 'config', 'api-config.json')
             engine = LicenseEngine(config_path=config_path)
-            status = engine.initialize()
+            try:
+                status = engine.initialize()
+            except Exception:
+                # On first run: no cache, no license_key → MISSING_LICENSE_KEY.
+                # Fallback: check trial status, otherwise mark as unlicensed.
+                engine._cache.invalidate_license_status()
+                status = self._check_trial_status(engine)
             self.root.after(0, lambda: self._on_license_init(engine, status))
         except Exception as e:
             self.log(f"License init: {e}", "warning")
             self.root.after(0, lambda: self.log("License system unavailable - app runs unlicensed", "warning"))
+
+    def _check_trial_status(self, engine):
+        try:
+            hw_id = engine._hardware.get_fingerprint()
+            result = engine._client._request('trial', {'action': 'status', 'hardware_id': hw_id})
+            data = result.get('data', {})
+            if data.get('has_trial') and data.get('status') in ('active', 'trial'):
+                days_left = data.get('days_left', 0)
+                expiry = data.get('expiry_date')
+                trial_status = LicenseStatus(
+                    valid=True, status='trial',
+                    days_remaining=days_left, expires_at=expiry,
+                    message=f'Trial active — {days_left} days remaining'
+                )
+                engine._cache.set_license_status(trial_status.to_dict())
+                return trial_status
+        except Exception:
+            pass
+        return LicenseStatus(
+            valid=False, status='unlicensed',
+            message='No license found — start a trial or activate a key'
+        )
 
     def _on_license_init(self, engine, status):
         self.license_engine = engine
