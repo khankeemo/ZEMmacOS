@@ -4,7 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 import os
 import platform
 
-from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, ActivationDialog
+from SDKToolkit_prod_zemmacos import LicenseEngine, ActivationDialog
 
 
 class SettingsUI:
@@ -282,12 +282,11 @@ class SettingsUI:
             def do_activate():
                 try:
                     dialog = ActivationDialog(
-                        client=engine._client,
-                        product_name='ZEMmacOS',
-                        cache=engine._cache
+                        engine=engine,
+                        parent=self.app.root
                     )
                     result = dialog.show()
-                    if result.get("activated"):
+                    if result and result.get("action") == "activated":
                         engine._cache.invalidate_license_status()
                         new_status = engine.initialize()
                         engine._status = new_status or engine.get_status()

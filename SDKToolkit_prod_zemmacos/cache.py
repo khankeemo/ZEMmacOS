@@ -9,9 +9,14 @@ from typing import Any, Dict, Optional
 class CacheManager:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.product_id = config.get('product', {}).get('id', 'unknown')
-        safe_name = ''.join(c if c.isalnum() or c in '-_' else '_' for c in self.product_id)
-        self._cache_dir = Path.home() / '.websmith' / safe_name
+        self.product_id = config.get('product', {}).get('id')
+
+        if not self.product_id:
+            raise ValueError(
+                "CacheManager requires product_id in api-config.json"
+            )
+
+        self._cache_dir = Path.home() / '.websmith' / self.product_id
         self._cache_file = self._cache_dir / 'cache.json'
         self._tmp_file = self._cache_dir / 'cache.tmp'
         self._corrupt_file = self._cache_dir / 'cache.corrupt'
@@ -20,7 +25,7 @@ class CacheManager:
 
     def _get_ttl(self) -> int:
         offline = self.config.get('offline', {})
-        return offline.get('cache_days', 0)
+        return offline.get('cache_days', 30)
 
     def _ensure_cache_dir(self) -> None:
         self._cache_dir.mkdir(parents=True, exist_ok=True)
@@ -77,7 +82,10 @@ class CacheManager:
 
     def set(self, key: str, value: Any) -> None:
         cache = self._load_cache()
-        cache[key] = {'value': value, 'cached_at': time.time()}
+        cache[key] = {
+            'value': value,
+            'cached_at': time.time()
+        }
         self._save_cache()
 
     def delete(self, key: str) -> None:
@@ -113,11 +121,3 @@ class CacheManager:
 
     def invalidate_license_status(self) -> None:
         self.delete('license_status')
-
-    def set_onboarding_complete(self) -> None:
-        cache = self._load_cache()
-        cache['onboarding_complete'] = {'value': True, 'cached_at': time.time()}
-        self._save_cache()
-
-    def is_onboarding_complete(self) -> bool:
-        return self.get('onboarding_complete') is True

@@ -16,7 +16,7 @@ from idm_downloader import IDMDownloader
 from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
-from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus, WelcomeDialog, ActivationDialog
+from SDKToolkit_prod_zemmacos import LicenseEngine, LicenseStatus, WelcomeDialog, ActivationDialog
 
 
 def main():
@@ -118,7 +118,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def _init_license_worker(self):
         try:
             base = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(base, 'WSD_SDKToolkit_ZEMMACOS', 'config', 'api-config.json')
+            config_path = os.path.join(base, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json')
             engine = LicenseEngine(config_path=config_path)
             try:
                 status = engine.initialize()
@@ -143,10 +143,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 trial_status = LicenseStatus(
                     valid=True, status='trial',
                     days_remaining=days_left, expires_at=expiry,
-                    message=f'Trial active — {days_left} days remaining',
-                    customer_email=data.get('email', data.get('customer_email')),
-                    customer_name=data.get('customer_name'),
-                    device_bound=True
+                    message=f'Trial active — {days_left} days remaining'
                 )
                 engine._cache.set_license_status(trial_status.to_dict())
                 engine._status = trial_status
@@ -183,14 +180,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
             engine = getattr(self, 'license_engine', None)
             if not engine:
                 return
-            client = engine._client
-            cache = engine._cache
-            dialog = WelcomeDialog(client, product_name='ZEMmacOS', cache=cache)
-            if dialog.is_onboarding_complete():
-                self.log("Onboarding already completed (cached)", "info")
-                return
+            dialog = WelcomeDialog(engine=engine, parent=self.root)
             result = dialog.show()
-            if result.get('onboarding_complete'):
+            if result:
                 self.log("Onboarding complete — trial started", "success")
                 new_status = self.license_engine.initialize()
                 self.license_engine._status = new_status or self.license_engine.get_status()
@@ -211,12 +203,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self._exit_app()
                 return
             dialog = ActivationDialog(
-                client=engine._client,
-                product_name='ZEMmacOS',
-                cache=engine._cache
+                engine=engine,
+                parent=self.root
             )
             result = dialog.show()
-            if result.get("activated"):
+            if result and result.get("action") == "activated":
                 self.log("License activated successfully from startup dialog", "success")
                 engine._cache.invalidate_license_status()
                 new_status = engine.initialize()

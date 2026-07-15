@@ -1,0 +1,104 @@
+# Architecture
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Developer Application                               │
+│  ┌───────────────────────────────────────────────┐  │
+│  │ WSD SDK                                       │  │
+│  │  ┌─────────┐ ┌──────────┐ ┌───────────────┐  │  │
+│  │  │ Welcome │ │Activation│ │Device Replace  │  │  │
+│  │  │ Dialog  │ │ Dialog   │ │ Dialog        │  │  │
+│  │  └─────────┘ └──────────┘ └───────────────┘  │  │
+│  │  ┌─────────┐ ┌──────────┐ ┌───────────────┐  │  │
+│  │  │Renewal  │ │ License  │ │  Widgets      │  │  │
+│  │  │ Dialog  │ │ Engine   │ │  (4 widgets)  │  │  │
+│  │  └─────────┘ └──────────┘ └───────────────┘  │  │
+│  │  ┌─────────┐ ┌──────────┐ ┌───────────────┐  │  │
+│  │  │Hardware │ │  Cache   │ │  API Client   │  │  │
+│  │  │ Manager │ │  Manager │ │  (HMAC auth)  │  │  │
+│  │  └─────────┘ └──────────┘ └───────────────┘  │  │
+│  └───────────────────────────────────────────────┘  │
+└──────────────────────┬──────────────────────────────┘
+                       │ HTTPS + HMAC
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│ Websmith Internal API                                │
+│  ┌──────────┐ ┌──────────┐ ┌───────────────────┐   │
+│  │ Auth     │ │ License  │ │ Trial             │   │
+│  │ (OTP)    │ │ (CRUD)   │ │ (Management)      │   │
+│  └──────────┘ └──────────┘ └───────────────────┘   │
+│  ┌──────────┐ ┌──────────┐ ┌───────────────────┐   │
+│  │ Customer │ │ Plans    │ │ Admin             │   │
+│  │ (Store)  │ │ (Pricing)│ │ (Dashboard)       │   │
+│  └──────────┘ └──────────┘ └───────────────────┘   │
+└──────────────────────┬──────────────────────────────┘
+                       │ SQL
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│ PostgreSQL (Neon)                                    │
+│  ┌──────────┐ ┌──────────┐ ┌───────────────────┐   │
+│  │ customers│ │ licenses │ │ trials             │   │
+│  ├──────────┤ ├──────────┤ ├───────────────────┤   │
+│  │ products │ │ plans    │ │ activations        │   │
+│  ├──────────┤ ├──────────┤ ├───────────────────┤   │
+│  │ otp_     │ │ audit_   │ │ developer_api_keys │   │
+│  │ verif.   │ │ logs     │ │                    │   │
+│  └──────────┘ └──────────┘ └───────────────────┘   │
+└─────────────────────────────────────────────────────┘
+```
+
+## SDK Components
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| License Engine | `license_engine.py` | Orchestrates all license operations |
+| API Client | `client.py` | HTTP client with HMAC signing |
+| Cache Manager | `cache.py` | Local status cache |
+| Hardware Detector | `hardware.py` | Machine fingerprint |
+| Crypto Utils | `crypto.py` | HMAC signature generation |
+| Welcome Dialog | `welcome.py` | Trial onboarding UI |
+| Activation Dialog | `activation.py` | License activation UI |
+| Renewal Dialog | `renewal.py` | License renewal UI |
+| Device Replace | `device_replace.py` | Device transfer UI |
+| Dashboard Widget | `widgets/dashboard_widget.py` | Status display |
+| Settings Widget | `widgets/settings_widget.py` | License management |
+| Status Widget | `widgets/status_widget.py` | Compact indicator |
+| Activation Button | `widgets/activation_button.py` | Quick activation |
+
+## Data Flow
+
+### Trial Onboarding
+```
+User enters info → Send OTP → Verify OTP → Register Customer → Start Trial → Bind Hardware
+```
+
+### License Activation
+```
+User enters key → Fetch details → Verify → Activate → Bind Hardware → Cache Status
+```
+
+### Startup
+```
+Load cache → Check onboarding → Check trial → Check license → Validate hardware → Open app
+```
+
+### Renewal
+```
+Fetch plans → Select plan → Renew → Update cache
+```
+
+### Device Replacement
+```
+Old hardware → New hardware → Confirm → Replace → Refresh
+```
+
+## Technology Stack
+
+- **Client SDK:** Python 3.8+
+- **API:** Next.js serverless (Vercel)
+- **Database:** PostgreSQL (Neon)
+- **Auth:** HMAC-SHA256 request signing
+- **Cache:** Local JSON file
+- **Hardware ID:** CPU + machine fingerprint
