@@ -157,6 +157,10 @@ class ActivationDialog:
         self._plans_cache: Dict[str, List[Dict[str, Any]]] = {}
         self._product_ids: List[str] = []
         self._plan_ids: List[str] = []
+        self._init_completed = {'hardware': False, 'products': False}
+        self._initialized = False
+        self._hardware_ok = False
+        self._products_ok = False
         self.branding = self.config.get('branding', {})
         self._primary = '#1e40af'
         self._secondary = '#6b7280'
@@ -190,7 +194,9 @@ class ActivationDialog:
                          relief='flat')
         self._build_ui()
         self._center_window()
-        self._root.after(500, self._detect_hardware)
+        self._status_label.config(text='Loading license information...')
+        self._set_controls_disabled(True)
+        self._root.after(200, self._initialize)
         self._root.wait_window()
         return {
             'activated': self._activated,
@@ -381,6 +387,14 @@ class ActivationDialog:
         tk.Label(dev_row, textvariable=self._device_limit_var,
                   font=_F, bg=self._card_bg, fg=self._text_secondary).pack(anchor='w', pady=(2, 0))
 
+        lic_days_row = tk.Frame(l_body, bg=self._card_bg)
+        lic_days_row.pack(fill='x', pady=(4, 0))
+        tk.Label(lic_days_row, text='Days Remaining:', font=_FB,
+                  bg=self._card_bg, fg=self._text_primary).pack(side='left')
+        self._license_days_label = tk.Label(lic_days_row, text='--',
+                                              font=_F, bg=self._card_bg, fg=self._text_secondary)
+        self._license_days_label.pack(side='left', padx=(6, 0))
+
         l_card.pack(fill='x', pady=(0, 10))
 
         # Status label
@@ -443,23 +457,49 @@ class ActivationDialog:
                            font=('Segoe UI', 9), bg=self._bg, fg='#9ca3af')
         footer.pack(side='bottom', pady=(0, 14))
 
+    def _initialize(self):
+        self._init_completed = {'hardware': False, 'products': False}
+        self._root.after(0, self._detect_hardware)
+        self._root.after(0, self._fetch_products)
+
+    def _try_enable(self):
+        if all(self._init_completed.values()) and not self._initialized:
+            self._initialized = True
+            if self._hardware_ok and self._products_ok:
+                self._set_controls_disabled(False)
+                self._status_label.config(
+                    text='Initialization complete. Enter license key, click Refresh.',
+                    fg=self._text_secondary
+                )
+            else:
+                reasons = []
+                if not self._hardware_ok:
+                    reasons.append('hardware detection failed')
+                if not self._products_ok:
+                    reasons.append('no products available')
+                self._status_label.config(
+                    text=f'Initialization failed: {"; ".join(reasons)}. Close and retry.',
+                    fg=self._error
+                )
+
     def _detect_hardware(self):
         try:
             self._hardware_id = self.hardware.get_fingerprint()
             if not self._hardware_id:
                 self._hw_status.config(text='Unable to detect hardware. Please retry.', fg=self._error)
-                self._set_controls_disabled(True)
                 self._status_label.config(text='Hardware detection failed. Close and retry.', fg=self._error)
+                self._hardware_ok = False
                 return
             self._hw_id_label.config(text=f'Hardware ID: {self._hardware_id}')
             self._hw_status.config(text='Hardware verified. Activation available.', fg=self._success)
-            self._status_label.config(text='Loading products...', fg=self._text_secondary)
-            self._root.update()
-            self._fetch_products()
+            self._hardware_ok = True
         except Exception as e:
             self._hw_status.config(text=f'Unable to detect hardware: {str(e)}', fg=self._error)
-            self._set_controls_disabled(True)
             self._status_label.config(text=f'Hardware error: {str(e)}', fg=self._error)
+            self._hardware_ok = False
+        finally:
+            self._init_completed['hardware'] = True
+            self._try_enable()
 
     def _fetch_products(self):
         try:
@@ -467,7 +507,7 @@ class ActivationDialog:
             products = result.get('products', []) if result.get('success') else result.get('products', [])
             if not products:
                 self._status_label.config(text='No products available from server.', fg=self._error)
-                self._set_controls_disabled(True)
+                self._products_ok = False
                 return
             self._products = products
             self._plans_cache = {}
@@ -481,17 +521,16 @@ class ActivationDialog:
                 plans = p.get('plans', [])
                 self._plans_cache[pid] = plans
             self._product_combo['values'] = names
+            self._products_ok = True
             if names:
                 self._product_combo.set(names[0])
                 self._on_product_selected()
-            self._set_controls_disabled(False)
-            self._status_label.config(
-                text=f'Loaded {len(products)} product(s). Select product, plan, enter license key, click Refresh.',
-                fg=self._text_secondary
-            )
         except Exception as e:
             self._status_label.config(text=f'Failed to load products: {str(e)}', fg=self._error)
-            self._set_controls_disabled(True)
+            self._products_ok = False
+        finally:
+            self._init_completed['products'] = True
+            self._try_enable()
 
     def _on_product_selected(self, event=None):
         name = self._product_combo.get()
@@ -560,14 +599,6 @@ class ActivationDialog:
         if not license_key:
             self._status_label.config(text='Please enter a license key.', fg=self._error)
             return
-        selected_product = self._product_combo.get()
-        selected_plan = self._plan_combo.get()
-        if not selected_product:
-            self._status_label.config(text='Please select a product.', fg=self._error)
-            return
-        if not selected_plan:
-            self._status_label.config(text='Please select a plan.', fg=self._error)
-            return
         self._status_label.config(text='Validating license...', fg=self._text_secondary)
         self._refresh_btn.set_loading(True)
         self._root.update()
@@ -575,24 +606,30 @@ class ActivationDialog:
             result = self.client.validate_license(license_key, self._hardware_id)
             if result.get('valid') or result.get('data', {}).get('valid'):
                 data = result.get('data', result)
-                api_product = data.get('product_name', '')
-                api_plan = data.get('plan', '')
-                if api_product and api_product != selected_product:
-                    self._status_label.config(
-                        text=f'Product mismatch: license is for "{api_product}", selected "{selected_product}".',
-                        fg=self._error
-                    )
-                    return
-                if api_plan and api_plan != selected_plan:
-                    self._status_label.config(
-                        text=f'Plan mismatch: license is for "{api_plan}", selected "{selected_plan}".',
-                        fg=self._error
-                    )
-                    return
                 self._validate_data = data
                 self._license_key = license_key
                 self._update_ui(data)
-                self._status_label.config(text='License validated successfully.', fg=self._success)
+
+                # Auto-detect product + plan from validated license data
+                api_plan = data.get('plan', '')
+                if api_plan:
+                    found = False
+                    for pid, plans in self._plans_cache.items():
+                        for pl in plans:
+                            if pl.get('name') == api_plan:
+                                for i, pname in enumerate(self._product_combo['values']):
+                                    if i < len(self._product_ids) and self._product_ids[i] == pid:
+                                        self._product_combo.set(pname)
+                                        self._on_product_selected()
+                                        self._plan_combo.set(api_plan)
+                                        found = True
+                                        break
+                                if found:
+                                    break
+                        if found:
+                            break
+
+                self._status_label.config(text='License validated successfully. All fields auto-filled.', fg=self._success)
                 self._activate_btn.set_disabled(False)
                 self._fetch_trial_status()
             else:
@@ -647,6 +684,17 @@ class ActivationDialog:
         if expiry and 'T' in expiry:
             expiry = expiry.split('T')[0]
         self._expiry_var.set(expiry)
+
+        days_left = data.get('days_left', data.get('days_remaining', 0))
+        if days_left and days_left > 0:
+            self._license_days_label.config(
+                text=f'{days_left} day(s) left',
+                fg=self._success
+            )
+        elif days_left == 0 and expiry and expiry != '--':
+            self._license_days_label.config(text='Expired', fg=self._error)
+        else:
+            self._license_days_label.config(text='--', fg=self._text_secondary)
 
         max_dev = data.get('max_devices', '--')
         dev_count = data.get('device_count', data.get('active_devices', 0))
