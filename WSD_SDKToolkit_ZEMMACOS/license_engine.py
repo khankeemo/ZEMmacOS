@@ -17,9 +17,6 @@ class LicenseStatus:
         self.plan = kwargs.get('plan')
         self.hardware_id = kwargs.get('hardware_id')
         self.message = kwargs.get('message')
-        self.customer_email = kwargs.get('customer_email')
-        self.customer_name = kwargs.get('customer_name')
-        self.device_bound = kwargs.get('device_bound', False)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -29,10 +26,7 @@ class LicenseStatus:
             'days_remaining': self.days_remaining,
             'plan': self.plan,
             'hardware_id': self.hardware_id,
-            'message': self.message,
-            'customer_email': self.customer_email,
-            'customer_name': self.customer_name,
-            'device_bound': self.device_bound
+            'message': self.message
         }
 
     @classmethod
@@ -44,10 +38,7 @@ class LicenseStatus:
             days_remaining=data.get('days_remaining', 0),
             plan=data.get('plan'),
             hardware_id=data.get('hardware_id'),
-            message=data.get('message'),
-            customer_email=data.get('customer_email'),
-            customer_name=data.get('customer_name'),
-            device_bound=data.get('device_bound', False)
+            message=data.get('message')
         )
 
 
@@ -93,10 +84,7 @@ class LicenseEngine:
                 days_remaining=response.get('days_left', response.get('days_remaining', 0)),
                 plan=response.get('plan'),
                 hardware_id=hardware_id,
-                message=response.get('message'),
-                customer_email=response.get('email', response.get('customer_email')),
-                customer_name=response.get('customer_name'),
-                device_bound=response.get('device_bound', response.get('hardware_bound', False))
+                message=response.get('message')
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
@@ -151,12 +139,12 @@ class LicenseEngine:
             self.initialize()
         return result
 
-    def convert_trial(self, plan: Optional[str] = None) -> Dict[str, Any]:
+    def convert_trial(self, plan: Optional[str] = None, customer_name: str = '', customer_email: str = '') -> Dict[str, Any]:
         status = self.initialize()
         if not status or status.status != 'trial':
             raise RuntimeError("No active trial to convert.")
         hardware_id = self._hardware.get_fingerprint()
-        result = self._client.convert_trial(hardware_id, plan)
+        result = self._client.convert_trial(hardware_id, plan, customer_name, customer_email)
         if result.get('success'):
             if 'license_key' in result:
                 self._license_key = result.get('license_key')

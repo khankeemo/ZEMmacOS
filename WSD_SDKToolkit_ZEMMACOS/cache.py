@@ -20,7 +20,7 @@ class CacheManager:
 
     def _get_ttl(self) -> int:
         offline = self.config.get('offline', {})
-        return offline.get('cache_days', 30)
+        return offline.get('cache_days', 0)
 
     def _ensure_cache_dir(self) -> None:
         self._cache_dir.mkdir(parents=True, exist_ok=True)

@@ -4,8 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 import os
 import platform
 
-from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine
-from SDK_ZEM_MAC_OS_prod_zemmacos.activation import ActivationDialog
+from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, ActivationDialog
 
 
 class SettingsUI:

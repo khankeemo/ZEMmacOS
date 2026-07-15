@@ -212,4 +212,43 @@ class ApiClient:
         if self._cache:
             self._cache.invalidate_license_status()
         return response
-        return self._request('GET', '/api/v1/status')
+
+    def get_products(self) -> Dict[str, Any]:
+        import requests as _requests
+        url = f"{self.base_url}/api/{self.api_version}/store/products"
+        try:
+            resp = _requests.get(url, timeout=self.timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            return {'success': False, 'products': []}
+        except Exception:
+            return {'success': False, 'products': []}
+
+    def update_customer(self, name: str, email: str, phone: str,
+                         hardware_id: Optional[str] = None) -> Dict[str, Any]:
+        import requests as _requests
+        if hardware_id is None:
+            hardware_id = self._get_hardware_id()
+        url = f"{self.base_url}/api/{self.api_version}/customer/register"
+        payload = {
+            'name': name,
+            'email': email,
+            'mobile': phone,
+            'hardware_id': hardware_id,
+        }
+        try:
+            resp = _requests.post(
+                url, json=payload,
+                headers={'X-API-Key': self.api_key,
+                         'Content-Type': 'application/json'},
+                timeout=self.timeout
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get('success') and self._cache:
+                    self._cache.invalidate_license_status()
+                return data
+            return {'success': False,
+                    'error': resp.json().get('error', f'HTTP {resp.status_code}')}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}

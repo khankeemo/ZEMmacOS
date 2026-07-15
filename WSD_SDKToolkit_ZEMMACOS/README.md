@@ -28,7 +28,7 @@ license validation, activation, deactivation, renewal, hardware binding, and dev
 ## Installation
 
 ```bash
-pip install SDK_ZEM_MAC_OS_prod_zemmacos
+pip install WSD_SDKToolkit_ZEMMACOS
 ```
 
 ## Quick Start
@@ -36,7 +36,7 @@ pip install SDK_ZEM_MAC_OS_prod_zemmacos
 ### Initialize & Validate
 
 ```python
-from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine
+from WSD_SDKToolkit_ZEMMACOS import LicenseEngine
 
 engine = LicenseEngine()
 status = engine.initialize()
@@ -119,7 +119,7 @@ except ValueError:
 ### Show Welcome Dialog
 
 ```python
-from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, WelcomeDialog
+from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, WelcomeDialog
 
 engine = LicenseEngine()
 status = engine.initialize()
@@ -257,7 +257,7 @@ Application opens
 **Integration pattern:**
 
 ```python
-from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, WelcomeDialog
+from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, WelcomeDialog
 
 engine = LicenseEngine()
 status = engine.initialize()

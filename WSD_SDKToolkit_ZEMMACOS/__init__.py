@@ -6,6 +6,7 @@ __all__ = [
     "HardwareDetector",
     "CacheManager",
     "WelcomeDialog",
+    "ActivationDialog",
 ]
 
 from .client import ApiClient, ApiError
@@ -13,3 +14,4 @@ from .license_engine import LicenseEngine, LicenseStatus
 from .hardware import HardwareDetector
 from .cache import CacheManager
 from .welcome import WelcomeDialog
+from .activation import ActivationDialog

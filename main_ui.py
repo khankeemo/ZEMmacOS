@@ -8,7 +8,7 @@ from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole, LicenseWidget
 
-from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine
+from WSD_SDKToolkit_ZEMMACOS import LicenseEngine
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

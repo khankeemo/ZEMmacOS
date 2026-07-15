@@ -17,7 +17,7 @@ a = Analysis(
         ('public/images', 'public/images'),
         ('help', 'help'),
         # License SDK (entire package with config/assets)
-        ('SDK_ZEM_MAC_OS_prod_zemmacos', 'SDK_ZEM_MAC_OS_prod_zemmacos'),
+        ('WSD_SDKToolkit_ZEMMACOS', 'WSD_SDKToolkit_ZEMMACOS'),
     ],
     # CRITICAL: Hidden imports for PyInstaller to include these modules
     hiddenimports=[
@@ -44,13 +44,14 @@ a = Analysis(
         'modern_widgets',
         'gibMacOS',
         # SDK modules
-        'SDK_ZEM_MAC_OS_prod_zemmacos',
-        'SDK_ZEM_MAC_OS_prod_zemmacos.client',
-        'SDK_ZEM_MAC_OS_prod_zemmacos.crypto',
-        'SDK_ZEM_MAC_OS_prod_zemmacos.hardware',
-        'SDK_ZEM_MAC_OS_prod_zemmacos.cache',
-        'SDK_ZEM_MAC_OS_prod_zemmacos.license_engine',
-        'SDK_ZEM_MAC_OS_prod_zemmacos.welcome',
+        'WSD_SDKToolkit_ZEMMACOS',
+        'WSD_SDKToolkit_ZEMMACOS.client',
+        'WSD_SDKToolkit_ZEMMACOS.crypto',
+        'WSD_SDKToolkit_ZEMMACOS.hardware',
+        'WSD_SDKToolkit_ZEMMACOS.cache',
+        'WSD_SDKToolkit_ZEMMACOS.license_engine',
+        'WSD_SDKToolkit_ZEMMACOS.welcome',
+        'WSD_SDKToolkit_ZEMMACOS.activation',
         # Scripts subfolder modules
         'Scripts.run',
         'Scripts.utils',

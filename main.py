@@ -16,8 +16,7 @@ from idm_downloader import IDMDownloader
 from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
-from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, LicenseStatus, WelcomeDialog
-from SDK_ZEM_MAC_OS_prod_zemmacos.activation import ActivationDialog
+from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus, WelcomeDialog, ActivationDialog
 
 
 def main():
@@ -119,7 +118,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def _init_license_worker(self):
         try:
             base = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(base, 'SDK_ZEM_MAC_OS_prod_zemmacos', 'config', 'api-config.json')
+            config_path = os.path.join(base, 'WSD_SDKToolkit_ZEMMACOS', 'config', 'api-config.json')
             engine = LicenseEngine(config_path=config_path)
             try:
                 status = engine.initialize()
@@ -208,6 +207,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
         try:
             engine = getattr(self, 'license_engine', None)
             if not engine:
+                self.log("No license engine — exiting application", "warning")
+                self._exit_app()
                 return
             dialog = ActivationDialog(
                 client=engine._client,
@@ -223,6 +224,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.set_license_engine(engine)
                 self.refresh_license_widgets()
                 self.show_toast("License activated successfully", "success", 3000)
+            else:
+                self.log("Activation cancelled or failed — exiting application", "warning")
+                self._exit_app()
         except Exception as e:
             self.log(f"Activation error: {e} — exiting application", "warning")
             self._exit_app()
