@@ -299,8 +299,8 @@ class ActivationDialog:
         tk.Label(cemail_row, text='Email', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._customer_email_entry = tk.Entry(cemail_row, textvariable=self._customer_email_var,
-                                               font=_F, relief='solid', bd=1,
-                                               highlightbackground=self._border, state='disabled')
+                                                font=_F, relief='solid', bd=1,
+                                                highlightbackground=self._border, state='disabled')
         self._customer_email_entry.pack(fill='x', pady=(2, 0))
 
         cphone_row = tk.Frame(c_body, bg=self._card_bg)
@@ -308,8 +308,8 @@ class ActivationDialog:
         tk.Label(cphone_row, text='Mobile Number', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._customer_phone_entry = tk.Entry(cphone_row, textvariable=self._customer_phone_var,
-                                               font=_F, relief='solid', bd=1,
-                                               highlightbackground=self._border, state='disabled')
+                                                font=_F, relief='solid', bd=1,
+                                                highlightbackground=self._border, state='disabled')
         self._customer_phone_entry.pack(fill='x', pady=(2, 0))
 
         c_card.pack(fill='x', pady=(0, 10))
@@ -361,7 +361,7 @@ class ActivationDialog:
         tk.Label(lk_row, text='License Key', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._license_entry = tk.Entry(lk_row, font=_FC, relief='solid',
-                                        bd=1, highlightbackground=self._border, state='disabled')
+                                         bd=1, highlightbackground=self._border, state='disabled')
         self._license_entry.pack(fill='x', pady=(2, 0))
 
         expiry_row = tk.Frame(l_body, bg=self._card_bg)
