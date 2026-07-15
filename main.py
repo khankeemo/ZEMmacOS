@@ -17,6 +17,7 @@ from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine, LicenseStatus, WelcomeDialog
+from SDK_ZEM_MAC_OS_prod_zemmacos.activation import ActivationDialog
 
 
 def main():
@@ -171,6 +172,10 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 msg += f" ({status.plan})"
             self.log(msg, "success")
             return
+        if status.status == 'expired':
+            self.log("License expired — showing activation dialog", "warning")
+            self.root.after(1000, self._show_activation_dialog)
+            return
         self.log("No active license — starting onboarding", "info")
         self.root.after(1000, self._show_welcome_dialog)
 
@@ -197,6 +202,29 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self._exit_app()
         except Exception as e:
             self.log(f"Welcome dialog error: {e} — exiting application", "warning")
+            self._exit_app()
+
+    def _show_activation_dialog(self):
+        try:
+            engine = getattr(self, 'license_engine', None)
+            if not engine:
+                return
+            dialog = ActivationDialog(
+                client=engine._client,
+                product_name='ZEMmacOS',
+                cache=engine._cache
+            )
+            result = dialog.show()
+            if result.get("activated"):
+                self.log("License activated successfully from startup dialog", "success")
+                engine._cache.invalidate_license_status()
+                new_status = engine.initialize()
+                engine._status = new_status or engine.get_status()
+                self.set_license_engine(engine)
+                self.refresh_license_widgets()
+                self.show_toast("License activated successfully", "success", 3000)
+        except Exception as e:
+            self.log(f"Activation error: {e} — exiting application", "warning")
             self._exit_app()
 
     def _exit_app(self):

@@ -5,6 +5,7 @@ import os
 import platform
 
 from SDK_ZEM_MAC_OS_prod_zemmacos import LicenseEngine
+from SDK_ZEM_MAC_OS_prod_zemmacos.activation import ActivationDialog
 
 
 class SettingsUI:
@@ -280,37 +281,22 @@ class SettingsUI:
                     messagebox.showerror("Error", f"Refresh failed: {e}")
 
             def do_activate():
-                d = tk.Toplevel(self.parent)
-                d.title("Activate License")
-                d.geometry("400x200")
-                d.resizable(False, False)
-                d.transient(self.parent)
-                d.grab_set()
-                tk.Label(d, text="Enter License Key", font=("SF Pro Text", 12, "bold"),
-                         fg=c["text"], bg=c["card_bg"]).pack(pady=15)
-                key_var = tk.StringVar()
-                entry = tk.Entry(d, textvariable=key_var, font=("SF Pro Text", 12),
-                                 bg=c["input_bg"], fg=c["input_fg"],
-                                 bd=1, relief=tk.FLAT, width=30)
-                entry.pack(pady=10)
-                def do_activate():
-                    key = key_var.get().strip()
-                    if not key:
-                        messagebox.showerror("Error", "Enter a license key")
-                        return
-                    try:
-                        result = engine.activate(key)
-                        if result.get('success'):
-                            messagebox.showinfo("Success", "License activated!")
-                            d.destroy()
-                            after_action()
-                        else:
-                            messagebox.showerror("Error", result.get('message', 'Activation failed'))
-                    except Exception as e:
-                        messagebox.showerror("Error", str(e))
-                tk.Button(d, text="Activate", font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["success"], bd=0, padx=20, pady=8,
-                          cursor="hand2", command=do_activate).pack(pady=10)
+                try:
+                    dialog = ActivationDialog(
+                        client=engine._client,
+                        product_name='ZEMmacOS',
+                        cache=engine._cache
+                    )
+                    result = dialog.show()
+                    if result.get("activated"):
+                        engine._cache.invalidate_license_status()
+                        new_status = engine.initialize()
+                        engine._status = new_status or engine.get_status()
+                        self.app.set_license_engine(engine)
+                        self.app.refresh_license_widgets()
+                        self.app.show_toast("License activated successfully", "success", 3000)
+                except Exception as e:
+                    messagebox.showerror("Error", f"Activation failed: {e}")
 
             def do_deactivate():
                 key = engine.get_license_key()
