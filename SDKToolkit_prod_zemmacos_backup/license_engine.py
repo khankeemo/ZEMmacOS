@@ -17,8 +17,6 @@ class LicenseStatus:
         self.plan = kwargs.get('plan')
         self.hardware_id = kwargs.get('hardware_id')
         self.message = kwargs.get('message')
-        self.license_key = kwargs.get('license_key')
-        self.trial_active = kwargs.get('trial_active', status == 'trial')
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -28,9 +26,7 @@ class LicenseStatus:
             'days_remaining': self.days_remaining,
             'plan': self.plan,
             'hardware_id': self.hardware_id,
-            'message': self.message,
-            'license_key': self.license_key,
-            'trial_active': self.trial_active
+            'message': self.message
         }
 
     @classmethod
@@ -42,9 +38,7 @@ class LicenseStatus:
             days_remaining=data.get('days_remaining', 0),
             plan=data.get('plan'),
             hardware_id=data.get('hardware_id'),
-            message=data.get('message'),
-            license_key=data.get('license_key'),
-            trial_active=data.get('trial_active', data.get('status') == 'trial')
+            message=data.get('message')
         )
 
 
@@ -82,30 +76,25 @@ class LicenseEngine:
                 return self._status
         try:
             hardware_id = self._hardware.get_fingerprint()
-            # Check for existing trial first (works without license key)
-            trial_response = self._client.get_trial_status(hardware_id)
-            trial_data = trial_response.get('data', {})
-            if trial_data.get('has_trial'):
-                status_str = trial_data.get('status', 'trial')
-                self._status = LicenseStatus(
-                    valid=status_str == 'active',
-                    status=status_str,
-                    expires_at=trial_data.get('expiry_date'),
-                    days_remaining=trial_data.get('days_left', 0),
-                    plan=trial_data.get('plan'),
-                    hardware_id=hardware_id,
-                    message=f"Trial is {status_str}"
-                )
-                if self._status.valid:
-                    self._cache.set_license_status(self._status.to_dict())
-                return self._status
-            # No trial - return unlicensed
+            response = self._client.validate_license(hardware_id)
+            data = response.get('data', response)
             self._status = LicenseStatus(
-                valid=False, status='unlicensed',
+                valid=data.get('valid', False),
+                status=data.get('status', 'unlicensed'),
+                expires_at=data.get('expires_at'),
+                days_remaining=data.get('days_left', data.get('days_remaining', 0)),
+                plan=data.get('plan'),
                 hardware_id=hardware_id,
-                message='No license or trial found'
+                message=data.get('message', response.get('message'))
             )
+            if self._status.valid:
+                self._cache.set_license_status(self._status.to_dict())
             return self._status
+        except ApiError:
+            cached = self._cache.get_license_status()
+            if cached:
+                return LicenseStatus.from_dict(cached)
+            raise
         except Exception as e:
             cached = self._cache.get_license_status()
             if cached:
@@ -115,9 +104,6 @@ class LicenseEngine:
                 message=f"Unexpected error: {str(e)}"
             )
             return self._status
-
-    def get_hardware_id(self) -> str:
-        return self._hardware.get_fingerprint()
 
     def get_status(self) -> Optional[LicenseStatus]:
         return self._status

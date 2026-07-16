@@ -4,9 +4,6 @@ from tkinter import ttk, messagebox, filedialog
 import os
 import platform
 
-from SDKToolkit_prod_zemmacos import LicenseEngine, ActivationDialog
-
-
 class SettingsUI:
     def __init__(self, parent, app_instance):
         self.parent = parent
@@ -22,11 +19,21 @@ class SettingsUI:
         header._role = "header"
         header.pack(fill=tk.X, padx=30, pady=24)
 
-        tk.Label(header, text="Settings", font=("SF Pro Display", 26, "bold"),
+        left_h = tk.Frame(header, bg=self.colors["header_bg"])
+        left_h.pack(side=tk.LEFT, anchor=tk.W)
+        tk.Label(left_h, text="Settings", font=("SF Pro Display", 26, "bold"),
                  fg=self.colors["text"], bg=self.colors["header_bg"]).pack(anchor=tk.W)
-        tk.Label(header, text="Configure your application preferences",
+        tk.Label(left_h, text="Configure your application preferences",
                  font=("SF Pro Text", 11), fg=self.colors["muted"],
                  bg=self.colors["header_bg"]).pack(anchor=tk.W, pady=2)
+
+        right_h = tk.Frame(header, bg=self.colors["header_bg"])
+        right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6, padx=4)
+        self._license_badge = tk.Label(
+            right_h, text="", font=("SF Pro Text", 9, "bold"),
+            fg=self.colors.get("muted", "#86868b"), bg=self.colors["header_bg"]
+        )
+        self._license_badge.pack(side=tk.RIGHT, padx=8)
 
         body = tk.Frame(container, bg=self.colors["content_bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=30, pady=12)
@@ -132,9 +139,13 @@ class SettingsUI:
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["success"],
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
-        tk.Button(inner2, text="Check for Updates", command=self._check_for_updates,
+        tk.Button(inner2, text="Activate License", command=self._activate_license,
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["accent"],
+                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+        tk.Button(inner2, text="Check for Updates", command=self._check_for_updates,
+                  font=("SF Pro Text", 11, "bold"),
+                  fg="white", bg=self.colors["warning"],
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
 
     def _build_downloads(self):
@@ -228,174 +239,6 @@ class SettingsUI:
                   fg="white", bg=self.colors["success"],
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
 
-    def refresh_license_display(self):
-        if self._current_section == "license":
-            self._switch_section("license")
-
-    def _build_license(self):
-        c = self.colors
-        engine = getattr(self.app, 'license_engine', None)
-        status = engine.get_status() if engine else None
-
-        inner = self._card(self._content_frame, "License Status")
-        if status:
-            rows = [
-                ("Status", status.status.upper()),
-                ("Plan", status.plan or 'N/A'),
-                ("Expires", status.expires_at or 'N/A'),
-                ("Days Remaining", str(status.days_remaining)),
-                ("Customer Email", getattr(status, 'customer_email', '') or 'N/A'),
-                ("Device Bound", "\u2705 Yes" if getattr(status, 'device_bound', False) else "\u274c No"),
-                ("Hardware ID", (status.hardware_id or 'N/A')[:40] + '...' if status.hardware_id and len(status.hardware_id) > 40 else (status.hardware_id or 'N/A')),
-                ("Valid", "\u2705 Yes" if status.valid else "\u274c No"),
-                ("Message", status.message or ''),
-            ]
-            for label, val in rows:
-                row = self._row(inner, label)
-                tk.Label(row, text=val, font=("SF Pro Text", 11),
-                         fg=c["text"], bg=c["card_bg"]).pack(side=tk.LEFT)
-        elif engine:
-            tk.Label(inner, text="Initializing license engine...",
-                     font=("SF Pro Text", 11), fg=c["muted"],
-                     bg=c["card_bg"]).pack(anchor=tk.W, pady=10)
-        else:
-            tk.Label(inner, text="License engine not initialized.",
-                     font=("SF Pro Text", 11), fg=c["muted"],
-                     bg=c["card_bg"]).pack(anchor=tk.W, pady=10)
-
-        inner2 = self._card(self._content_frame, "Actions")
-        if engine and status:
-            state = status.status
-
-            def after_action():
-                self.app.refresh_license_widgets()
-
-            def do_refresh():
-                try:
-                    engine.refresh()
-                    after_action()
-                    self.app.show_toast("License status refreshed", "success", 2000)
-                except Exception as e:
-                    messagebox.showerror("Error", f"Refresh failed: {e}")
-
-            def do_activate():
-                try:
-                    dialog = ActivationDialog(
-                        engine=engine,
-                        parent=self.app.root
-                    )
-                    result = dialog.show()
-                    if result and result.get("action") == "activated":
-                        engine.initialize()
-                        self.app.set_license_engine(engine)
-                        self.app.refresh_license_widgets()
-                        self.app.show_toast("License activated successfully", "success", 3000)
-                except Exception as e:
-                    messagebox.showerror("Error", f"Activation failed: {e}")
-
-            def do_deactivate():
-                key = engine.get_license_key()
-                if not key:
-                    messagebox.showerror("Error", "No license key available")
-                    return
-                if messagebox.askyesno("Deactivate", "Deactivate license on this device?"):
-                    try:
-                        result = engine.deactivate(key)
-                        if result.get('success'):
-                            messagebox.showinfo("Success", "License deactivated")
-                            after_action()
-                        else:
-                            messagebox.showerror("Error", result.get('message', 'Deactivation failed'))
-                    except Exception as e:
-                        messagebox.showerror("Error", str(e))
-
-            def do_renew():
-                try:
-                    result = engine.renew()
-                    if result.get('success'):
-                        messagebox.showinfo("Success", "License renewed!")
-                        after_action()
-                    else:
-                        messagebox.showerror("Error", result.get('message', 'Renewal failed'))
-                except Exception as e:
-                    messagebox.showerror("Error", str(e))
-
-            def do_replace_device():
-                if messagebox.askyesno("Replace Device", "Replace device binding for this license?"):
-                    try:
-                        result = engine.replace_hardware()
-                        if result.get('success'):
-                            messagebox.showinfo("Success", "Device replaced!")
-                            after_action()
-                        else:
-                            messagebox.showerror("Error", result.get('message', 'Device replacement failed'))
-                    except Exception as e:
-                        messagebox.showerror("Error", str(e))
-
-            if state == 'trial':
-                tk.Button(inner2, text="Refresh Status",
-                          font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["accent"],
-                          bd=0, padx=20, pady=8, cursor="hand2",
-                          command=do_refresh).pack(side=tk.LEFT, padx=5)
-                tk.Button(inner2, text="Activate License",
-                          font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["success"],
-                          bd=0, padx=20, pady=8, cursor="hand2",
-                          command=do_activate).pack(side=tk.LEFT, padx=5)
-            elif state == 'active' and status.valid:
-                tk.Button(inner2, text="Refresh License",
-                          font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["accent"],
-                          bd=0, padx=20, pady=8, cursor="hand2",
-                          command=do_refresh).pack(side=tk.LEFT, padx=5)
-                tk.Button(inner2, text="Replace Device",
-                          font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["warning"],
-                          bd=0, padx=20, pady=8, cursor="hand2",
-                          command=do_replace_device).pack(side=tk.LEFT, padx=5)
-                tk.Button(inner2, text="Deactivate License",
-                          font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["error"],
-                          bd=0, padx=20, pady=8, cursor="hand2",
-                          command=do_deactivate).pack(side=tk.LEFT, padx=5)
-            elif state == 'expired':
-                tk.Button(inner2, text="Renew License",
-                          font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["success"],
-                          bd=0, padx=20, pady=8, cursor="hand2",
-                          command=do_renew).pack(side=tk.LEFT, padx=5)
-                tk.Button(inner2, text="Activate License",
-                          font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["accent"],
-                          bd=0, padx=20, pady=8, cursor="hand2",
-                          command=do_activate).pack(side=tk.LEFT, padx=5)
-            else:
-                tk.Button(inner2, text="Refresh Status",
-                          font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["accent"],
-                          bd=0, padx=20, pady=8, cursor="hand2",
-                          command=do_refresh).pack(side=tk.LEFT, padx=5)
-                tk.Button(inner2, text="Activate License",
-                          font=("SF Pro Text", 11, "bold"),
-                          fg="white", bg=c["success"],
-                          bd=0, padx=20, pady=8, cursor="hand2",
-                          command=do_activate).pack(side=tk.LEFT, padx=5)
-
-        inner3 = self._card(self._content_frame, "Support")
-        support_email = "support@websmithdigital.com"
-        try:
-            if engine and engine.config:
-                support_email = engine.config.get("branding", {}).get("support_email", support_email)
-        except Exception:
-            pass
-        tk.Label(inner3, text=f"For license issues contact: {support_email}",
-                 font=("SF Pro Text", 10), fg=c["text_secondary"],
-                 bg=c["card_bg"]).pack(anchor=tk.W, pady=6)
-        tk.Label(inner3, text="https://websmith-z.vercel.app",
-                 font=("SF Pro Text", 10), fg=c["accent"],
-                 bg=c["card_bg"]).pack(anchor=tk.W)
-
     def _build_updates(self):
         inner = self._card(self._content_frame, "Update Settings")
         row = self._row(inner, "Notifications:")
@@ -437,6 +280,73 @@ class SettingsUI:
         tk.Label(inner4, text="ZEMmacOS is a tool for downloading macOS installer packages from Apple's servers.",
                  font=("SF Pro Text", 10), fg=self.colors["text_secondary"],
                  bg=self.colors["card_bg"], wraplength=500, justify=tk.LEFT).pack(anchor=tk.W)
+
+    def _build_license(self):
+        inner = self._card(self._content_frame, "License Information")
+        engine = getattr(self.app, 'license_engine', None)
+        status_obj = getattr(self.app, 'license_status', None) if hasattr(self.app, 'license_status') else None
+        labels = engine.config.get('branding', {}).get('labels', {}) if engine and engine.config else {}
+        prod = engine.config.get('product', {}) if engine and engine.config else {}
+
+        info_rows = [
+            ("Status", status_obj.status.upper() if status_obj else "--"),
+            ("Product", prod.get('name', 'ZEM MAC OS')),
+            ("Plan", (status_obj.plan or '--') if status_obj else "--"),
+            ("Expiry", (status_obj.expires_at or '--') if status_obj else "--"),
+            ("Days Remaining", str(status_obj.days_remaining) if status_obj else "--"),
+            ("License Key", (status_obj.license_key or '--') if status_obj else "--"),
+            ("Hardware ID", (status_obj.hardware_id or '--') if status_obj else "--"),
+            ("Max Devices", str(status_obj.max_devices) if status_obj else "--"),
+            ("Device Count", str(status_obj.device_count) if status_obj else "--"),
+        ]
+        for label, value in info_rows:
+            row = self._row(inner, label)
+            tk.Label(row, text=value, font=("SF Pro Text", 11, "bold"),
+                     fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+
+        inner2 = self._card(self._content_frame, "Actions")
+        btn_frame = tk.Frame(inner2, bg=self.colors["card_bg"])
+        btn_frame.pack(fill=tk.X)
+        buttons = [
+            ("Activate License", self._activate_license, self.colors["accent"]),
+            ("Renew License", self._renew_license, self.colors["success"]),
+            ("Replace Device", self._replace_device, self.colors["warning"]),
+            ("Start Trial / Welcome", self._open_welcome, self.colors["info"]),
+            ("Refresh Status", self._refresh_license_status, self.colors["muted"]),
+        ]
+        for text, cmd, clr in buttons:
+            tk.Button(btn_frame, text=text, command=cmd,
+                      font=("SF Pro Text", 11, "bold"),
+                      fg="white", bg=clr,
+                      bd=0, padx=20, pady=8, cursor="hand2",
+                      width=24).pack(side=tk.LEFT, padx=5)
+
+    def _activate_license(self):
+        act = getattr(self.app, 'open_activation', None)
+        if act:
+            act()
+
+    def _renew_license(self):
+        act = getattr(self.app, 'open_renewal', None)
+        if act:
+            act()
+
+    def _replace_device(self):
+        act = getattr(self.app, 'open_device_replace', None)
+        if act:
+            act()
+
+    def _open_welcome(self):
+        act = getattr(self.app, 'open_welcome', None)
+        if act:
+            act()
+
+    def _refresh_license_status(self):
+        ref = getattr(self.app, 'refresh_license', None)
+        if ref:
+            ref()
+        if hasattr(self, '_build_license'):
+            self._switch_section("license")
 
     # ---- Actions ----
 

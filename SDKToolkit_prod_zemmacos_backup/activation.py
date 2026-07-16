@@ -468,10 +468,9 @@ class ActivationDialog:
             if self._hardware_ok and self._products_ok:
                 self._set_controls_disabled(False)
                 self._status_label.config(
-                    text='Initialization complete. Refreshing trial/license data...',
+                    text='Initialization complete. Enter license key, click Refresh.',
                     fg=self._text_secondary
                 )
-                self._root.after(100, self._auto_fetch_trial)
             else:
                 reasons = []
                 if not self._hardware_ok:
@@ -482,20 +481,6 @@ class ActivationDialog:
                     text=f'Initialization failed: {"; ".join(reasons)}. Close and retry.',
                     fg=self._error
                 )
-
-    def _auto_fetch_trial(self):
-        try:
-            trial_result = self.client.get_trial_status(self._hardware_id)
-            trial_data = trial_result.get('data', {})
-            if trial_data.get('has_trial'):
-                self._update_ui(trial_data)
-                self._status_label.config(
-                    text=f"Trial active — {trial_data.get('days_left', 0)} day(s) remaining. Enter license key to activate.",
-                    fg=self._success
-                )
-                self._activate_btn.set_disabled(False)
-        except Exception:
-            pass
 
     def _detect_hardware(self):
         try:
@@ -611,58 +596,47 @@ class ActivationDialog:
 
     def _on_refresh(self):
         license_key = self._license_entry.get().strip()
+        if not license_key:
+            self._status_label.config(text='Please enter a license key.', fg=self._error)
+            return
+        self._status_label.config(text='Validating license...', fg=self._text_secondary)
         self._refresh_btn.set_loading(True)
         self._root.update()
         try:
-            if license_key:
-                self._status_label.config(text='Validating license...', fg=self._text_secondary)
-                result = self.client.validate_license(license_key, self._hardware_id)
-                if result.get('valid') or result.get('data', {}).get('valid'):
-                    data = result.get('data', result)
-                    self._validate_data = data
-                    self._license_key = license_key
-                    self._update_ui(data)
+            result = self.client.validate_license(license_key, self._hardware_id)
+            if result.get('valid') or result.get('data', {}).get('valid'):
+                data = result.get('data', result)
+                self._validate_data = data
+                self._license_key = license_key
+                self._update_ui(data)
 
-                    # Auto-detect product + plan from validated license data
-                    api_plan = data.get('plan', '')
-                    if api_plan:
-                        found = False
-                        for pid, plans in self._plans_cache.items():
-                            for pl in plans:
-                                if pl.get('name') == api_plan:
-                                    for i, pname in enumerate(self._product_combo['values']):
-                                        if i < len(self._product_ids) and self._product_ids[i] == pid:
-                                            self._product_combo.set(pname)
-                                            self._on_product_selected()
-                                            self._plan_combo.set(api_plan)
-                                            found = True
-                                            break
-                                    if found:
+                # Auto-detect product + plan from validated license data
+                api_plan = data.get('plan', '')
+                if api_plan:
+                    found = False
+                    for pid, plans in self._plans_cache.items():
+                        for pl in plans:
+                            if pl.get('name') == api_plan:
+                                for i, pname in enumerate(self._product_combo['values']):
+                                    if i < len(self._product_ids) and self._product_ids[i] == pid:
+                                        self._product_combo.set(pname)
+                                        self._on_product_selected()
+                                        self._plan_combo.set(api_plan)
+                                        found = True
                                         break
-                            if found:
-                                break
+                                if found:
+                                    break
+                        if found:
+                            break
 
-                    self._status_label.config(text='License validated successfully. All fields auto-filled.', fg=self._success)
-                    self._activate_btn.set_disabled(False)
-                    self._fetch_trial_status()
-                else:
-                    err_msg = result.get('message', result.get('error', 'License validation failed'))
-                    self._status_label.config(text=f'Validation failed: {err_msg}', fg=self._error)
+                self._status_label.config(text='License validated successfully. All fields auto-filled.', fg=self._success)
+                self._activate_btn.set_disabled(False)
+                self._fetch_trial_status()
             else:
-                # No license key — try fetching trial info
-                trial_result = self.client.get_trial_status(self._hardware_id)
-                trial_data = trial_result.get('data', {})
-                if trial_data.get('has_trial'):
-                    self._update_ui(trial_data)
-                    self._status_label.config(
-                        text=f"Trial active — {trial_data.get('days_left', 0)} day(s) remaining. Enter license key to activate.",
-                        fg=self._success
-                    )
-                    self._activate_btn.set_disabled(False)
-                else:
-                    self._status_label.config(text='No license key and no active trial found.', fg=self._error)
+                err_msg = result.get('message', result.get('error', 'License validation failed'))
+                self._status_label.config(text=f'Validation failed: {err_msg}', fg=self._error)
         except Exception as e:
-            self._status_label.config(text=f'Refresh error: {str(e)}', fg=self._error)
+            self._status_label.config(text=f'Validation error: {str(e)}', fg=self._error)
         finally:
             self._refresh_btn.set_loading(False)
 

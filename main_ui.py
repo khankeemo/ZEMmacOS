@@ -6,9 +6,7 @@ import sys
 import time
 from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
-from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole, LicenseWidget
-
-from SDKToolkit_prod_zemmacos import LicenseEngine
+from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -51,8 +49,10 @@ class ZEMmacOSUI:
         self._check_updates_callback = None
         self._nav_buttons = {}
         self._toast_widgets = []
-        if not hasattr(self, '_license_engine'):
-            self._license_engine = None
+        self._license_badge = None
+        self._dashboard_license_widgets = {}
+        self._lock_overlay = None
+        self._live_log_viewer = None
 
         self._init_light_colors()
         self.setup_styles()
@@ -124,51 +124,6 @@ class ZEMmacOSUI:
         main_container.pack(fill=tk.BOTH, expand=True)
         self.create_sidebar(main_container)
         self.create_content_area(main_container)
-
-    def _get_license_engine(self):
-        return self._license_engine
-
-    def set_license_engine(self, engine):
-        self._license_engine = engine
-        self._update_license_display()
-
-    def refresh_license_widgets(self):
-        self._update_license_display()
-        if hasattr(self, 'settings_ui') and self.settings_ui:
-            try:
-                self.settings_ui.refresh_license_display()
-            except Exception:
-                pass
-
-    def _update_license_display(self):
-        engine = self._get_license_engine()
-        if not engine:
-            return
-        status = engine.get_status()
-        if not status:
-            return
-        c = self.colors
-        if status.valid:
-            txt = f"\u2705 Active - {status.plan or 'N/A'} - {status.days_remaining}d remaining"
-            fg = c["success"]
-        elif status.status == 'trial':
-            txt = f"\U0001f3b5 Trial - {status.days_remaining}d remaining"
-            fg = c["warning"]
-        elif status.status == 'expired':
-            txt = "\u26a0 License expired"
-            fg = c["error"]
-        elif status.status == 'unlicensed':
-            txt = "\U0001f512 Not activated"
-            fg = c["muted"]
-        else:
-            txt = f"License: {status.status}"
-            fg = c["muted"]
-        if hasattr(self, '_license_status_label') and self._license_status_label:
-            self._license_status_label.config(text=txt, fg=fg)
-        if hasattr(self, '_license_dash_label') and self._license_dash_label:
-            self._license_dash_label.config(text=txt, fg=fg)
-        if hasattr(self, '_license_widget') and self._license_widget:
-            self._license_widget.update_from_engine(engine)
 
     def create_sidebar(self, parent):
         sidebar = tk.Frame(parent, bg=self.colors["sidebar_bg"], width=self.colors.get("sidebar_width", 220))
@@ -449,55 +404,6 @@ class ZEMmacOSUI:
             callback()
 
     # -----------------------------------------------------------------
-    # INIT ERROR DIALOG — used when license system fails to init
-    # -----------------------------------------------------------------
-    def show_init_error_dialog(self, error_msg, retry_callback, exit_callback):
-        if getattr(self, "_init_error_open", False):
-            return
-        self._init_error_open = True
-        c = self.colors
-        W, H = 400, 240
-
-        def cleanup():
-            self._init_error_open = False
-            if hasattr(self, "_init_error_dialog") and self._init_error_dialog:
-                try:
-                    self._init_error_dialog.destroy()
-                except:
-                    pass
-                self._init_error_dialog = None
-
-        d, canvas = self._make_modal_dialog(W, H, close_cb=exit_callback)
-        self._init_error_dialog = d
-        cx = W // 2
-
-        canvas.create_text(cx, 40, text="Initialization Failed",
-                           font=("SF Pro Display", 16, "bold"),
-                           fill=c["error"], anchor="center")
-
-        canvas.create_text(cx, 78, text="The license system could not be initialized.",
-                           font=("SF Pro Text", 11),
-                           fill=c["text"], anchor="center")
-
-        canvas.create_text(cx, 106, text=error_msg[:80],
-                           font=("SF Pro Text", 9),
-                           fill=c["muted"], anchor="center", width=340)
-
-        canvas.create_text(cx, 140, text="The application cannot continue without a valid license.",
-                           font=("SF Pro Text", 10, "bold"),
-                           fill=c["text_secondary"], anchor="center")
-
-        bw, bh = 120, 34
-        by = 180
-
-        self._make_dialog_button(d, "Retry", c["accent"], "white",
-                                 lambda: [cleanup(), retry_callback()],
-                                 cx - bw - 10, by, bw, bh)
-        self._make_dialog_button(d, "Exit", c["error"], "white",
-                                 lambda: [cleanup(), exit_callback()],
-                                 cx + 10, by, bw, bh)
-
-    # -----------------------------------------------------------------
     # CANCEL CONFIRMATION DIALOG
     # -----------------------------------------------------------------
     def _show_cancel_confirmation(self, on_yes_callback):
@@ -586,14 +492,17 @@ class ZEMmacOSUI:
 
         right_h = tk.Frame(header, bg=colors["header_bg"])
         right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6, padx=4)
-        self._license_widget = LicenseWidget(right_h, colors)
-        self._license_widget.pack(side=tk.RIGHT, padx=(0, 8))
         self._theme_toggle = ThemeToggle(
             right_h,
             command=self._on_theme_toggle,
             colors=colors,
         )
         self._theme_toggle.pack(side=tk.RIGHT, padx=4)
+        self._license_badge = tk.Label(
+            right_h, text="", font=("SF Pro Text", 9, "bold"),
+            fg=colors.get("muted", "#86868b"), bg=colors["header_bg"]
+        )
+        self._license_badge.pack(side=tk.RIGHT, padx=8)
 
         body_frame = tk.Frame(self.content_area, bg=colors["content_bg"])
         body_frame.pack(fill=tk.BOTH, expand=True, padx=28, pady=24)
@@ -622,18 +531,7 @@ class ZEMmacOSUI:
             tk.Label(card, text=stats_labels[i], font=("SF Pro Text", 10),
                      fg=colors["muted"], bg=colors["card_bg"]).pack()
 
-        license_card = ModernCard(body_frame, colors, title="License Status", padding=10)
-        license_card.pack(fill=tk.X, pady=12)
-        lc_body = license_card.get_body()
-        c = colors
-        row = tk.Frame(lc_body, bg=c["card_bg"])
-        row.pack(fill=tk.X, pady=4)
-        self._license_dash_label = tk.Label(row, text="Checking license...",
-            font=("SF Pro Text", 12), fg=c["muted"], bg=c["card_bg"])
-        self._license_dash_label.pack(side=tk.LEFT)
-        engine = self._get_license_engine()
-        if engine and engine.get_status():
-            self._update_license_display()
+        self._build_dashboard_license_card(body_frame)
 
         actions_card = ModernCard(body_frame, colors, title="Quick Actions", padding=18)
         actions_card.pack(fill=tk.X, pady=12)
@@ -671,6 +569,218 @@ class ZEMmacOSUI:
             tk.Label(row, text=desc, font=("SF Pro Text", 11),
                      fg=colors["text"], bg=colors["card_bg"]).pack(side=tk.LEFT, padx=6)
 
+        self._build_live_log_viewer(body_frame)
+
+    # ---- License ----
+
+    def _build_dashboard_license_card(self, parent):
+        colors = self.colors
+        card = ModernCard(parent, colors, title="License Overview",
+                          subtitle="ZEM MAC OS license status", padding=18)
+        card.pack(fill=tk.X, pady=12)
+        body = card.get_body()
+        rows = [
+            ("status", "Status", "--"),
+            ("product", "Product", "--"),
+            ("plan", "Plan", "--"),
+            ("expiry", "Expiry", "--"),
+            ("days", "Days Remaining", "--"),
+            ("customer", "Customer", "--"),
+            ("email", "Email", "--"),
+            ("mobile", "Mobile", "--"),
+            ("key", "License Key", "--"),
+        ]
+        self._dashboard_license_widgets = {}
+        for key, label, _ in rows:
+            row = tk.Frame(body, bg=colors["card_bg"])
+            row.pack(fill=tk.X, pady=2)
+            tk.Label(row, text=label+":", font=("SF Pro Text", 10, "bold"),
+                     fg=colors["text_secondary"], bg=colors["card_bg"],
+                     width=16, anchor=tk.W).pack(side=tk.LEFT)
+            val = tk.Label(row, text="--", font=("SF Pro Text", 10),
+                           fg=colors["text"], bg=colors["card_bg"], anchor=tk.W)
+            val.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            self._dashboard_license_widgets[key] = val
+
+        action_row = tk.Frame(body, bg=colors["card_bg"])
+        action_row.pack(fill=tk.X, pady=(12, 0))
+        tk.Button(action_row, text="Activate License",
+                  command=self._on_activate_license,
+                  font=("SF Pro Text", 10, "bold"),
+                  fg="white", bg=colors["accent"],
+                  bd=0, padx=14, pady=6, cursor="hand2"
+                  ).pack(side=tk.LEFT, padx=2)
+        tk.Button(action_row, text="Refresh",
+                  command=self._on_refresh_license,
+                  font=("SF Pro Text", 10, "bold"),
+                  fg=colors["text"], bg=colors["btn_secondary_bg"],
+                  bd=0, padx=14, pady=6, cursor="hand2"
+                  ).pack(side=tk.LEFT, padx=2)
+
+    def _update_dashboard_license(self):
+        if not hasattr(self, '_dashboard_license_widgets'):
+            return
+        w = self._dashboard_license_widgets
+        colors = self.colors
+        status_obj = getattr(self, 'license_status', None) if hasattr(self, 'license_status') else None
+        engine = getattr(self, 'license_engine', None) if hasattr(self, 'license_engine') else None
+        prod_config = engine.config.get('product', {}) if engine and engine.config else {}
+
+        if status_obj and status_obj.valid:
+            status_text = status_obj.status.upper()
+            if status_obj.trial_active:
+                fg = colors["warning"]
+            else:
+                fg = colors["success"]
+            w["status"].config(text=status_text, fg=fg)
+            w["product"].config(text=prod_config.get('name', 'ZEM MAC OS'))
+            w["plan"].config(text=status_obj.plan or '--')
+            w["expiry"].config(text=status_obj.expires_at or '--')
+            w["days"].config(text=str(status_obj.days_remaining))
+            w["key"].config(text=status_obj.license_key or '--')
+        else:
+            w["status"].config(text="UNLICENSED", fg=colors["error"])
+            w["product"].config(text=prod_config.get('name', 'ZEM MAC OS'))
+            w["plan"].config(text='--')
+            w["expiry"].config(text='--')
+            w["days"].config(text='--')
+            w["key"].config(text='--')
+
+        cust_name = getattr(self, '_customer_name', '') or ''
+        cust_email = getattr(self, '_customer_email', '') or ''
+        cust_mobile = getattr(self, '_customer_mobile', '') or ''
+        w["customer"].config(text=cust_name or '--')
+        w["email"].config(text=cust_email or '--')
+        w["mobile"].config(text=cust_mobile or '--')
+
+    def _update_header_license_badge(self):
+        if not self._license_badge or not self._license_badge.winfo_exists():
+            return
+        colors = self.colors
+        status_obj = getattr(self, 'license_status', None) if hasattr(self, 'license_status') else None
+        if status_obj and status_obj.valid:
+            if status_obj.trial_active:
+                text = f"TRIAL  {status_obj.days_remaining}d"
+                fg = colors["warning"]
+            else:
+                text = f"ACTIVE  {status_obj.days_remaining}d"
+                fg = colors["success"]
+        else:
+            text = "UNLICENSED"
+            fg = colors["error"]
+        self._license_badge.config(text=text, fg=fg)
+
+    def _on_activate_license(self):
+        act = getattr(self, 'open_activation', None)
+        if act:
+            act()
+
+    def _on_refresh_license(self):
+        ref = getattr(self, 'refresh_license', None)
+        if ref:
+            ref()
+
+    # ---- Live Log Viewer ----
+
+    def _build_live_log_viewer(self, parent):
+        colors = self.colors
+        card = ModernCard(parent, colors, title="Live Log",
+                          subtitle="Real-time license integration events", padding=8)
+        card.pack(fill=tk.X, pady=(0, 12))
+        body = card.get_body()
+
+        header_row = tk.Frame(body, bg=colors["card_bg"])
+        header_row.pack(fill=tk.X)
+        self._log_filter_var = tk.StringVar(value="ALL")
+        filters = ["ALL", "STARTUP", "SDK", "WELCOME", "ACTIVATION", "RENEWAL", "DEVICE", "UI"]
+        for f in filters:
+            rb = tk.Radiobutton(
+                header_row, text=f, variable=self._log_filter_var,
+                value=f, command=self._apply_log_filter,
+                font=("SF Pro Text", 8), bg=colors["card_bg"],
+                fg=colors["text"], selectcolor=colors["card_bg"],
+                activebackground=colors["card_bg"],
+                indicatoron=False, padx=6, pady=1,
+            )
+            rb.pack(side=tk.LEFT, padx=1)
+
+        log_frame = tk.Frame(body, bg=colors["card_bg"])
+        log_frame.pack(fill=tk.X, pady=(4, 0))
+        self._log_text = tk.Text(
+            log_frame,
+            font=("SF Mono", 8),
+            bg=colors.get("input_bg", "#ffffff"),
+            fg=colors.get("text", "#1d1d1f"),
+            bd=1, relief=tk.FLAT, height=10,
+            wrap=tk.WORD, state=tk.DISABLED,
+        )
+        sb = tk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self._log_text.yview)
+        self._log_text.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._log_text.pack(fill=tk.BOTH, expand=True)
+
+        for cat, clr in [
+            ("STARTUP", "#5ac8fa"), ("SDK", "#af52de"), ("WELCOME", "#ff9f0a"),
+            ("ACTIVATION", "#0071e3"), ("RENEWAL", "#34c759"), ("DEVICE", "#ff6482"),
+            ("UI", "#86868b"),
+        ]:
+            self._log_text.tag_config(f"cat_{cat}", foreground=clr, font=("SF Mono", 8, "bold"))
+        for lvl, clr in [
+            ("DEBUG", "#888888"), ("INFO", "#51cf66"), ("SUCCESS", "#00ff88"),
+            ("WARNING", "#ffd43b"), ("ERROR", "#ff6b6b"),
+        ]:
+            self._log_text.tag_config(f"lvl_{lvl}", foreground=clr)
+        self._log_text.tag_config("ts", foreground="#666666")
+        self._log_text.tag_config("detail", foreground="#555555")
+
+        self._log_entries = []
+        self._live_log_cb = None
+
+        self.root.after(500, self._connect_live_log)
+
+    def _connect_live_log(self):
+        try:
+            from live_log import get_live_log
+            ll = get_live_log()
+            for entry in ll.get_recent(100):
+                self._log_entries.append(entry)
+            self._apply_log_filter()
+            ll.register(self._on_live_log_entry)
+            self._live_log_cb = self._on_live_log_entry
+        except Exception:
+            pass
+
+    def _on_live_log_entry(self, category, level, message, detail):
+        self._log_entries.append((category, level, message, detail))
+        if len(self._log_entries) > 2000:
+            self._log_entries = self._log_entries[-1000:]
+        self._apply_log_filter()
+
+    def _apply_log_filter(self):
+        try:
+            filt = self._log_filter_var.get()
+            self._log_text.configure(state=tk.NORMAL)
+            self._log_text.delete(1.0, tk.END)
+            count = 0
+            for cat, lvl, msg, det in reversed(self._log_entries):
+                if filt != "ALL" and cat != filt:
+                    continue
+                from datetime import datetime
+                ts = datetime.now().strftime("%H:%M:%S")
+                self._log_text.insert(tk.END, f"[{ts}] ", "ts")
+                self._log_text.insert(tk.END, f"[{cat:<9}] ", f"cat_{cat}")
+                self._log_text.insert(tk.END, f"[{lvl:<7}] ", f"lvl_{lvl}")
+                self._log_text.insert(tk.END, f"{msg}\n")
+                if det:
+                    self._log_text.insert(tk.END, f"  {det}\n", "detail")
+                count += 1
+                if count >= 100:
+                    break
+            self._log_text.see(tk.END)
+            self._log_text.configure(state=tk.DISABLED)
+        except Exception:
+            pass
+
     # ---- Library ----
 
     def show_library(self):
@@ -684,11 +794,21 @@ class ZEMmacOSUI:
         header._role = "header"
         header.pack(fill=tk.X, padx=30, pady=24)
 
-        tk.Label(header, text="Download Library", font=("SF Pro Display", 26, "bold"),
+        left_h = tk.Frame(header, bg=colors["header_bg"])
+        left_h.pack(side=tk.LEFT, anchor=tk.W)
+        tk.Label(left_h, text="Download Library", font=("SF Pro Display", 26, "bold"),
                  fg=colors["text"], bg=colors["header_bg"]).pack(anchor=tk.W)
-        tk.Label(header, text="Browse and download macOS installer versions",
+        tk.Label(left_h, text="Browse and download macOS installer versions",
                  font=("SF Pro Text", 11), fg=colors["muted"],
                  bg=colors["header_bg"]).pack(anchor=tk.W, pady=2)
+
+        right_h = tk.Frame(header, bg=colors["header_bg"])
+        right_h.pack(side=tk.RIGHT, anchor=tk.N, pady=6, padx=4)
+        self._license_badge = tk.Label(
+            right_h, text="", font=("SF Pro Text", 9, "bold"),
+            fg=colors.get("muted", "#86868b"), bg=colors["header_bg"]
+        )
+        self._license_badge.pack(side=tk.RIGHT, padx=8)
 
         body = tk.Frame(self.content_area, bg=colors["content_bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=28, pady=10)
@@ -889,6 +1009,7 @@ class ZEMmacOSUI:
         self.settings_download_dir = getattr(self.settings_ui, 'settings_download_dir', None)
         self.settings_catalog_var = getattr(self.settings_ui, 'settings_catalog_var', None)
         self.threads_var = getattr(self.settings_ui, 'threads_var', None)
+        self.root.after(100, self._update_header_license_badge)
 
     # ---- Callbacks ----
 
