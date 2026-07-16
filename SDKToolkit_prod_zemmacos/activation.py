@@ -587,8 +587,6 @@ class ActivationDialog:
             self._root.destroy()
         except Exception:
             pass
-        if self._cancelled:
-            sys.exit(0)
 
     def _get_selected_product_id(self) -> str:
         name = self._product_combo.get()

@@ -193,7 +193,6 @@ class WelcomeDialog:
             self._root.destroy()
         except Exception:
             pass
-        sys.exit(0)
 
     def _on_send_otp(self):
         name = self._name_entry.get().strip()
