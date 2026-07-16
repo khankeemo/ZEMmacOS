@@ -5,7 +5,7 @@ import sys
 import time
 import threading
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
 
 import threading as _threading
 
@@ -19,7 +19,7 @@ from update import AppUpdater
 from SDKToolkit_prod_zemmacos import LicenseEngine, WelcomeDialog, ActivationDialog
 
 
-def _create_splash(parent):
+def _create_loading_screen(parent, status_text="Initializing license system..."):
     splash = tk.Toplevel(parent)
     splash.overrideredirect(True)
     splash.configure(bg="#f5f5f7")
@@ -28,15 +28,24 @@ def _create_splash(parent):
 
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
-    w, h = 400, 220
+    w, h = 500, 260
     x = (sw - w) // 2
     y = (sh - h) // 2
     splash.geometry(f"{w}x{h}+{x}+{y}")
 
     tk.Label(splash, text="ZEMmacOS", font=("SF Pro Display", 28, "bold"),
              fg="#0071e3", bg="#f5f5f7").pack(pady=(50, 10))
-    tk.Label(splash, text="Initializing license...", font=("SF Pro Text", 12),
-             fg="#6e6e73", bg="#f5f5f7").pack()
+
+    status_label = tk.Label(splash, text=status_text, font=("SF Pro Text", 12),
+                            fg="#6e6e73", bg="#f5f5f7")
+    status_label.pack(pady=10)
+
+    progress = ttk.Progressbar(splash, mode="indeterminate", length=280)
+    progress.pack(pady=15)
+    progress.start(15)
+
+    splash.status_label = status_label
+    splash.progress = progress
     splash.update()
     return splash
 
@@ -114,8 +123,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._network_monitor_stop = threading.Event()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.settings_service.apply_saved_theme()
-        self.settings_service.check_first_run_directory()
 
         self.debug_log("APP", "SYSTEM", "Application starting...")
         self.debug_log("PERFORMANCE", "INFO", "ZEMmacOS v3.0", f"Python {sys.version}")
@@ -124,9 +131,42 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.log(f"Log file: {self.logger.get_log_file_path()}", "info")
         self.log("=" * 60, "info")
 
-        self._splash = _create_splash(self.root)
-        self._start_network_monitor()
+        self._splash = _create_loading_screen(self.root)
         self.root.after(100, self._start_license_system)
+
+    # -----------------------------------------------------------------
+    # LOADING SCREEN HELPERS
+    # -----------------------------------------------------------------
+    def _update_loading_status(self, text):
+        if hasattr(self, '_splash') and self._splash:
+            try:
+                self._splash.status_label.config(text=text)
+                self._splash.update_idletasks()
+            except:
+                pass
+
+    def _destroy_loading_screen(self):
+        if hasattr(self, '_splash') and self._splash:
+            try:
+                self._splash.destroy()
+            except:
+                pass
+            self._splash = None
+
+    def _finalize_startup(self):
+        """Build UI, apply theme, show dashboard, start services."""
+        self._destroy_loading_screen()
+        self.build_main_ui()
+        self.settings_service.apply_saved_theme()
+        self.root.deiconify()
+        self.show_dashboard()
+        if hasattr(self, 'license_engine') and self.license_engine:
+            self.refresh_license_widgets()
+        self._start_network_monitor()
+        self.root.after(500, self._show_startup_toast)
+        self.root.after(1000, self._auto_fetch)
+        self.root.after(2000, self._check_internet_on_startup)
+        self.settings_service.check_first_run_directory()
 
     # -----------------------------------------------------------------
     # LICENSE SYSTEM — SDK initialization + welcome flow
@@ -136,54 +176,59 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def _init_license_worker(self):
         try:
+            self.root.after(0, lambda: self._update_loading_status("Loading configuration..."))
             base = os.path.dirname(os.path.abspath(__file__))
             config_path = os.path.join(base, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json')
+
+            self.root.after(0, lambda: self._update_loading_status("Initializing LicenseEngine..."))
             engine = LicenseEngine(config_path=config_path)
+
+            self.root.after(0, lambda: self._update_loading_status("Checking hardware..."))
             status = engine.initialize()
+
+            self.root.after(0, lambda: self._update_loading_status("Checking license status..."))
             self.root.after(0, lambda: self._on_license_init(engine, status))
         except Exception as e:
             self.root.after(0, lambda e=e: self._on_license_error(str(e)))
 
     def _on_license_error(self, error_msg):
-        if self._splash:
-            self._splash.destroy()
-            self._splash = None
-        self.root.deiconify()
+        self._destroy_loading_screen()
         self.log(f"License system error: {error_msg}", "warning")
-        self.show_dashboard()
-        self.root.after(500, self._show_startup_toast)
-        self.root.after(1000, self._auto_fetch)
-        self.root.after(2000, self._check_internet_on_startup)
-        self.show_toast("License system unavailable", "warning", 5000)
+        self.root.deiconify()
+        self.root.after(100, lambda: self.show_init_error_dialog(
+            error_msg,
+            retry_callback=self._retry_license_init,
+            exit_callback=self._exit_app
+        ))
+
+    def _retry_license_init(self):
+        self.log("Retrying license initialization...", "info")
+        self.root.withdraw()
+        self._splash = _create_loading_screen(self.root, "Retrying license initialization...")
+        self.root.after(100, self._start_license_system)
 
     def _on_license_init(self, engine, status):
         self.license_engine = engine
         self.set_license_engine(engine)
         self.debug_log("LICENSE", "INFO", f"SDK status: {status.status}")
+
+        # State 2 — License Available
         if status.status in ('active', 'trial'):
-            if self._splash:
-                self._splash.destroy()
-                self._splash = None
-            self.root.deiconify()
             msg = f"License: {status.status.upper()} — {status.days_remaining}d remaining"
             if status.plan:
                 msg += f" ({status.plan})"
             self.log(msg, "success")
-            self.show_dashboard()
-            self.root.after(500, self._show_startup_toast)
-            self.root.after(1000, self._auto_fetch)
-            self.root.after(2000, self._check_internet_on_startup)
+            self._finalize_startup()
             return
+
+        # State 3 — Activation Required
         if status.status == 'expired':
-            if self._splash:
-                self._splash.destroy()
-                self._splash = None
+            self._destroy_loading_screen()
             self.log("License expired — showing activation dialog", "warning")
             self.root.after(100, self._show_activation_dialog)
             return
-        if self._splash:
-            self._splash.destroy()
-            self._splash = None
+
+        self._destroy_loading_screen()
         self.log("No active license — starting onboarding", "info")
         self.root.after(100, self._show_welcome_dialog)
 
@@ -198,12 +243,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.log("Onboarding complete — trial started", "success")
                 engine.initialize()
                 self.set_license_engine(engine)
-                self.refresh_license_widgets()
-                self.root.deiconify()
-                self.show_dashboard()
-                self.root.after(500, self._show_startup_toast)
-                self.root.after(1000, self._auto_fetch)
-                self.root.after(2000, self._check_internet_on_startup)
+                self._finalize_startup()
             else:
                 self.log("Onboarding incomplete — exiting application", "warning")
                 self._exit_app()
@@ -227,12 +267,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.log("License activated successfully from startup dialog", "success")
                 engine.initialize()
                 self.set_license_engine(engine)
-                self.refresh_license_widgets()
-                self.root.deiconify()
-                self.show_dashboard()
-                self.root.after(500, self._show_startup_toast)
-                self.root.after(1000, self._auto_fetch)
-                self.root.after(2000, self._check_internet_on_startup)
+                self._finalize_startup()
                 self.show_toast("License activated successfully", "success", 3000)
             else:
                 self.log("Activation cancelled or failed — exiting application", "warning")

@@ -56,8 +56,7 @@ class ZEMmacOSUI:
 
         self._init_light_colors()
         self.setup_styles()
-        self.create_ui()
-        self.load_logo()
+        self._main_ui_built = False
 
     def _init_light_colors(self):
         self.colors = {
@@ -112,6 +111,13 @@ class ZEMmacOSUI:
                                        fg=self.colors["accent"], bg=self.colors["sidebar_bg"])
         except Exception:
             pass
+
+    def build_main_ui(self):
+        if self._main_ui_built:
+            return
+        self.create_ui()
+        self.load_logo()
+        self._main_ui_built = True
 
     def create_ui(self):
         main_container = tk.Frame(self.root, bg=self.colors["root_bg"])
@@ -441,6 +447,55 @@ class ZEMmacOSUI:
         self._close_network_dialog()
         if callback:
             callback()
+
+    # -----------------------------------------------------------------
+    # INIT ERROR DIALOG — used when license system fails to init
+    # -----------------------------------------------------------------
+    def show_init_error_dialog(self, error_msg, retry_callback, exit_callback):
+        if getattr(self, "_init_error_open", False):
+            return
+        self._init_error_open = True
+        c = self.colors
+        W, H = 400, 240
+
+        def cleanup():
+            self._init_error_open = False
+            if hasattr(self, "_init_error_dialog") and self._init_error_dialog:
+                try:
+                    self._init_error_dialog.destroy()
+                except:
+                    pass
+                self._init_error_dialog = None
+
+        d, canvas = self._make_modal_dialog(W, H, close_cb=exit_callback)
+        self._init_error_dialog = d
+        cx = W // 2
+
+        canvas.create_text(cx, 40, text="Initialization Failed",
+                           font=("SF Pro Display", 16, "bold"),
+                           fill=c["error"], anchor="center")
+
+        canvas.create_text(cx, 78, text="The license system could not be initialized.",
+                           font=("SF Pro Text", 11),
+                           fill=c["text"], anchor="center")
+
+        canvas.create_text(cx, 106, text=error_msg[:80],
+                           font=("SF Pro Text", 9),
+                           fill=c["muted"], anchor="center", width=340)
+
+        canvas.create_text(cx, 140, text="The application cannot continue without a valid license.",
+                           font=("SF Pro Text", 10, "bold"),
+                           fill=c["text_secondary"], anchor="center")
+
+        bw, bh = 120, 34
+        by = 180
+
+        self._make_dialog_button(d, "Retry", c["accent"], "white",
+                                 lambda: [cleanup(), retry_callback()],
+                                 cx - bw - 10, by, bw, bh)
+        self._make_dialog_button(d, "Exit", c["error"], "white",
+                                 lambda: [cleanup(), exit_callback()],
+                                 cx + 10, by, bw, bh)
 
     # -----------------------------------------------------------------
     # CANCEL CONFIRMATION DIALOG
