@@ -142,7 +142,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             status = engine.initialize()
             self.root.after(0, lambda: self._on_license_init(engine, status))
         except Exception as e:
-            self.root.after(0, lambda: self._on_license_error(str(e)))
+            self.root.after(0, lambda e=e: self._on_license_error(str(e)))
 
     def _on_license_error(self, error_msg):
         if self._splash:
