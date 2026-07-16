@@ -16,7 +16,29 @@ from idm_downloader import IDMDownloader
 from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
-from SDKToolkit_prod_zemmacos import LicenseEngine, LicenseStatus, WelcomeDialog, ActivationDialog
+from SDKToolkit_prod_zemmacos import LicenseEngine, WelcomeDialog, ActivationDialog
+
+
+def _create_splash(parent):
+    splash = tk.Toplevel(parent)
+    splash.overrideredirect(True)
+    splash.configure(bg="#f5f5f7")
+    splash.transient(parent)
+    splash.grab_set()
+
+    sw = parent.winfo_screenwidth()
+    sh = parent.winfo_screenheight()
+    w, h = 400, 220
+    x = (sw - w) // 2
+    y = (sh - h) // 2
+    splash.geometry(f"{w}x{h}+{x}+{y}")
+
+    tk.Label(splash, text="ZEMmacOS", font=("SF Pro Display", 28, "bold"),
+             fg="#0071e3", bg="#f5f5f7").pack(pady=(50, 10))
+    tk.Label(splash, text="Initializing license...", font=("SF Pro Text", 12),
+             fg="#6e6e73", bg="#f5f5f7").pack()
+    splash.update()
+    return splash
 
 
 def main():
@@ -32,6 +54,7 @@ def main():
     root.geometry("1200x800")
     root.minsize(1000, 700)
     root.state('zoomed')
+    root.withdraw()
     ZEMmacOSApp(root)
     root.mainloop()
 
@@ -101,13 +124,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.log(f"Log file: {self.logger.get_log_file_path()}", "info")
         self.log("=" * 60, "info")
 
-        self.show_dashboard()
-
-        self.root.after(500, self._show_startup_toast)
-        self.root.after(1000, self._auto_fetch)
-        self.root.after(2000, self._check_internet_on_startup)
-        self.root.after(3000, self._start_license_system)
+        self._splash = _create_splash(self.root)
         self._start_network_monitor()
+        self.root.after(100, self._start_license_system)
 
     # -----------------------------------------------------------------
     # LICENSE SYSTEM — SDK initialization + welcome flow
@@ -120,60 +139,53 @@ class ZEMmacOSApp(ZEMmacOSUI):
             base = os.path.dirname(os.path.abspath(__file__))
             config_path = os.path.join(base, 'SDKToolkit_prod_zemmacos', 'config', 'api-config.json')
             engine = LicenseEngine(config_path=config_path)
-            try:
-                status = engine.initialize()
-            except Exception:
-                # On first run: no cache, no license_key → MISSING_LICENSE_KEY.
-                # Fallback: check trial status, otherwise mark as unlicensed.
-                engine._cache.invalidate_license_status()
-                status = self._check_trial_status(engine)
+            status = engine.initialize()
             self.root.after(0, lambda: self._on_license_init(engine, status))
         except Exception as e:
-            self.log(f"License init: {e}", "warning")
-            self.root.after(0, lambda: self.log("License system unavailable - app runs unlicensed", "warning"))
+            self.root.after(0, lambda: self._on_license_error(str(e)))
 
-    def _check_trial_status(self, engine):
-        try:
-            hw_id = engine._hardware.get_fingerprint()
-            result = engine._client._request('trial', {'action': 'status', 'hardware_id': hw_id})
-            data = result.get('data', {})
-            if data.get('has_trial') and data.get('status') in ('active', 'trial'):
-                days_left = data.get('days_left', 0)
-                expiry = data.get('expiry_date')
-                trial_status = LicenseStatus(
-                    valid=True, status='trial',
-                    days_remaining=days_left, expires_at=expiry,
-                    message=f'Trial active — {days_left} days remaining'
-                )
-                engine._cache.set_license_status(trial_status.to_dict())
-                engine._status = trial_status
-                return trial_status
-        except Exception:
-            pass
-        unlicensed = LicenseStatus(
-            valid=False, status='unlicensed',
-            message='No license found — start a trial or activate a key'
-        )
-        engine._status = unlicensed
-        return unlicensed
+    def _on_license_error(self, error_msg):
+        if self._splash:
+            self._splash.destroy()
+            self._splash = None
+        self.root.deiconify()
+        self.log(f"License system error: {error_msg}", "warning")
+        self.show_dashboard()
+        self.root.after(500, self._show_startup_toast)
+        self.root.after(1000, self._auto_fetch)
+        self.root.after(2000, self._check_internet_on_startup)
+        self.show_toast("License system unavailable", "warning", 5000)
 
     def _on_license_init(self, engine, status):
         self.license_engine = engine
-        engine._status = status
         self.set_license_engine(engine)
         self.debug_log("LICENSE", "INFO", f"SDK status: {status.status}")
         if status.status in ('active', 'trial'):
+            if self._splash:
+                self._splash.destroy()
+                self._splash = None
+            self.root.deiconify()
             msg = f"License: {status.status.upper()} — {status.days_remaining}d remaining"
             if status.plan:
                 msg += f" ({status.plan})"
             self.log(msg, "success")
+            self.show_dashboard()
+            self.root.after(500, self._show_startup_toast)
+            self.root.after(1000, self._auto_fetch)
+            self.root.after(2000, self._check_internet_on_startup)
             return
         if status.status == 'expired':
+            if self._splash:
+                self._splash.destroy()
+                self._splash = None
             self.log("License expired — showing activation dialog", "warning")
-            self.root.after(1000, self._show_activation_dialog)
+            self.root.after(100, self._show_activation_dialog)
             return
+        if self._splash:
+            self._splash.destroy()
+            self._splash = None
         self.log("No active license — starting onboarding", "info")
-        self.root.after(1000, self._show_welcome_dialog)
+        self.root.after(100, self._show_welcome_dialog)
 
     def _show_welcome_dialog(self):
         try:
@@ -184,10 +196,14 @@ class ZEMmacOSApp(ZEMmacOSUI):
             result = dialog.show()
             if result:
                 self.log("Onboarding complete — trial started", "success")
-                new_status = self.license_engine.initialize()
-                self.license_engine._status = new_status or self.license_engine.get_status()
-                self.set_license_engine(self.license_engine)
+                engine.initialize()
+                self.set_license_engine(engine)
                 self.refresh_license_widgets()
+                self.root.deiconify()
+                self.show_dashboard()
+                self.root.after(500, self._show_startup_toast)
+                self.root.after(1000, self._auto_fetch)
+                self.root.after(2000, self._check_internet_on_startup)
             else:
                 self.log("Onboarding incomplete — exiting application", "warning")
                 self._exit_app()
@@ -209,11 +225,14 @@ class ZEMmacOSApp(ZEMmacOSUI):
             result = dialog.show()
             if result and result.get("action") == "activated":
                 self.log("License activated successfully from startup dialog", "success")
-                engine._cache.invalidate_license_status()
-                new_status = engine.initialize()
-                engine._status = new_status or engine.get_status()
+                engine.initialize()
                 self.set_license_engine(engine)
                 self.refresh_license_widgets()
+                self.root.deiconify()
+                self.show_dashboard()
+                self.root.after(500, self._show_startup_toast)
+                self.root.after(1000, self._auto_fetch)
+                self.root.after(2000, self._check_internet_on_startup)
                 self.show_toast("License activated successfully", "success", 3000)
             else:
                 self.log("Activation cancelled or failed — exiting application", "warning")

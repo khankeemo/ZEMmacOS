@@ -272,8 +272,7 @@ class SettingsUI:
 
             def do_refresh():
                 try:
-                    new_status = engine.initialize()
-                    engine._status = new_status or engine.get_status()
+                    engine.refresh()
                     after_action()
                     self.app.show_toast("License status refreshed", "success", 2000)
                 except Exception as e:
@@ -287,9 +286,7 @@ class SettingsUI:
                     )
                     result = dialog.show()
                     if result and result.get("action") == "activated":
-                        engine._cache.invalidate_license_status()
-                        new_status = engine.initialize()
-                        engine._status = new_status or engine.get_status()
+                        engine.initialize()
                         self.app.set_license_engine(engine)
                         self.app.refresh_license_widgets()
                         self.app.show_toast("License activated successfully", "success", 3000)
