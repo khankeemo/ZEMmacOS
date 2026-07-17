@@ -39,7 +39,7 @@ class RenewalDialog:
         s=self.engine.get_status()
         plan_lbl = labels.get('plan_label', 'Plan'); expiry_lbl = labels.get('expiry_label', 'Expiry')
         self.plan_lbl=tk.Label(cf,text=f"{plan_lbl}: {s.plan if s else labels.get('hardware_placeholder', '--')}",font=("Helvetica",10),bg=bg,fg=colors.get('text_secondary','#555')); self.plan_lbl.pack(anchor=tk.W)
-        self.exp_lbl=tk.Label(cf,text=f"{expiry_lbl}: {s.expires_at if s else labels.get('expiry_na', 'N/A')}",font=("Helvetica",10),bg=bg,fg=colors.get('text_secondary','#555')); self.exp_lbl.pack(anchor=tk.W)
+        self.exp_lbl=tk.Label(cf,text=f"{expiry_lbl}: {s.expiry_date if s else labels.get('expiry_na', 'N/A')}",font=("Helvetica",10),bg=bg,fg=colors.get('text_secondary','#555')); self.exp_lbl.pack(anchor=tk.W)
 
         ttk.Separator(form,orient=tk.HORIZONTAL).pack(fill=tk.X,pady=8)
         tk.Label(form,text=labels.get('available_plans_section', "Available Plans"),font=("Helvetica",11,"bold"),bg=bg,fg=colors.get('text_primary','#333')).pack(anchor=tk.W,pady=(0,5))
@@ -72,23 +72,24 @@ class RenewalDialog:
         if r.get('success'):
             self.plans=r.get('data',r.get('plans',[])); self.lb.delete(0,tk.END)
             for i,p in enumerate(self.plans):
-                self.lb.insert(tk.END,f"{p.get('name',f'Plan {i+1}')} - ${p.get('price','--')} ({p.get('duration_days',p.get('default_expiry_days','--'))} days)")
+                self.lb.insert(tk.END,f"{p.get('name',f'Plan {i+1}')} - {p.get('price','--')} ({p.get('duration_days',p.get('default_expiry_days','--'))} days)")
             if self.plans: self.lb.selection_set(0)
             self.lb.bind('<<ListboxSelect>>',self._on_select)
         else: self.st.config(text=r.get('message','Failed'),fg=colors.get('error','#dc2626'))
 
     def _on_select(self,ev):
         sel=self.lb.curselection()
-        if sel and sel[0]<len(self.plans): self.selected_plan=self.plans[sel[0]].get('id') or self.plans[sel[0]].get('name')
+        if sel and sel[0]<len(self.plans): self.selected_plan=self.plans[sel[0]]
         else: self.selected_plan=None
 
     def _renew(self):
         colors = self.config.get('branding', {}).get('colors', {})
         if not self.selected_plan: self.st.config(text="Select a plan",fg=colors.get('error','#dc2626')); return
         self._set_loading(True); self.st.config(text="Processing...",fg=colors.get('text_primary','#333'))
+        extra = self.selected_plan.get('duration_days') if isinstance(self.selected_plan, dict) else None
         def do():
             try:
-                r=self.engine.renew(plan_id=self.selected_plan)
+                r=self.engine.renew(extra_days=extra)
                 self.root.after(0,lambda: self._on_renew(r))
             except Exception as e: self.root.after(0,lambda: self.st.config(text=f"Error: {str(e)}",fg=colors.get('error','#dc2626')))
         threading.Thread(target=do,daemon=True).start()

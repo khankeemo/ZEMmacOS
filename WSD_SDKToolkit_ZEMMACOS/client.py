@@ -179,13 +179,13 @@ class ApiClient:
     def convert_trial(self, hardware_id: Optional[str] = None, plan: Optional[str] = None, customer_name: str = '', customer_email: str = '') -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
-        payload: Dict[str, Any] = {'action': 'convert', 'hardware_id': hardware_id}
-        if plan:
-            payload['plan'] = plan
-        if customer_name:
-            payload['customer_name'] = customer_name
-        if customer_email:
-            payload['customer_email'] = customer_email
+        payload: Dict[str, Any] = {
+            'action': 'convert',
+            'hardware_id': hardware_id,
+            'plan': plan or '',
+            'customer_name': customer_name or 'SDK User',
+            'customer_email': customer_email or '',
+        }
         response = self._request('trial', payload)
         if self._cache:
             self._cache.invalidate_license_status()
@@ -199,7 +199,7 @@ class ApiClient:
             payload['device_name'] = device_name
         return self._request('device', payload)
 
-    def replace_device(self, license_key: str, new_hardware_id: Optional[str] = None, old_hardware_id: Optional[str] = None) -> Dict[str, Any]:
+    def replace_device(self, license_key: str, new_hardware_id: Optional[str] = None, old_hardware_id: Optional[str] = None, device_name: Optional[str] = None) -> Dict[str, Any]:
         if new_hardware_id is None:
             new_hardware_id = self._get_hardware_id()
         if old_hardware_id is None:
@@ -208,6 +208,8 @@ class ApiClient:
             'action': 'replace', 'license_key': license_key,
             'old_hardware_id': old_hardware_id, 'new_hardware_id': new_hardware_id
         }
+        if device_name:
+            payload['device_name'] = device_name
         response = self._request('device', payload)
         if self._cache:
             self._cache.invalidate_license_status()

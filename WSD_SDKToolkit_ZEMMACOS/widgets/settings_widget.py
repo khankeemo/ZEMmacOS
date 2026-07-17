@@ -46,7 +46,7 @@ class SettingsWidget:
         if s:
             self._w['s'].config(text=f"{status_lbl}: {s.status.upper()}",fg=colors.get('success','#16a34a') if s.valid else colors.get('error','#dc2626'))
             n=self.engine.config.get('product',{}).get('name','')
-            self._w['p'].config(text=f"{prod_lbl}: {n}"); self._w['e'].config(text=f"{expiry_lbl}: {s.expires_at or labels.get('expiry_na', 'N/A')}")
+            self._w['p'].config(text=f"{prod_lbl}: {n}"); self._w['e'].config(text=f"{expiry_lbl}: {s.expiry_date or labels.get('expiry_na', 'N/A')}")
             self._w['pl'].config(text=f"{plan_lbl}: {s.plan or labels.get('plan_na', 'N/A')}"); self._w['h'].config(text=f"{hw_lbl}: {s.hardware_id or labels.get('hardware_placeholder', '--')}")
     def _open_activation(self):
         from ..activation import ActivationDialog
@@ -65,4 +65,8 @@ class SettingsWidget:
         if k: DeviceReplaceDialog(self.engine,k, parent=self.parent).show(); self.refresh()
     def _open_welcome(self):
         from ..welcome import WelcomeDialog
-        WelcomeDialog(self.engine, parent=self.parent).show(); self.refresh()
+        WelcomeDialog(
+            getattr(self.engine, '_client', None),
+            product_name=self.engine.config.get('product', {}).get('name', ''),
+            cache=getattr(self.engine, '_cache', None)
+        ).show(); self.refresh()

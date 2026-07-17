@@ -1,5 +1,6 @@
 """License validation and management engine"""
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -7,13 +8,15 @@ from .client import ApiClient, ApiError
 from .hardware import HardwareDetector
 from .cache import CacheManager
 
+logger = logging.getLogger(__name__)
+
 
 class LicenseStatus:
     def __init__(self, valid: bool, status: str, **kwargs):
         self.valid = valid
         self.status = status
-        self.expires_at = kwargs.get('expires_at')
-        self.days_remaining = kwargs.get('days_remaining', 0)
+        self.expiry_date = kwargs.get('expiry_date')
+        self.days_left = kwargs.get('days_left', 0)
         self.plan = kwargs.get('plan')
         self.hardware_id = kwargs.get('hardware_id')
         self.message = kwargs.get('message')
@@ -24,8 +27,8 @@ class LicenseStatus:
         return {
             'valid': self.valid,
             'status': self.status,
-            'expires_at': self.expires_at,
-            'days_remaining': self.days_remaining,
+            'expiry_date': self.expiry_date,
+            'days_left': self.days_left,
             'plan': self.plan,
             'hardware_id': self.hardware_id,
             'message': self.message,
@@ -38,8 +41,8 @@ class LicenseStatus:
         return cls(
             valid=data.get('valid', False),
             status=data.get('status', 'unlicensed'),
-            expires_at=data.get('expires_at'),
-            days_remaining=data.get('days_remaining', 0),
+            expiry_date=data.get('expiry_date'),
+            days_left=data.get('days_left', 0),
             plan=data.get('plan'),
             hardware_id=data.get('hardware_id'),
             message=data.get('message'),
@@ -90,8 +93,8 @@ class LicenseEngine:
                 self._status = LicenseStatus(
                     valid=status_str == 'active',
                     status=status_str,
-                    expires_at=trial_data.get('expiry_date'),
-                    days_remaining=trial_data.get('days_left', 0),
+                    expiry_date=trial_data.get('expiry_date'),
+                    days_left=trial_data.get('days_left', 0),
                     plan=trial_data.get('plan'),
                     hardware_id=hardware_id,
                     message=f"Trial is {status_str}"
@@ -107,6 +110,7 @@ class LicenseEngine:
             )
             return self._status
         except Exception as e:
+            logger.exception("Unexpected error during license initialization")
             cached = self._cache.get_license_status()
             if cached:
                 return LicenseStatus.from_dict(cached)
@@ -162,10 +166,14 @@ class LicenseEngine:
         hardware_id = self._hardware.get_fingerprint()
         result = self._client.convert_trial(hardware_id, plan, customer_name, customer_email)
         if result.get('success'):
-            if 'license_key' in result:
-                self._license_key = result.get('license_key')
+            data = result.get('data', result)
+            if 'license_key' in data:
+                self._license_key = data.get('license_key')
             self.initialize()
         return result
+
+    def get_plans(self) -> Dict[str, Any]:
+        return self._client.get_products()
 
     def renew(self, extra_days: Optional[int] = None) -> Dict[str, Any]:
         if not self._license_key:
@@ -187,7 +195,7 @@ class LicenseEngine:
                 self._license_key = None
         return result
 
-    def replace_hardware(self) -> Dict[str, Any]:
+    def replace_hardware(self, device_name: Optional[str] = None) -> Dict[str, Any]:
         if not self._license_key:
             raise ValueError("License key unavailable. Please activate first.")
         new_hardware_id = self._hardware.get_fingerprint()
@@ -205,7 +213,8 @@ class LicenseEngine:
         result = self._client.replace_device(
             license_key=self._license_key,
             new_hardware_id=new_hardware_id,
-            old_hardware_id=old_hardware_id
+            old_hardware_id=old_hardware_id,
+            device_name=device_name
         )
         if result.get('success'):
             self._cache.invalidate_license_status()

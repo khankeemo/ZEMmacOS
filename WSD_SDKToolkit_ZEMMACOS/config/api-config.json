@@ -9,6 +9,7 @@
     "url": "https://websmith-z.vercel.app",
     "version": "v1",
     "public_key": "pk_zeos_6d1222642b60654de7bd336b820484d20c01869997b9d557e634240cd0573860",
+    "secret": "pk_zeos_6d1222642b60654de7bd336b820484d20c01869997b9d557e634240cd0573860",
     "timeout": 30000,
     "retry_count": 3
   },
@@ -17,14 +18,14 @@
     "days": 7,
     "require_email": true,
     "require_company": false,
-    "auto_convert": false,
-    "message": "Start your 7-day free trial of ZEM MAC OS. No credit card required."
+    "auto_convert": true,
+    "message": "Start your 7-day free trial. No credit card required."
   },
   "license": {
     "enabled": true,
     "hardware_binding": true,
     "max_devices": 1,
-    "offline_days": 30,
+    "offline_days": 0,
     "renewal_reminder_days": 7
   },
   "hardware": {
@@ -43,7 +44,7 @@
   },
   "offline": {
     "enabled": true,
-    "cache_days": 30,
+    "cache_days": 0,
     "encryption": "AES-256-GCM",
     "validate_on_reconnect": true
   },

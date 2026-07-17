@@ -251,7 +251,7 @@ class WelcomeDialog:
         email = self._email_entry.get().strip()
         mobile = self._mobile_entry.get().strip()
         company = self._company_entry.get().strip()
-        country_code = self._selected_country.get('dial', '') if self._selected_country else ''
+        country_code = self._selected_country.get('code', '') if self._selected_country else ''
         hardware_id = self.hardware.get_fingerprint()
         self._status_label.config(text='Activating trial...', fg=self._primary)
         self._root.update()

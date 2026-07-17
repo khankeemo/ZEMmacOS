@@ -35,8 +35,8 @@ class DashboardWidget:
             c=colors.get('success','#16a34a'); label=labels.get('trial_active_text','Trial Active') if s.trial_active else labels.get('licensed_text','Licensed')
             self._w['s'].config(text=f"{status_lbl}: {label}",fg=c)
             self._w['t'].config(text=label)
-            self._w['d'].config(text=f"{days_lbl}: {s.days_remaining}")
-            self._w['e'].config(text=f"{expiry_lbl}: {s.expires_at or labels.get('expiry_na', 'N/A')}")
+            self._w['d'].config(text=f"{days_lbl}: {s.days_left}")
+            self._w['e'].config(text=f"{expiry_lbl}: {s.expiry_date or labels.get('expiry_na', 'N/A')}")
             self._w['p'].config(text=f"{plan_lbl}: {s.plan or labels.get('plan_na', 'N/A')}")
         else:
             self._w['s'].config(text=f"{status_lbl}: {labels.get('unlicensed_status', 'Unlicensed')}",fg=colors.get('error','#dc2626')); self._w['t'].config(text=labels.get('no_active_text', 'No active license or trial'))
