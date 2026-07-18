@@ -94,10 +94,37 @@ class LicenseEngine:
             cached = self._cache.get_license_status()
             if cached:
                 self._status = LicenseStatus.from_dict(cached)
+                if not self._license_key and self._status.license_key:
+                    self._license_key = self._status.license_key
                 return self._status
         try:
             hardware_id = self._hardware.get_fingerprint()
-            # Check for existing trial first (works without license key)
+            # Priority 1: Validate active paid license from server
+            if self._license_key:
+                try:
+                    result = self._client.validate_license(self._license_key, hardware_id)
+                    data = result.get('data', result)
+                    if data.get('valid'):
+                        self._status = LicenseStatus(
+                            valid=True,
+                            status=data.get('status', 'active'),
+                            expiry_date=data.get('expiry_date'),
+                            days_left=data.get('days_left', 0),
+                            plan=data.get('plan'),
+                            hardware_id=hardware_id,
+                            license_key=self._license_key,
+                            customer_name=data.get('customer_name'),
+                            customer_email=data.get('customer_email'),
+                            customer_phone=data.get('customer_phone'),
+                            customer_mobile=data.get('customer_mobile'),
+                            message='License active'
+                        )
+                        if self._status.valid:
+                            self._cache.set_license_status(self._status.to_dict())
+                        return self._status
+                except Exception:
+                    pass  # Server error — fall through to trial
+            # Priority 2: Check for active trial
             trial_response = self._client.get_trial_status(hardware_id)
             trial_data = trial_response.get('data', {})
             if trial_data.get('has_trial'):
@@ -118,7 +145,7 @@ class LicenseEngine:
                 if self._status.valid:
                     self._cache.set_license_status(self._status.to_dict())
                 return self._status
-            # No trial - return unlicensed
+            # No license or trial found
             self._status = LicenseStatus(
                 valid=False, status='unlicensed',
                 hardware_id=hardware_id,
@@ -308,8 +335,23 @@ class LicenseEngine:
         )
         if result.get('success'):
             self._cache.invalidate_license_status()
-            self._status = None
-            self.initialize()
+            data = result.get('data', result)
+            self._status = LicenseStatus(
+                valid=True,
+                status=data.get('status', 'active'),
+                expiry_date=data.get('expiry_date'),
+                days_left=data.get('days_left', 0),
+                plan=data.get('plan'),
+                hardware_id=new_hardware_id,
+                license_key=self._license_key,
+                customer_name=data.get('customer_name'),
+                customer_email=data.get('customer_email'),
+                customer_phone=data.get('customer_phone'),
+                customer_mobile=data.get('customer_mobile'),
+                message='Hardware replaced'
+            )
+            if self._status.valid:
+                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def bind_device(self, license_key: Optional[str] = None, device_name: Optional[str] = None) -> Dict[str, Any]:
@@ -318,5 +360,23 @@ class LicenseEngine:
             raise ValueError("License key unavailable.")
         result = self._client.bind_device(key, device_name=device_name)
         if result.get('success'):
-            self.initialize()
+            self._license_key = key
+            data = result.get('data', result)
+            hardware_id = self._hardware.get_fingerprint()
+            self._status = LicenseStatus(
+                valid=True,
+                status=data.get('status', 'active'),
+                expiry_date=data.get('expiry_date'),
+                days_left=data.get('days_left', 0),
+                plan=data.get('plan'),
+                hardware_id=hardware_id,
+                license_key=key,
+                customer_name=data.get('customer_name'),
+                customer_email=data.get('customer_email'),
+                customer_phone=data.get('customer_phone'),
+                customer_mobile=data.get('customer_mobile'),
+                message='Device bound'
+            )
+            if self._status.valid:
+                self._cache.set_license_status(self._status.to_dict())
         return result
