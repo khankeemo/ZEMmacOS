@@ -616,65 +616,77 @@ class ZEMmacOSUI:
         if not hasattr(self, '_dashboard_license_widgets'):
             return
         w = self._dashboard_license_widgets
-        colors = self.colors
-        status_obj = getattr(self, 'license_status', None) if hasattr(self, 'license_status') else None
-        engine = getattr(self, 'license_engine', None) if hasattr(self, 'license_engine') else None
-        prod_config = engine.config.get('product', {}) if engine and engine.config else {}
-
-        if status_obj and status_obj.valid:
-            status_text = status_obj.status.upper()
-            if status_obj.trial_active:
-                fg = colors["warning"]
-                plan_text = status_obj.plan or 'Trial'
-            else:
-                fg = colors["success"]
-                plan_text = status_obj.plan or 'Active'
-            w["status"].config(text=status_text, fg=fg)
-            w["plan"].config(text=plan_text)
-            # Validity countdown
-            days_left = getattr(status_obj, 'days_left', 0) or 0
-            w["validity"].config(text=f"{days_left} days remaining")
-            # Valid until
-            expiry = getattr(status_obj, 'expiry_date', None)
-            if expiry:
-                # Format date nicely
-                try:
-                    from datetime import datetime
-                    dt = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
-                    w["expiry"].config(text=dt.strftime('%d %b %Y'))
-                except Exception:
-                    w["expiry"].config(text=expiry.split('T')[0])
-            else:
-                w["expiry"].config(text='--')
-        else:
-            w["status"].config(text="UNLICENSED", fg=colors["error"])
-            w["plan"].config(text='--')
-            w["validity"].config(text='--')
-            w["expiry"].config(text='--')
-
-    def _update_header_license_badge(self):
-        if not self._license_badge or not self._license_badge.winfo_exists():
+        # Guard: widgets may have been destroyed by page switch or app shutdown
+        try:
+            key = next(iter(w))
+            if not w[key] or not w[key].winfo_exists():
+                return
+        except (tk.TclError, StopIteration, KeyError):
             return
         colors = self.colors
         status_obj = getattr(self, 'license_status', None) if hasattr(self, 'license_status') else None
-        if status_obj and status_obj.valid:
-            if status_obj.trial_active:
-                text = f"TRIAL  {status_obj.days_left}d"
-                fg = colors["warning"]
-            else:
-                text = f"ACTIVE  {status_obj.days_left}d"
-                fg = colors["success"]
-        else:
-            text = "UNLICENSED"
-            fg = colors["error"]
-        self._license_badge.config(text=text, fg=fg)
+        engine = getattr(self, 'license_engine', None) if hasattr(self, 'license_engine') else None
 
-    def _start_validity_countdown(self):
-        """Periodically update the validity countdown in dashboard and header."""
-        self._update_dashboard_license()
-        self._update_header_license_badge()
-        # Schedule next update in 60 seconds
-        self.root.after(60000, self._start_validity_countdown)
+        try:
+            if status_obj and status_obj.valid:
+                status_text = status_obj.status.upper()
+                if status_obj.trial_active:
+                    fg = colors["warning"]
+                    plan_text = status_obj.plan or 'Trial'
+                else:
+                    fg = colors["success"]
+                    plan_text = status_obj.plan or 'Active'
+                if w.get("status") and w["status"].winfo_exists():
+                    w["status"].config(text=status_text, fg=fg)
+                if w.get("plan") and w["plan"].winfo_exists():
+                    w["plan"].config(text=plan_text)
+                days_left = getattr(status_obj, 'days_left', 0) or 0
+                if w.get("validity") and w["validity"].winfo_exists():
+                    w["validity"].config(text=f"{days_left} days remaining")
+                expiry = getattr(status_obj, 'expiry_date', None)
+                if expiry and w.get("expiry") and w["expiry"].winfo_exists():
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
+                        w["expiry"].config(text=dt.strftime('%d %b %Y'))
+                    except Exception:
+                        w["expiry"].config(text=expiry.split('T')[0])
+                elif w.get("expiry") and w["expiry"].winfo_exists():
+                    w["expiry"].config(text='--')
+            else:
+                for key in ('status', 'plan', 'validity', 'expiry'):
+                    if w.get(key) and w[key].winfo_exists():
+                        txt = "UNLICENSED" if key == 'status' else '--'
+                        fg = colors["error"] if key == 'status' else None
+                        if fg:
+                            w[key].config(text=txt, fg=fg)
+                        else:
+                            w[key].config(text=txt)
+        except tk.TclError:
+            pass
+
+    def _update_header_license_badge(self):
+        try:
+            if not self._license_badge or not self._license_badge.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        colors = self.colors
+        status_obj = getattr(self, 'license_status', None) if hasattr(self, 'license_status') else None
+        try:
+            if status_obj and status_obj.valid:
+                if status_obj.trial_active:
+                    text = f"TRIAL  {status_obj.days_left}d"
+                    fg = colors["warning"]
+                else:
+                    text = f"ACTIVE  {status_obj.days_left}d"
+                    fg = colors["success"]
+            else:
+                text = "UNLICENSED"
+                fg = colors["error"]
+            self._license_badge.config(text=text, fg=fg)
+        except tk.TclError:
+            pass
 
     def _on_activate_license(self):
         act = getattr(self, 'open_activation', None)

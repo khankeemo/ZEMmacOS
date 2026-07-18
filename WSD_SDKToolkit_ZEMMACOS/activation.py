@@ -785,18 +785,26 @@ class ActivationDialog:
                 self._license_key = license_key
                 self._activation_badge.set('Bound', self._badge_bound)
                 self._hw_bound_badge.set('Bound', self._badge_bound)
-                msg = data.get('message', 'License activated successfully')
-                if data.get('already_activated'):
-                    msg = 'License already activated on this device'
-                self._status_label.config(text=msg, fg=self._success)
-                expiry = data.get('expiry_date', '--')
-                if expiry and 'T' in expiry:
-                    expiry = expiry.split('T')[0]
-                self._expiry_var.set(expiry)
-                dcount = data.get('device_count', 0)
-                self._device_limit_var.set(f'{dcount} / {max_dev}')
-                self.cache.invalidate_license_status()
-                self._root.after(1000, lambda: self._on_refresh())
+                # Write new license state to cache immediately
+                self.cache.set_license_status({
+                    'valid': True,
+                    'status': 'active',
+                    'expiry_date': data.get('expiry_date', ''),
+                    'days_left': data.get('days_left', 0),
+                    'plan': data.get('plan', ''),
+                    'hardware_id': self._hardware_id,
+                    'message': 'License activated successfully',
+                    'license_key': license_key,
+                    'trial_active': False,
+                    'customer_name': self._customer_name_var.get().strip(),
+                    'customer_email': self._customer_email_var.get().strip(),
+                    'customer_phone': self._customer_phone_var.get().strip(),
+                    'customer_mobile': self._customer_phone_var.get().strip(),
+                })
+                # Clear label (success will be shown via popup in main app)
+                self._status_label.config(text='', fg=self._text_secondary)
+                # Close dialog after short delay — restart handled by caller
+                self._root.after(200, self._root.destroy)
             else:
                 err = result.get('message', result.get('error', 'Activation failed'))
                 self._status_label.config(text=f'Activation failed: {err}', fg=self._error)

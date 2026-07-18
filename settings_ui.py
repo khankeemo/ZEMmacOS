@@ -344,8 +344,6 @@ class SettingsUI:
         buttons = [
             ("Activate License", self._activate_license, self.colors["accent"]),
             ("Renew License", self._renew_license, self.colors["success"]),
-            ("Replace Device", self._replace_device, self.colors["warning"]),
-            ("Start Trial / Welcome", self._open_welcome, self.colors["info"]),
             ("Refresh Status", self._refresh_license_status, self.colors["muted"]),
         ]
         for text, cmd, clr in buttons:
@@ -376,19 +374,64 @@ class SettingsUI:
             act()
 
     def _renew_license(self):
-        act = getattr(self.app, 'open_renewal', None)
-        if act:
-            act()
-
-    def _replace_device(self):
-        act = getattr(self.app, 'open_device_replace', None)
-        if act:
-            act()
-
-    def _open_welcome(self):
-        act = getattr(self.app, 'open_welcome', None)
-        if act:
-            act()
+        branding = getattr(self.app, 'license_engine', None)
+        branding = branding.config.get('branding', {}) if branding and branding.config else {}
+        support_email = branding.get('support_email', 'support@websmithdigital.com')
+        colors = self.colors
+        d = tk.Toplevel(self.parent)
+        d.transient(self.parent)
+        d.grab_set()
+        d.title("Renew License")
+        d.geometry("400x240")
+        d.resizable(False, False)
+        d.configure(bg=colors.get("card_bg", "#ffffff"))
+        d.update_idletasks()
+        sw = d.winfo_screenwidth(); sh = d.winfo_screenheight()
+        w = d.winfo_width(); h = d.winfo_height()
+        d.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
+        header = tk.Frame(d, bg=colors.get("accent", "#6366f1"), height=50)
+        header.pack(fill=tk.X); header.pack_propagate(False)
+        tk.Label(header, text="Renew License", fg="white",
+                 bg=colors.get("accent", "#6366f1"),
+                 font=("SF Pro Text", 14, "bold")).pack(expand=True)
+        body = tk.Frame(d, bg=colors.get("card_bg", "#ffffff"), padx=24, pady=16)
+        body.pack(fill=tk.BOTH, expand=True)
+        tk.Label(body, text="Renewal requests are handled by the administrator.",
+                 font=("SF Pro Text", 11),
+                 fg=colors.get("text", "#333"),
+                 bg=colors.get("card_bg", "#ffffff"),
+                 wraplength=360, justify="left").pack(anchor=tk.W, pady=(8, 4))
+        tk.Label(body, text="Please contact:",
+                 font=("SF Pro Text", 10),
+                 fg=colors.get("muted", "#888"),
+                 bg=colors.get("card_bg", "#ffffff"),
+                 wraplength=360, justify="left").pack(anchor=tk.W, pady=(0, 6))
+        email_frame = tk.Frame(body, bg=colors.get("input_bg", "#f5f5f7"),
+                               highlightbackground=colors.get("border", "#d1d5db"),
+                               highlightthickness=1)
+        email_frame.pack(fill=tk.X, pady=(0, 14))
+        tk.Label(email_frame, text=support_email,
+                 font=("Courier", 11, "bold"),
+                 bg=colors.get("input_bg", "#f5f5f7"),
+                 fg=colors.get("accent", "#6366f1")).pack(padx=12, pady=8)
+        btn_frame = tk.Frame(body, bg=colors.get("card_bg", "#ffffff"))
+        btn_frame.pack(fill=tk.X)
+        close_btn = tk.Button(btn_frame, text="Close", command=d.destroy,
+                               font=("SF Pro Text", 11),
+                               bg=colors.get("btn_secondary_bg", "#e5e7eb"),
+                               fg=colors.get("text", "#333"),
+                               bd=0, padx=16, pady=6, cursor="hand2")
+        close_btn.pack(side=tk.LEFT, padx=(0, 8))
+        def copy_email():
+            d.clipboard_clear(); d.clipboard_append(support_email)
+            close_btn.config(text="Copied!", fg=colors.get("success", "#16a34a"))
+            d.after(1500, lambda: close_btn.config(text="Close", fg=colors.get("text", "#333")))
+        copy_btn = tk.Button(btn_frame, text="Copy Email", command=copy_email,
+                              font=("SF Pro Text", 11, "bold"),
+                              bg=colors.get("accent", "#6366f1"), fg="white",
+                              bd=0, padx=16, pady=6, cursor="hand2")
+        copy_btn.pack(side=tk.LEFT)
+        d.bind('<Escape>', lambda e: d.destroy())
 
     def _refresh_license_status(self):
         ref = getattr(self.app, 'refresh_license', None)

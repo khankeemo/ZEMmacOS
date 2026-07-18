@@ -20,7 +20,7 @@ from live_log import get_live_log
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus
-from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog, ActivationDialog, RenewalDialog, DeviceReplaceDialog
+from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog, ActivationDialog
 
 
 def main():
@@ -327,7 +327,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self._shutdown_app()
 
     # -----------------------------------------------------------------
-    # ACTIVATION FLOW — closes app if dialog cancelled
+    # ACTIVATION FLOW — restarts app after successful activation
     # -----------------------------------------------------------------
     def open_activation(self, license_key=None):
         if not self.license_engine:
@@ -340,12 +340,50 @@ class ZEMmacOSApp(ZEMmacOSUI):
         )
         r = d.show()
         if r and r.get('activated'):
+            key = r.get('license_key', '')
+            if key:
+                self.license_engine._license_key = key
+            # Re-initialize — cache was written by the dialog
+            try:
+                self.license_status = self.license_engine.initialize()
+                self._extract_customer_from_api()
+            except Exception as e:
+                self.log_live("ACTIVATION", "ERROR", f"Post-activation init failed: {e}")
             self.log_live("ACTIVATION", "SUCCESS", "License activation successful")
-            self.refresh_license()
-            self.root.after(500, self._unlock_ui)
+            # Show modal popup, then restart on OK
+            self.root.after(0, self._show_activation_success_dialog)
         elif r and r.get('cancelled'):
             self.log_live("ACTIVATION", "WARNING", "Activation cancelled — continuing trial")
         return r
+
+    def _show_activation_success_dialog(self):
+        messagebox.showinfo(
+            "License Activated",
+            "License activated successfully.\n\nThe application will now restart and load your new license."
+        )
+        self._restart_app()
+
+    def _restart_app(self):
+        # Stop the validity countdown BEFORE destroying anything
+        self._countdown_running = False
+        self.log_live("ACTIVATION", "INFO", "Restarting application to load new license")
+        self._stop_network_monitor()
+        if hasattr(self, 'live_log'):
+            self.live_log.write("STARTUP", "INFO", "Application restarting for new license")
+            self.live_log.stop()
+        self.logger.stop()
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+        python = sys.executable
+        import subprocess as _subprocess
+        script = os.path.abspath(sys.argv[0]) if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
+        try:
+            _subprocess.Popen([python, script] + sys.argv[1:])
+        except Exception:
+            os.execv(python, [python, script] + sys.argv[1:])
+        sys.exit(0)
 
     # -----------------------------------------------------------------
     # APPLICATION SHUTDOWN (for incomplete flows)
@@ -362,43 +400,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             import sys as _sys
             _sys.exit(1)
 
-    # -----------------------------------------------------------------
-    # RENEWAL FLOW
-    # -----------------------------------------------------------------
-    def open_renewal(self):
-        if not self.license_engine:
-            return
-        self.log_live("RENEWAL", "INFO", "Renewal started")
-        k = self.license_engine.get_license_key()
-        if not k:
-            self.log_live("RENEWAL", "WARNING", "No active license key found")
-            self.show_toast("No active license key found.", "warning", 3000)
-            return
-        d = RenewalDialog(self.license_engine, k, parent=self.root)
-        r = d.show()
-        if r:
-            self.log_live("RENEWAL", "SUCCESS", "Renewal completed")
-            self.refresh_license()
-        return r
 
-    # -----------------------------------------------------------------
-    # DEVICE REPLACEMENT FLOW
-    # -----------------------------------------------------------------
-    def open_device_replace(self):
-        if not self.license_engine:
-            return
-        self.log_live("DEVICE", "INFO", "Device replacement requested")
-        k = self.license_engine.get_license_key()
-        if not k:
-            self.log_live("DEVICE", "WARNING", "No active license key found")
-            self.show_toast("No active license key found.", "warning", 3000)
-            return
-        d = DeviceReplaceDialog(self.license_engine, k, parent=self.root)
-        r = d.show()
-        if r:
-            self.log_live("DEVICE", "SUCCESS", "Device replacement successful")
-            self.refresh_license()
-        return r
 
     # -----------------------------------------------------------------
     # LICENSE REFRESH
@@ -462,36 +464,28 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self.log_live("SDK", "WARNING", f"Could not extract customer from API: {e}")
 
     def _update_all_license_ui(self):
-        self._update_dashboard_license()
-        self._update_header_license_badge()
+        try:
+            self._update_dashboard_license()
+            self._update_header_license_badge()
+        except Exception:
+            pass
         # Also update settings license panel if open
         if hasattr(self, '_settings_license_widgets') and self._settings_license_widgets:
-            self._update_settings_license_panel()
+            try:
+                if hasattr(self, '_update_settings_license_panel'):
+                    self._update_settings_license_panel()
+            except Exception:
+                pass
 
     def _update_validity_countdown(self):
         """Update validity countdown every second."""
         if not getattr(self, '_countdown_running', False):
             return
         self._update_all_license_ui()
-        self.root.after(1000, self._update_validity_countdown)
-
-    def open_welcome(self):
-        if not self.license_engine:
-            return
-        self.log_live("WELCOME", "INFO", "Welcome dialog opened (manual)")
-        d = WelcomeDialog(
-            self.license_engine._client,
-            product_name='ZEM MAC OS',
-            cache=self.license_engine._cache
-        )
-        result = d.show()
-        if result and result.get('onboarding_complete'):
-            self.log_live("WELCOME", "SUCCESS", "Trial created via manual welcome")
-            self.refresh_license()
-        else:
-            self.log_live("WELCOME", "WARNING", "Manual welcome dialog cancelled")
-            self.log_live("WELCOME", "INFO", "Application shutdown initiated")
-            self._shutdown_app()
+        try:
+            self.root.after(1000, self._update_validity_countdown)
+        except tk.TclError:
+            pass
 
     # -----------------------------------------------------------------
     # NETWORK MONITOR — runs continuously in background
@@ -1265,9 +1259,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.settings_service.toggle_and_save_theme()
 
     def on_closing(self):
+        self._countdown_running = False
         active_downloads = any(info.get("status") in ["downloading", "paused"] for info in self.downloads.values())
         if active_downloads:
             if not messagebox.askyesno("Download Active", "Downloads are in progress. Cancel and exit?"):
+                self._countdown_running = True
                 return
             with self.download_lock:
                 for did, downloader in self.idm_downloaders.items():
@@ -1283,7 +1279,10 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self.live_log.write("STARTUP", "INFO", "Application shutting down")
             self.live_log.stop()
         self.logger.stop()
-        self.root.destroy()
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
