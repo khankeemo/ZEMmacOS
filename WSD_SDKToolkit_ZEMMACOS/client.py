@@ -145,8 +145,8 @@ class ApiClient:
     def deactivate_license(self, license_key: str, hardware_id: Optional[str] = None) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
-        payload = {'action': 'deactivate', 'license_key': license_key, 'hardware_id': hardware_id}
-        response = self._request('license', payload)
+        payload = {'license_key': license_key, 'hardware_id': hardware_id}
+        response = self._request('license/deactivate', payload)
         if self._cache:
             self._cache.invalidate_license_status()
         return response

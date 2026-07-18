@@ -207,7 +207,7 @@ class LicenseEngine:
                 valid=True,
                 status='trial',
                 expiry_date=data.get('expiry_date'),
-                days_left=data.get('days_left', data.get('duration_days', 7)),
+                days_left=data.get('days_left', data.get('duration_days', 0)),
                 plan=data.get('plan', 'Trial'),
                 hardware_id=self._hardware.get_fingerprint(),
                 customer_name=data.get('customer_name') or customer_name,
