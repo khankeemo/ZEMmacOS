@@ -581,14 +581,9 @@ class ZEMmacOSUI:
         body = card.get_body()
         rows = [
             ("status", "Status", "--"),
-            ("product", "Product", "--"),
             ("plan", "Plan", "--"),
-            ("expiry", "Expiry", "--"),
-            ("days", "Days Remaining", "--"),
-            ("customer", "Customer", "--"),
-            ("email", "Email", "--"),
-            ("mobile", "Mobile", "--"),
-            ("key", "License Key", "--"),
+            ("validity", "Validity", "--"),
+            ("expiry", "Valid until", "--"),
         ]
         self._dashboard_license_widgets = {}
         for key, label, _ in rows:
@@ -630,28 +625,32 @@ class ZEMmacOSUI:
             status_text = status_obj.status.upper()
             if status_obj.trial_active:
                 fg = colors["warning"]
+                plan_text = status_obj.plan or 'Trial'
             else:
                 fg = colors["success"]
+                plan_text = status_obj.plan or 'Active'
             w["status"].config(text=status_text, fg=fg)
-            w["product"].config(text=prod_config.get('name', 'ZEM MAC OS'))
-            w["plan"].config(text=status_obj.plan or '--')
-            w["expiry"].config(text=status_obj.expires_at or '--')
-            w["days"].config(text=str(status_obj.days_remaining))
-            w["key"].config(text=status_obj.license_key or '--')
+            w["plan"].config(text=plan_text)
+            # Validity countdown
+            days_left = getattr(status_obj, 'days_left', 0) or 0
+            w["validity"].config(text=f"{days_left} days remaining")
+            # Valid until
+            expiry = getattr(status_obj, 'expiry_date', None)
+            if expiry:
+                # Format date nicely
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
+                    w["expiry"].config(text=dt.strftime('%d %b %Y'))
+                except Exception:
+                    w["expiry"].config(text=expiry.split('T')[0])
+            else:
+                w["expiry"].config(text='--')
         else:
             w["status"].config(text="UNLICENSED", fg=colors["error"])
-            w["product"].config(text=prod_config.get('name', 'ZEM MAC OS'))
             w["plan"].config(text='--')
+            w["validity"].config(text='--')
             w["expiry"].config(text='--')
-            w["days"].config(text='--')
-            w["key"].config(text='--')
-
-        cust_name = getattr(self, '_customer_name', '') or ''
-        cust_email = getattr(self, '_customer_email', '') or ''
-        cust_mobile = getattr(self, '_customer_mobile', '') or ''
-        w["customer"].config(text=cust_name or '--')
-        w["email"].config(text=cust_email or '--')
-        w["mobile"].config(text=cust_mobile or '--')
 
     def _update_header_license_badge(self):
         if not self._license_badge or not self._license_badge.winfo_exists():
@@ -660,15 +659,22 @@ class ZEMmacOSUI:
         status_obj = getattr(self, 'license_status', None) if hasattr(self, 'license_status') else None
         if status_obj and status_obj.valid:
             if status_obj.trial_active:
-                text = f"TRIAL  {status_obj.days_remaining}d"
+                text = f"TRIAL  {status_obj.days_left}d"
                 fg = colors["warning"]
             else:
-                text = f"ACTIVE  {status_obj.days_remaining}d"
+                text = f"ACTIVE  {status_obj.days_left}d"
                 fg = colors["success"]
         else:
             text = "UNLICENSED"
             fg = colors["error"]
         self._license_badge.config(text=text, fg=fg)
+
+    def _start_validity_countdown(self):
+        """Periodically update the validity countdown in dashboard and header."""
+        self._update_dashboard_license()
+        self._update_header_license_badge()
+        # Schedule next update in 60 seconds
+        self.root.after(60000, self._start_validity_countdown)
 
     def _on_activate_license(self):
         act = getattr(self, 'open_activation', None)

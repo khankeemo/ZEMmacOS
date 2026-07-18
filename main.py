@@ -19,8 +19,8 @@ from live_log import get_live_log
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
-from SDKToolkit_prod_zemmacos import LicenseEngine, LicenseStatus
-from SDKToolkit_prod_zemmacos import WelcomeDialog, ActivationDialog, RenewalDialog, DeviceReplaceDialog
+from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus
+from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog, ActivationDialog, RenewalDialog, DeviceReplaceDialog
 
 
 def main():
@@ -158,7 +158,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._splash = splash
 
     def _init_license_thread(self):
-        config_path = Path(BASE_DIR) / 'SDKToolkit_prod_zemmacos' / 'config' / 'api-config.json'
+        config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
         self.log_live("SDK", "INFO", "LicenseEngine initialization")
         self.log_live("UI", "INFO", "UI locked")
 
@@ -176,6 +176,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 live.write("SDK", "INFO", "License validation")
                 self.license_status = self.license_engine.initialize()
                 self._license_initialized = True
+
+                # Extract customer data from API response
+                self._extract_customer_from_api()
 
                 status = self.license_status
                 if status:
@@ -225,6 +228,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.root.after(1000, self._auto_fetch)
         self.root.after(2000, self._check_internet_on_startup)
         self.settings_service.check_first_run_directory()
+        self._countdown_running = True
+        self.root.after(1000, self._update_validity_countdown)
 
         self.root.after(300, self._check_license_on_startup)
 
@@ -404,16 +409,71 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.log_live("ACTIVATION", "INFO", "License refresh started")
         def do():
             try:
-                self.license_status = self.license_engine.refresh()
-                self.root.after(0, self._update_all_license_ui)
-                self.log_live("ACTIVATION", "SUCCESS", "License refresh completed")
+                new_status = self.license_engine.initialize()
+                # Only update if we got valid data
+                if new_status is not None:
+                    self.license_status = new_status
+                    # Extract customer info from API response
+                    self._extract_customer_from_api()
+                    self.root.after(0, self._update_all_license_ui)
+                    self.log_live("ACTIVATION", "SUCCESS", "License refresh completed")
+                else:
+                    self.log_live("ACTIVATION", "WARNING", "License refresh returned None - keeping previous data")
             except Exception as e:
                 self.log_live("ACTIVATION", "ERROR", f"License refresh error: {e}")
         threading.Thread(target=do, daemon=True).start()
 
+    def _extract_customer_info(self, status):
+        """Extract customer info from license status and store locally."""
+        if status and status.valid:
+            self._customer_name = getattr(status, 'customer_name', '') or ''
+            self._customer_email = getattr(status, 'customer_email', '') or ''
+            # Prefer mobile over phone
+            self._customer_mobile = getattr(status, 'customer_mobile', '') or getattr(status, 'customer_phone', '') or ''
+
+    def _extract_customer_from_api(self):
+        """Call API directly to get customer data from license/trial response."""
+        if not self.license_engine or not self.license_status:
+            return
+        
+        try:
+            hw_id = self.license_engine.get_hardware_id()
+            
+            # If we have a license key, use validate_license
+            if self.license_engine.has_license_key():
+                result = self.license_engine._client.validate_license(
+                    self.license_engine.get_license_key(), hw_id
+                )
+                data = result.get('data', result)
+                if data.get('valid') or data.get('customer_name'):
+                    self._customer_name = data.get('customer_name', '') or ''
+                    self._customer_email = data.get('customer_email', '') or ''
+                    self._customer_mobile = data.get('customer_mobile', '') or data.get('customer_phone', '') or ''
+                    return
+            
+            # Otherwise try trial status (works without license key)
+            trial_result = self.license_engine._client.get_trial_status(hw_id)
+            trial_data = trial_result.get('data', {})
+            if trial_data.get('has_trial'):
+                self._customer_name = trial_data.get('customer_name', '') or ''
+                self._customer_email = trial_data.get('customer_email', '') or ''
+                self._customer_mobile = trial_data.get('customer_phone', '') or trial_data.get('mobile_number', '') or ''
+        except Exception as e:
+            self.log_live("SDK", "WARNING", f"Could not extract customer from API: {e}")
+
     def _update_all_license_ui(self):
         self._update_dashboard_license()
         self._update_header_license_badge()
+        # Also update settings license panel if open
+        if hasattr(self, '_settings_license_widgets') and self._settings_license_widgets:
+            self._update_settings_license_panel()
+
+    def _update_validity_countdown(self):
+        """Update validity countdown every second."""
+        if not getattr(self, '_countdown_running', False):
+            return
+        self._update_all_license_ui()
+        self.root.after(1000, self._update_validity_countdown)
 
     def open_welcome(self):
         if not self.license_engine:

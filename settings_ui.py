@@ -288,21 +288,55 @@ class SettingsUI:
         labels = engine.config.get('branding', {}).get('labels', {}) if engine and engine.config else {}
         prod = engine.config.get('product', {}) if engine and engine.config else {}
 
+        # Customer info
+        cust_name = getattr(self.app, '_customer_name', '') or ''
+        cust_email = getattr(self.app, '_customer_email', '') or ''
+        cust_mobile = getattr(self.app, '_customer_mobile', '') or ''
+
         info_rows = [
             ("Status", status_obj.status.upper() if status_obj else "--"),
             ("Product", prod.get('name', 'ZEM MAC OS')),
             ("Plan", (status_obj.plan or '--') if status_obj else "--"),
-            ("Expiry", (status_obj.expires_at or '--') if status_obj else "--"),
-            ("Days Remaining", str(status_obj.days_remaining) if status_obj else "--"),
-            ("License Key", (status_obj.license_key or '--') if status_obj else "--"),
-            ("Hardware ID", (status_obj.hardware_id or '--') if status_obj else "--"),
-            ("Max Devices", str(status_obj.max_devices) if status_obj else "--"),
-            ("Device Count", str(status_obj.device_count) if status_obj else "--"),
+            ("Expiry", (status_obj.expiry_date or '--') if status_obj else "--"),
+            ("Days Remaining", str(getattr(status_obj, 'days_left', 0)) if status_obj else "--"),
+            ("Customer Name", cust_name or '--'),
+            ("Email", cust_email or '--'),
+            ("Mobile", cust_mobile or '--'),
         ]
         for label, value in info_rows:
             row = self._row(inner, label)
             tk.Label(row, text=value, font=("SF Pro Text", 11, "bold"),
                      fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+
+        # License Key with show/hide
+        key_row = self._row(inner, "License Key")
+        license_key = (status_obj.license_key or '--') if status_obj else '--'
+        self._license_key_hidden = True
+        self._license_key_var = tk.StringVar(value='•' * len(license_key) if license_key != '--' else '--')
+        self._license_key_label = tk.Label(key_row, textvariable=self._license_key_var, font=("SF Pro Text", 11, "bold"),
+                     fg=self.colors["text"], bg=self.colors["card_bg"])
+        self._license_key_label.pack(side=tk.LEFT)
+        self._license_key_show_btn = tk.Button(key_row, text="Show", font=("SF Pro Text", 9),
+            command=self._toggle_license_key_visibility, bd=0, padx=8, pady=2, cursor="hand2")
+        self._license_key_show_btn.pack(side=tk.LEFT, padx=(8, 0))
+
+        # Device info
+        device_rows = [
+            ("Hardware ID", (status_obj.hardware_id or '--') if status_obj else "--"),
+            ("Max Devices", str(getattr(status_obj, 'max_devices', 0)) if status_obj else "--"),
+            ("Active Devices", str(getattr(status_obj, 'active_devices', getattr(status_obj, 'device_count', 0))) if status_obj else "--"),
+        ]
+        for label, value in device_rows:
+            row = self._row(inner, label)
+            tk.Label(row, text=value, font=("SF Pro Text", 11, "bold"),
+                     fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+
+        # Device bound status
+        bound_row = self._row(inner, "Device Bound")
+        bound_status = "Yes" if (status_obj and status_obj.hardware_id and getattr(status_obj, 'active_devices', getattr(status_obj, 'device_count', 0)) > 0) else "No"
+        bound_color = self.colors["success"] if bound_status == "Yes" else self.colors["error"]
+        tk.Label(bound_row, text=bound_status, font=("SF Pro Text", 11, "bold"),
+                 fg=bound_color, bg=self.colors["card_bg"]).pack(side=tk.LEFT)
 
         inner2 = self._card(self._content_frame, "Actions")
         btn_frame = tk.Frame(inner2, bg=self.colors["card_bg"])
@@ -320,6 +354,21 @@ class SettingsUI:
                       fg="white", bg=clr,
                       bd=0, padx=20, pady=8, cursor="hand2",
                       width=24).pack(side=tk.LEFT, padx=5)
+
+    def _toggle_license_key_visibility(self):
+        """Toggle license key visibility."""
+        if not hasattr(self, '_license_key_hidden') or not hasattr(self, '_license_key_var'):
+            return
+        status_obj = getattr(self.app, 'license_status', None) if hasattr(self.app, 'license_status') else None
+        license_key = (status_obj.license_key or '') if status_obj else ''
+        if self._license_key_hidden:
+            self._license_key_var.set(license_key)
+            self._license_key_show_btn.config(text="Hide")
+            self._license_key_hidden = False
+        else:
+            self._license_key_var.set('•' * len(license_key) if license_key else '--')
+            self._license_key_show_btn.config(text="Show")
+            self._license_key_hidden = True
 
     def _activate_license(self):
         act = getattr(self.app, 'open_activation', None)
