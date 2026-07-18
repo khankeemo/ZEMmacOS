@@ -10,5 +10,6 @@
   "max_retries": 3,
   "timeout_seconds": 30,
   "notifications_enabled": true,
-  "compact_mode": false
+  "compact_mode": false,
+  "license_key": "MROC-49VK-886S-Z8JI-Z1KS-ITJU"
 }

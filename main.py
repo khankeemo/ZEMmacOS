@@ -183,10 +183,10 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.license_status = self.license_engine.initialize()
                 self._license_initialized = True
 
-                # If we have a stored license key but get trial/unlicensed, the trial
-                # endpoint still returns has_trial=true after paid activation.
-                # Validate against the license endpoint to get the real paid status.
-                if stored_key and (not self.license_status or self.license_status.status in ('trial', 'unlicensed', 'error')):
+                # Always validate stored license key against the backend.
+                # The trial endpoint returns has_trial=true even after paid activation
+                # with status='active', so checking status alone is insufficient.
+                if stored_key:
                     live.write("SDK", "INFO", "Paid license exists — validating against server")
                     try:
                         self.license_engine.validate(stored_key)
