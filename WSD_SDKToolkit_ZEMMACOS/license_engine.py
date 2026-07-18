@@ -22,6 +22,10 @@ class LicenseStatus:
         self.message = kwargs.get('message')
         self.license_key = kwargs.get('license_key')
         self.trial_active = kwargs.get('trial_active', status == 'trial')
+        self.customer_name = kwargs.get('customer_name')
+        self.customer_email = kwargs.get('customer_email')
+        self.customer_phone = kwargs.get('customer_phone')
+        self.customer_mobile = kwargs.get('customer_mobile')
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -33,7 +37,11 @@ class LicenseStatus:
             'hardware_id': self.hardware_id,
             'message': self.message,
             'license_key': self.license_key,
-            'trial_active': self.trial_active
+            'trial_active': self.trial_active,
+            'customer_name': self.customer_name,
+            'customer_email': self.customer_email,
+            'customer_phone': self.customer_phone,
+            'customer_mobile': self.customer_mobile
         }
 
     @classmethod
@@ -47,7 +55,11 @@ class LicenseStatus:
             hardware_id=data.get('hardware_id'),
             message=data.get('message'),
             license_key=data.get('license_key'),
-            trial_active=data.get('trial_active', data.get('status') == 'trial')
+            trial_active=data.get('trial_active', data.get('status') == 'trial'),
+            customer_name=data.get('customer_name'),
+            customer_email=data.get('customer_email'),
+            customer_phone=data.get('customer_phone'),
+            customer_mobile=data.get('customer_mobile')
         )
 
 
@@ -97,7 +109,11 @@ class LicenseEngine:
                     days_left=trial_data.get('days_left', 0),
                     plan=trial_data.get('plan'),
                     hardware_id=hardware_id,
-                    message=f"Trial is {status_str}"
+                    message=f"Trial is {status_str}",
+                    customer_name=trial_data.get('customer_name'),
+                    customer_email=trial_data.get('customer_email'),
+                    customer_phone=trial_data.get('customer_phone'),
+                    customer_mobile=trial_data.get('customer_mobile')
                 )
                 if self._status.valid:
                     self._cache.set_license_status(self._status.to_dict())
@@ -142,21 +158,65 @@ class LicenseEngine:
         if data.get('valid'):
             if data.get('license_key'):
                 self._license_key = data['license_key']
-            self.initialize()
+            # Create LicenseStatus from validation response which has all customer fields
+            self._status = LicenseStatus(
+                valid=data.get('valid', True),
+                status=data.get('status', 'active'),
+                expiry_date=data.get('expiry_date'),
+                days_left=data.get('days_left', 0),
+                plan=data.get('plan'),
+                hardware_id=hardware_id,
+                license_key=data.get('license_key'),
+                customer_name=data.get('customer_name'),
+                customer_email=data.get('customer_email'),
+                customer_phone=data.get('customer_phone'),
+                customer_mobile=data.get('customer_mobile')
+            )
+            if self._status.valid:
+                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def activate(self, license_key: str) -> Dict[str, Any]:
         result = self._client.activate_license(license_key)
         if result.get('success'):
             self._license_key = license_key
-            self.initialize()
+            data = result.get('data', result)
+            self._status = LicenseStatus(
+                valid=True,
+                status=data.get('status', 'active'),
+                expiry_date=data.get('expiry_date'),
+                days_left=data.get('days_left', 0),
+                plan=data.get('plan'),
+                hardware_id=self._hardware.get_fingerprint(),
+                license_key=license_key,
+                customer_name=data.get('customer_name'),
+                customer_email=data.get('customer_email'),
+                customer_phone=data.get('customer_phone'),
+                customer_mobile=data.get('customer_mobile')
+            )
+            if self._status.valid:
+                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def start_trial(self, email: str, customer_name: str = '',
                     customer_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         result = self._client.start_trial(email, customer_name=customer_name, customer_data=customer_data)
         if result.get('success'):
-            self.initialize()
+            data = result.get('data', result)
+            self._status = LicenseStatus(
+                valid=True,
+                status='trial',
+                expiry_date=data.get('expiry_date'),
+                days_left=data.get('days_left', data.get('duration_days', 7)),
+                plan=data.get('plan', 'Trial'),
+                hardware_id=self._hardware.get_fingerprint(),
+                customer_name=data.get('customer_name') or customer_name,
+                customer_email=data.get('customer_email') or email,
+                customer_phone=data.get('customer_phone'),
+                customer_mobile=data.get('customer_mobile')
+            )
+            if self._status.valid:
+                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def convert_trial(self, plan: Optional[str] = None, customer_name: str = '', customer_email: str = '') -> Dict[str, Any]:
@@ -169,7 +229,21 @@ class LicenseEngine:
             data = result.get('data', result)
             if 'license_key' in data:
                 self._license_key = data.get('license_key')
-            self.initialize()
+            self._status = LicenseStatus(
+                valid=True,
+                status=data.get('status', 'active'),
+                expiry_date=data.get('expiry_date'),
+                days_left=data.get('days_left', 0),
+                plan=data.get('plan'),
+                hardware_id=hardware_id,
+                license_key=data.get('license_key'),
+                customer_name=data.get('customer_name'),
+                customer_email=data.get('customer_email'),
+                customer_phone=data.get('customer_phone'),
+                customer_mobile=data.get('customer_mobile')
+            )
+            if self._status.valid:
+                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def get_plans(self) -> Dict[str, Any]:
@@ -180,7 +254,23 @@ class LicenseEngine:
             raise ValueError("License key unavailable. Please activate first.")
         result = self._client.renew_license(self._license_key, extra_days)
         if result.get('success'):
-            self.initialize()
+            data = result.get('data', result)
+            hardware_id = self._hardware.get_fingerprint()
+            self._status = LicenseStatus(
+                valid=True,
+                status=data.get('status', 'active'),
+                expiry_date=data.get('new_expiry_date') or data.get('expiry_date'),
+                days_left=data.get('days_left', 0),
+                plan=data.get('plan'),
+                hardware_id=hardware_id,
+                license_key=self._license_key,
+                customer_name=data.get('customer_name'),
+                customer_email=data.get('customer_email'),
+                customer_phone=data.get('customer_phone'),
+                customer_mobile=data.get('customer_mobile')
+            )
+            if self._status.valid:
+                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def deactivate(self, license_key: Optional[str] = None) -> Dict[str, Any]:
