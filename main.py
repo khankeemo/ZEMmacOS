@@ -432,32 +432,32 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self._customer_mobile = getattr(status, 'customer_mobile', '') or getattr(status, 'customer_phone', '') or ''
 
     def _extract_customer_from_api(self):
-        """Call API directly to get customer data from license/trial response."""
+        """Get customer data using public SDK API."""
         if not self.license_engine or not self.license_status:
             return
-        
+
         try:
             hw_id = self.license_engine.get_hardware_id()
-            
-            # If we have a license key, use validate_license
+
+            # If we have a license key, use public validate() method
             if self.license_engine.has_license_key():
-                result = self.license_engine._client.validate_license(
-                    self.license_engine.get_license_key(), hw_id
+                result = self.license_engine.validate(
+                    self.license_engine.get_license_key()
                 )
+                # validate() returns full API response dict
                 data = result.get('data', result)
                 if data.get('valid') or data.get('customer_name'):
                     self._customer_name = data.get('customer_name', '') or ''
                     self._customer_email = data.get('customer_email', '') or ''
                     self._customer_mobile = data.get('customer_mobile', '') or data.get('customer_phone', '') or ''
                     return
-            
-            # Otherwise try trial status (works without license key)
-            trial_result = self.license_engine._client.get_trial_status(hw_id)
-            trial_data = trial_result.get('data', {})
-            if trial_data.get('has_trial'):
-                self._customer_name = trial_data.get('customer_name', '') or ''
-                self._customer_email = trial_data.get('customer_email', '') or ''
-                self._customer_mobile = trial_data.get('customer_phone', '') or trial_data.get('mobile_number', '') or ''
+
+            # For trial: data already fetched during initialize()
+            # Trial customer data is in the trial API response but not exposed in LicenseStatus
+            # This is a known SDK limitation - backend fix already returns the data
+            # If license is not valid but trial is active, we can't access trial customer data via public SDK
+            # (requires SDK regeneration to expose trial customer fields in LicenseStatus)
+
         except Exception as e:
             self.log_live("SDK", "WARNING", f"Could not extract customer from API: {e}")
 
