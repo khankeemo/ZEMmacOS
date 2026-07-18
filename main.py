@@ -189,9 +189,14 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 if stored_key:
                     live.write("SDK", "INFO", "Paid license exists — validating against server")
                     try:
-                        self.license_engine.validate(stored_key)
+                        result = self.license_engine.validate(stored_key)
                         validated = self.license_engine.get_status()
                         if validated and validated.valid:
+                            # Enrich LicenseStatus with device info from raw response
+                            data = result.get('data', result) if isinstance(result, dict) else {}
+                            validated.max_devices = data.get('max_devices', 0)
+                            validated.active_devices = data.get('active_devices', data.get('device_count', 0))
+                            validated.device_count = data.get('device_count', data.get('active_devices', 0))
                             self.license_status = validated
                             live.write("SDK", "SUCCESS", f"License validated: {validated.status} - {validated.plan}")
                     except Exception as ve:
@@ -353,6 +358,16 @@ class ZEMmacOSApp(ZEMmacOSUI):
         if not self.license_engine:
             return
         self.log_live("ACTIVATION", "INFO", "Activation dialog opened")
+        # Monkey-patch: _update_ui ignores _hw_bound_badge, leaving it as "Not Bound"
+        # on refresh even when server confirms binding. Fix by wrapping the method.
+        from WSD_SDKToolkit_ZEMMACOS.activation import ActivationDialog as _ActDlg
+        _orig_update_ui = _ActDlg._update_ui
+        def _patched_update_ui(self, data):
+            _orig_update_ui(self, data)
+            dev_count = data.get('device_count', data.get('active_devices', 0))
+            if data.get('status') == 'active' and dev_count > 0:
+                self._hw_bound_badge.set('Bound', self._badge_bound)
+        _ActDlg._update_ui = _patched_update_ui
         d = ActivationDialog(
             self.license_engine._client,
             product_name='ZEM MAC OS',

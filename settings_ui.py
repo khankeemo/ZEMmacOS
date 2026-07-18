@@ -333,7 +333,7 @@ class SettingsUI:
 
         # Device bound status
         bound_row = self._row(inner, "Device Bound")
-        bound_status = "Yes" if (status_obj and status_obj.hardware_id and getattr(status_obj, 'active_devices', getattr(status_obj, 'device_count', 0)) > 0) else "No"
+        bound_status = "Yes" if (status_obj and status_obj.hardware_id) else "No"
         bound_color = self.colors["success"] if bound_status == "Yes" else self.colors["error"]
         tk.Label(bound_row, text=bound_status, font=("SF Pro Text", 11, "bold"),
                  fg=bound_color, bg=self.colors["card_bg"]).pack(side=tk.LEFT)
@@ -377,12 +377,16 @@ class SettingsUI:
         branding = getattr(self.app, 'license_engine', None)
         branding = branding.config.get('branding', {}) if branding and branding.config else {}
         support_email = branding.get('support_email', 'support@websmithdigital.com')
+        status_obj = getattr(self.app, 'license_status', None)
+        license_key = (status_obj.license_key or '') if status_obj else ''
+        customer_name = (status_obj.customer_name or '') if status_obj else ''
+        customer_email = (status_obj.customer_email or '') if status_obj else ''
         colors = self.colors
         d = tk.Toplevel(self.parent)
         d.transient(self.parent)
         d.grab_set()
         d.title("Renew License")
-        d.geometry("400x240")
+        d.geometry("440x340")
         d.resizable(False, False)
         d.configure(bg=colors.get("card_bg", "#ffffff"))
         d.update_idletasks()
@@ -400,12 +404,12 @@ class SettingsUI:
                  font=("SF Pro Text", 11),
                  fg=colors.get("text", "#333"),
                  bg=colors.get("card_bg", "#ffffff"),
-                 wraplength=360, justify="left").pack(anchor=tk.W, pady=(8, 4))
+                 wraplength=400, justify="left").pack(anchor=tk.W, pady=(8, 4))
         tk.Label(body, text="Please contact:",
                  font=("SF Pro Text", 10),
                  fg=colors.get("muted", "#888"),
                  bg=colors.get("card_bg", "#ffffff"),
-                 wraplength=360, justify="left").pack(anchor=tk.W, pady=(0, 6))
+                 wraplength=400, justify="left").pack(anchor=tk.W, pady=(0, 6))
         email_frame = tk.Frame(body, bg=colors.get("input_bg", "#f5f5f7"),
                                highlightbackground=colors.get("border", "#d1d5db"),
                                highlightthickness=1)
@@ -431,6 +435,29 @@ class SettingsUI:
                               bg=colors.get("accent", "#6366f1"), fg="white",
                               bd=0, padx=16, pady=6, cursor="hand2")
         copy_btn.pack(side=tk.LEFT)
+        def open_email():
+            import webbrowser
+            subject = "License Renewal Request"
+            body_lines = [
+                "Hello,",
+                "",
+                "I would like to renew my license.",
+                "",
+                f"License Key: {license_key}",
+                f"Customer: {customer_name}",
+                f"Email: {customer_email}",
+                "",
+                "Thank you.",
+            ]
+            body_text = "\n".join(body_lines)
+            from urllib.parse import quote
+            mailto_url = f"mailto:{support_email}?subject={quote(subject)}&body={quote(body_text)}"
+            webbrowser.open(mailto_url)
+        open_btn = tk.Button(btn_frame, text="Open Email", command=open_email,
+                              font=("SF Pro Text", 11, "bold"),
+                              bg=colors.get("accent", "#6366f1"), fg="white",
+                              bd=0, padx=16, pady=6, cursor="hand2")
+        open_btn.pack(side=tk.LEFT, padx=(5, 0))
         d.bind('<Escape>', lambda e: d.destroy())
 
     def _refresh_license_status(self):
