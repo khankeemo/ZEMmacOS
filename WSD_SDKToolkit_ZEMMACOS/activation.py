@@ -31,19 +31,19 @@ class StatusBadge(tk.Canvas):
     def __init__(self, parent, text, color, bg):
         self._color = color
         self._text = text
-        super().__init__(parent, width=0, height=22, bg=bg, highlightthickness=0)
+        super().__init__(parent, width=0, height=28, bg=bg, highlightthickness=0)
         self._draw(text, color)
 
     def _draw(self, text, color):
         self.delete('all')
         self._color = color
         self._text = text
-        w = len(text) * 8 + 20
-        r = 4
+        w = len(text) * 9 + 28
+        r = 12
         self.config(width=w)
-        self.create_rounded_rect(0, 0, w, 22, r, fill=color, outline=color)
-        self.create_text(w // 2, 11, text=text, fill='white',
-                          font=('Segoe UI', 8, 'bold'))
+        self.create_rounded_rect(0, 0, w, 28, r, fill=color, outline=color)
+        self.create_text(w // 2, 14, text=text, fill='white',
+                          font=('Segoe UI', 10, 'bold'))
 
     def set(self, text, color):
         self._draw(text, color)
@@ -56,15 +56,15 @@ class StatusBadge(tk.Canvas):
 
 
 class ActionButton(tk.Canvas):
-    def __init__(self, parent, text, color, command, width=160, height=36, **kw):
+    def __init__(self, parent, text, color, command, width=160, height=42, **kw):
         self._color = color
-        self._hover_color = self._adjust_color(color, 1.15)
+        self._hover_color = self._adjust_color(color, 1.2)
         self._disabled_color = '#9ca3af'
         self._cmd = command
         self._disabled = False
         self._loading = False
         self._text = text
-        r = 6
+        r = 12
         super().__init__(parent, width=width, height=height, bg=parent.cget('bg'),
                           highlightthickness=0, **kw)
         self._width = width
@@ -164,14 +164,14 @@ class ActivationDialog:
         self.branding = self.config.get('branding', {})
         self._primary = '#1e40af'
         self._secondary = '#6b7280'
-        self._bg = '#f3f4f6'
+        self._bg = '#f5f7fb'
         self._card_bg = '#ffffff'
         self._text_primary = '#111827'
         self._text_secondary = '#6b7280'
         self._success = '#16a34a'
         self._warning = '#ea580c'
         self._error = '#dc2626'
-        self._border = '#e5e7eb'
+        self._border = '#dbe3ef'
         self._badge_inactive = '#9ca3af'
         self._badge_verified = '#16a34a'
         self._badge_bound = '#16a34a'
@@ -216,15 +216,15 @@ class ActivationDialog:
 
     def _make_card(self, parent, title):
         frame = tk.Frame(parent, bg=self._card_bg, highlightbackground=self._border,
-                          highlightcolor=self._border, highlightthickness=1)
+                          highlightcolor=self._border, highlightthickness=2)
         header = tk.Frame(frame, bg=self._card_bg)
-        header.pack(fill='x', padx=14, pady=(10, 3))
-        tk.Label(header, text=title, font=('Segoe UI', 11, 'bold'),
+        header.pack(fill='x', padx=20, pady=(14, 4))
+        tk.Label(header, text=title, font=('Segoe UI', 12, 'bold'),
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         sep = tk.Frame(frame, bg=self._border, height=1)
-        sep.pack(fill='x', padx=14, pady=(0, 6))
+        sep.pack(fill='x', padx=20, pady=(0, 8))
         body = tk.Frame(frame, bg=self._card_bg)
-        body.pack(fill='x', padx=14, pady=(0, 10))
+        body.pack(fill='x', padx=20, pady=(0, 14))
         return frame, body
 
     def _build_ui(self):
@@ -250,8 +250,8 @@ class ActivationDialog:
             canvas.itemconfig(self._canvas_window, width=event.width - 4)
         canvas.bind('<Configure>', _on_canvas_configure)
 
-        _F = ('Segoe UI', 9)
-        _FB = ('Segoe UI', 9, 'bold')
+        _F = ('Segoe UI', 10)
+        _FB = ('Segoe UI', 10, 'bold')
         _FC = ('Courier', 10)
 
         # Hardware Card
@@ -259,7 +259,7 @@ class ActivationDialog:
 
         self._hw_status = tk.Label(hw_body, text='Fetching hardware information...',
                                     font=_F, bg=self._card_bg, fg=self._text_secondary)
-        self._hw_status.pack(anchor='w', pady=(0, 6))
+        self._hw_status.pack(anchor='w', pady=(0, 12))
 
         hw_info_frame = tk.Frame(hw_body, bg=self._card_bg)
         hw_info_frame.pack(fill='x')
@@ -274,45 +274,66 @@ class ActivationDialog:
         self._hw_platform_label.pack(anchor='w', pady=(1, 0))
 
         bound_row = tk.Frame(hw_body, bg=self._card_bg)
-        bound_row.pack(fill='x', pady=(4, 0))
+        bound_row.pack(fill='x', pady=(8, 0))
         tk.Label(bound_row, text='Device Bound:', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(side='left')
         self._hw_bound_badge = StatusBadge(bound_row, 'Not Bound', self._badge_inactive, self._card_bg)
         self._hw_bound_badge.pack(side='left', padx=(6, 0))
 
-        hw_card.pack(fill='x', pady=(0, 10))
+        hw_card.pack(fill='x', pady=(0, 18))
 
         # Customer Card
         c_card, c_body = self._make_card(scroll_frame, 'Customer')
 
         cname_row = tk.Frame(c_body, bg=self._card_bg)
-        cname_row.pack(fill='x', pady=(0, 6))
+        cname_row.pack(fill='x', pady=(0, 12))
         tk.Label(cname_row, text='Customer Name', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._customer_name_entry = tk.Entry(cname_row, textvariable=self._customer_name_var,
-                                              font=_F, relief='solid', bd=1,
-                                              highlightbackground=self._border, state='disabled')
-        self._customer_name_entry.pack(fill='x', pady=(2, 0))
+                                               font=_F, relief='solid', bd=2,
+                                               highlightthickness=2,
+                                               highlightbackground=self._border,
+                                               highlightcolor=self._primary,
+                                               disabledbackground='#f3f4f6',
+                                               disabledforeground='#9ca3af',
+                                               state='disabled')
+        self._customer_name_entry.pack(fill='x', ipady=4, pady=(4, 0))
+        self._customer_name_entry.bind('<FocusIn>', lambda e: self._customer_name_entry.config(highlightbackground=self._primary))
+        self._customer_name_entry.bind('<FocusOut>', lambda e: self._customer_name_entry.config(highlightbackground=self._border))
 
         cemail_row = tk.Frame(c_body, bg=self._card_bg)
-        cemail_row.pack(fill='x', pady=(0, 6))
+        cemail_row.pack(fill='x', pady=(0, 12))
         tk.Label(cemail_row, text='Email', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._customer_email_entry = tk.Entry(cemail_row, textvariable=self._customer_email_var,
-                                               font=_F, relief='solid', bd=1,
-                                               highlightbackground=self._border, state='disabled')
-        self._customer_email_entry.pack(fill='x', pady=(2, 0))
+                                                font=_F, relief='solid', bd=2,
+                                                highlightthickness=2,
+                                                highlightbackground=self._border,
+                                                highlightcolor=self._primary,
+                                                disabledbackground='#f3f4f6',
+                                                disabledforeground='#9ca3af',
+                                                state='disabled')
+        self._customer_email_entry.pack(fill='x', ipady=4, pady=(4, 0))
+        self._customer_email_entry.bind('<FocusIn>', lambda e: self._customer_email_entry.config(highlightbackground=self._primary))
+        self._customer_email_entry.bind('<FocusOut>', lambda e: self._customer_email_entry.config(highlightbackground=self._border))
 
         cphone_row = tk.Frame(c_body, bg=self._card_bg)
         cphone_row.pack(fill='x', pady=(0, 0))
         tk.Label(cphone_row, text='Mobile Number', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._customer_phone_entry = tk.Entry(cphone_row, textvariable=self._customer_phone_var,
-                                               font=_F, relief='solid', bd=1,
-                                               highlightbackground=self._border, state='disabled')
-        self._customer_phone_entry.pack(fill='x', pady=(2, 0))
+                                                font=_F, relief='solid', bd=2,
+                                                highlightthickness=2,
+                                                highlightbackground=self._border,
+                                                highlightcolor=self._primary,
+                                                disabledbackground='#f3f4f6',
+                                                disabledforeground='#9ca3af',
+                                                state='disabled')
+        self._customer_phone_entry.pack(fill='x', ipady=4, pady=(4, 0))
+        self._customer_phone_entry.bind('<FocusIn>', lambda e: self._customer_phone_entry.config(highlightbackground=self._primary))
+        self._customer_phone_entry.bind('<FocusOut>', lambda e: self._customer_phone_entry.config(highlightbackground=self._border))
 
-        c_card.pack(fill='x', pady=(0, 10))
+        c_card.pack(fill='x', pady=(0, 18))
 
         # Trial Card
         t_card, t_body = self._make_card(scroll_frame, 'Trial')
@@ -336,44 +357,51 @@ class ActivationDialog:
         self._trial_badge = StatusBadge(tstatus_row, '--', self._badge_inactive, self._card_bg)
         self._trial_badge.pack(side='left', padx=(6, 0))
 
-        t_card.pack(fill='x', pady=(0, 10))
+        t_card.pack(fill='x', pady=(0, 18))
 
         # License Card
         l_card, l_body = self._make_card(scroll_frame, 'License')
 
         product_row = tk.Frame(l_body, bg=self._card_bg)
-        product_row.pack(fill='x', pady=(0, 6))
+        product_row.pack(fill='x', pady=(0, 12))
         tk.Label(product_row, text='Product', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._product_combo = ttk.Combobox(product_row, font=_F, state='disabled')
-        self._product_combo.pack(fill='x', pady=(2, 0))
+        self._product_combo.pack(fill='x', pady=(4, 0))
         self._product_combo.bind('<<ComboboxSelected>>', self._on_product_selected)
 
         plan_row = tk.Frame(l_body, bg=self._card_bg)
-        plan_row.pack(fill='x', pady=(0, 6))
+        plan_row.pack(fill='x', pady=(0, 12))
         tk.Label(plan_row, text='Plan', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._plan_combo = ttk.Combobox(plan_row, font=_F, state='disabled')
-        self._plan_combo.pack(fill='x', pady=(2, 0))
+        self._plan_combo.pack(fill='x', pady=(4, 0))
 
         lk_row = tk.Frame(l_body, bg=self._card_bg)
-        lk_row.pack(fill='x', pady=(0, 6))
+        lk_row.pack(fill='x', pady=(0, 12))
         tk.Label(lk_row, text='License Key', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._license_entry = tk.Entry(lk_row, font=_FC, relief='solid',
-                                        bd=1, highlightbackground=self._border, state='disabled')
-        self._license_entry.pack(fill='x', pady=(2, 0))
+                                         bd=2, highlightthickness=2,
+                                         highlightbackground=self._border,
+                                         highlightcolor=self._primary,
+                                         disabledbackground='#f3f4f6',
+                                         disabledforeground='#9ca3af',
+                                         state='disabled')
+        self._license_entry.pack(fill='x', ipady=4, pady=(4, 0))
+        self._license_entry.bind('<FocusIn>', lambda e: self._license_entry.config(highlightbackground=self._primary))
+        self._license_entry.bind('<FocusOut>', lambda e: self._license_entry.config(highlightbackground=self._border))
 
         expiry_row = tk.Frame(l_body, bg=self._card_bg)
-        expiry_row.pack(fill='x', pady=(0, 6))
+        expiry_row.pack(fill='x', pady=(0, 12))
         tk.Label(expiry_row, text='License Expiry', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._expiry_var = tk.StringVar(value='--')
         tk.Label(expiry_row, textvariable=self._expiry_var,
-                  font=_F, bg=self._card_bg, fg=self._text_secondary).pack(anchor='w', pady=(2, 0))
+                  font=_F, bg=self._card_bg, fg=self._text_secondary).pack(anchor='w', pady=(4, 0))
 
         astatus_row = tk.Frame(l_body, bg=self._card_bg)
-        astatus_row.pack(fill='x', pady=(0, 6))
+        astatus_row.pack(fill='x', pady=(0, 12))
         tk.Label(astatus_row, text='Activation Status:', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(side='left')
         self._activation_badge = StatusBadge(astatus_row, 'Inactive', self._badge_inactive, self._card_bg)
@@ -385,34 +413,34 @@ class ActivationDialog:
                   bg=self._card_bg, fg=self._text_primary).pack(anchor='w')
         self._device_limit_var = tk.StringVar(value='-- / --')
         tk.Label(dev_row, textvariable=self._device_limit_var,
-                  font=_F, bg=self._card_bg, fg=self._text_secondary).pack(anchor='w', pady=(2, 0))
+                  font=_F, bg=self._card_bg, fg=self._text_secondary).pack(anchor='w', pady=(4, 0))
 
         lic_days_row = tk.Frame(l_body, bg=self._card_bg)
-        lic_days_row.pack(fill='x', pady=(4, 0))
+        lic_days_row.pack(fill='x', pady=(8, 0))
         tk.Label(lic_days_row, text='Days Remaining:', font=_FB,
                   bg=self._card_bg, fg=self._text_primary).pack(side='left')
         self._license_days_label = tk.Label(lic_days_row, text='--',
                                               font=_F, bg=self._card_bg, fg=self._text_secondary)
         self._license_days_label.pack(side='left', padx=(6, 0))
 
-        l_card.pack(fill='x', pady=(0, 10))
+        l_card.pack(fill='x', pady=(0, 18))
 
         # Status label
         self._status_label = tk.Label(scroll_frame, text='Detecting hardware...',
-                                       font=_F, bg=self._bg, fg=self._text_secondary)
-        self._status_label.pack(anchor='w', pady=(0, 6))
+                                        font=_F, bg=self._bg, fg=self._text_secondary)
+        self._status_label.pack(anchor='w', pady=(0, 12))
 
         # Buttons
         btn_frame = tk.Frame(scroll_frame, bg=self._bg)
         btn_frame.pack(fill='x', pady=(0, 10))
 
         self._refresh_btn = ActionButton(btn_frame, 'Refresh', self._secondary,
-                                          self._on_refresh, width=140, height=36)
+                                           self._on_refresh, width=140, height=42)
         self._refresh_btn.pack(side='left', padx=(0, 10))
         self._refresh_btn.set_disabled(True)
 
         self._activate_btn = ActionButton(btn_frame, 'Activate License', self._primary,
-                                           self._on_activate, width=170, height=36)
+                                            self._on_activate, width=170, height=42)
         self._activate_btn.pack(side='left')
         self._activate_btn.set_disabled(True)
 
@@ -422,19 +450,19 @@ class ActivationDialog:
         warn_text = '#991b1b'
         warn_text2 = '#7f1d1d'
         warning_frame = tk.Frame(scroll_frame, bg=warn_bg, highlightbackground=warn_border,
-                                  highlightcolor=warn_border, highlightthickness=1)
-        warning_frame.pack(fill='x', pady=(0, 10))
+                                  highlightcolor=warn_border, highlightthickness=2)
+        warning_frame.pack(fill='x', pady=(0, 18))
 
         warn_header = tk.Frame(warning_frame, bg=warn_bg)
-        warn_header.pack(fill='x', padx=14, pady=(10, 3))
+        warn_header.pack(fill='x', padx=20, pady=(14, 4))
         tk.Label(warn_header, text='⚠ Device Binding Notice',
-                  font=('Segoe UI', 11, 'bold'), bg=warn_bg, fg=warn_text).pack(anchor='w')
+                  font=('Segoe UI', 12, 'bold'), bg=warn_bg, fg=warn_text).pack(anchor='w')
 
         warn_sep = tk.Frame(warning_frame, bg=warn_border, height=1)
-        warn_sep.pack(fill='x', padx=14, pady=(0, 6))
+        warn_sep.pack(fill='x', padx=20, pady=(0, 8))
 
         warn_body = tk.Frame(warning_frame, bg=warn_bg)
-        warn_body.pack(fill='x', padx=14, pady=(0, 10))
+        warn_body.pack(fill='x', padx=20, pady=(0, 14))
 
         support_email = (self.config.get('branding', {})
                          .get('support_email', 'support@websmithdigital.com'))
@@ -448,7 +476,7 @@ class ActivationDialog:
                  wraplength=660, justify='left').pack(anchor='w')
         tk.Label(warn_body,
                  text=support_email,
-                 font=('Segoe UI', 9, 'underline'), bg=warn_bg,
+                 font=('Segoe UI', 10, 'underline'), bg=warn_bg,
                  fg=self._primary, cursor='hand2',
                  wraplength=660, justify='left').pack(anchor='w')
 
@@ -785,26 +813,18 @@ class ActivationDialog:
                 self._license_key = license_key
                 self._activation_badge.set('Bound', self._badge_bound)
                 self._hw_bound_badge.set('Bound', self._badge_bound)
-                # Write new license state to cache immediately
-                self.cache.set_license_status({
-                    'valid': True,
-                    'status': 'active',
-                    'expiry_date': data.get('expiry_date', ''),
-                    'days_left': data.get('days_left', 0),
-                    'plan': data.get('plan', ''),
-                    'hardware_id': self._hardware_id,
-                    'message': 'License activated successfully',
-                    'license_key': license_key,
-                    'trial_active': False,
-                    'customer_name': self._customer_name_var.get().strip(),
-                    'customer_email': self._customer_email_var.get().strip(),
-                    'customer_phone': self._customer_phone_var.get().strip(),
-                    'customer_mobile': self._customer_phone_var.get().strip(),
-                })
-                # Clear label (success will be shown via popup in main app)
-                self._status_label.config(text='', fg=self._text_secondary)
-                # Close dialog after short delay — restart handled by caller
-                self._root.after(200, self._root.destroy)
+                msg = data.get('message', 'License activated successfully')
+                if data.get('already_activated'):
+                    msg = 'License already activated on this device'
+                self._status_label.config(text=msg, fg=self._success)
+                expiry = data.get('expiry_date', '--')
+                if expiry and 'T' in expiry:
+                    expiry = expiry.split('T')[0]
+                self._expiry_var.set(expiry)
+                dcount = data.get('device_count', 0)
+                self._device_limit_var.set(f'{dcount} / {max_dev}')
+                self.cache.invalidate_license_status()
+                self._root.after(1000, lambda: self._on_refresh())
             else:
                 err = result.get('message', result.get('error', 'Activation failed'))
                 self._status_label.config(text=f'Activation failed: {err}', fg=self._error)

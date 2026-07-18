@@ -118,31 +118,7 @@ class LicenseEngine:
                 if self._status.valid:
                     self._cache.set_license_status(self._status.to_dict())
                 return self._status
-            # No trial — check if we have a stored license key and validate it
-            if self._license_key:
-                try:
-                    validation = self._client.validate_license(self._license_key, hardware_id)
-                    vdata = validation.get('data', validation)
-                    if vdata.get('valid') or validation.get('success'):
-                        self._status = LicenseStatus(
-                            valid=True,
-                            status=vdata.get('status', 'active'),
-                            expiry_date=vdata.get('expiry_date'),
-                            days_left=vdata.get('days_left', 0),
-                            plan=vdata.get('plan'),
-                            hardware_id=hardware_id,
-                            license_key=self._license_key,
-                            customer_name=vdata.get('customer_name'),
-                            customer_email=vdata.get('customer_email'),
-                            customer_phone=vdata.get('customer_phone'),
-                            customer_mobile=vdata.get('customer_mobile')
-                        )
-                        if self._status.valid:
-                            self._cache.set_license_status(self._status.to_dict())
-                        return self._status
-                except Exception:
-                    pass
-            # No trial, no valid license — return unlicensed
+            # No trial - return unlicensed
             self._status = LicenseStatus(
                 valid=False, status='unlicensed',
                 hardware_id=hardware_id,
