@@ -171,11 +171,31 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 live.write("SDK", "INFO", "Hardware detection")
                 _ = self.license_engine.get_hardware_id()
 
+                # Load persisted license key so engine can validate if cache expired
+                stored_key = self.settings.get("license_key", "") or ""
+                if stored_key:
+                    live.write("SDK", "INFO", "Stored license key found — setting on engine")
+                    self.license_engine._license_key = stored_key
+
                 live.write("SDK", "INFO", "Cache check")
                 live.write("SDK", "INFO", "Trial check")
                 live.write("SDK", "INFO", "License validation")
                 self.license_status = self.license_engine.initialize()
                 self._license_initialized = True
+
+                # If we have a stored license key but get trial/unlicensed, the trial
+                # endpoint still returns has_trial=true after paid activation.
+                # Validate against the license endpoint to get the real paid status.
+                if stored_key and (not self.license_status or self.license_status.status in ('trial', 'unlicensed', 'error')):
+                    live.write("SDK", "INFO", "Paid license exists — validating against server")
+                    try:
+                        self.license_engine.validate(stored_key)
+                        validated = self.license_engine.get_status()
+                        if validated and validated.valid:
+                            self.license_status = validated
+                            live.write("SDK", "SUCCESS", f"License validated: {validated.status} - {validated.plan}")
+                    except Exception as ve:
+                        live.write("SDK", "WARNING", f"Stored license validation failed: {ve}")
 
                 # Extract customer data from API response
                 self._extract_customer_from_api()
@@ -343,6 +363,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             key = r.get('license_key', '')
             if key:
                 self.license_engine._license_key = key
+                self.settings.set("license_key", key)  # Persist across restart
             # Re-initialize — cache was written by the dialog
             try:
                 self.license_status = self.license_engine.initialize()
