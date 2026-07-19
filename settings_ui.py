@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
 import platform
+from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutDialog as SDKAboutDialog
 
 class SettingsUI:
     def __init__(self, parent, app_instance):
@@ -253,33 +254,30 @@ class SettingsUI:
                   bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
 
     def _build_about(self):
-        inner = self._card(self._content_frame, "ZEMmacOS")
-        info = [
-            ("Application:", "ZEMmacOS"),
-            ("Version:", self.app.updater.get_current_version() if hasattr(self.app, "updater") else "3.0"),
-            ("Purpose:", "macOS Download Manager"),
-            ("Developer:", "Websmith Digital"),
-            ("Platform:", f"{platform.system()} {platform.release()}"),
-        ]
-        for label, value in info:
-            row = self._row(inner, label)
-            tk.Label(row, text=value, font=("SF Pro Text", 11, "bold"),
-                     fg=self.colors["text"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
+        inner = self._card(self._content_frame, "About ZEMmacOS")
+        tk.Label(inner,
+                 text="View detailed product and license information using the SDK About dialog.",
+                 font=("SF Pro Text", 10), fg=self.colors.get("text_secondary", "#555"),
+                 bg=self.colors["card_bg"], wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, pady=10)
+        tk.Button(inner, text="Open About Dialog",
+                  command=self._show_about_dialog,
+                  font=("SF Pro Text", 11, "bold"),
+                  fg="white", bg=self.colors.get("accent", "#0071e3"),
+                  bd=0, padx=20, pady=8, cursor="hand2").pack(anchor=tk.W)
 
-        inner2 = self._card(self._content_frame, "System Information")
-        sys_info = [
-            ("Python Version:", platform.python_version()),
-            ("Architecture:", platform.machine()),
-        ]
-        for label, value in sys_info:
-            row = self._row(inner2, label)
-            tk.Label(row, text=value, font=("SF Pro Text", 11),
-                     fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT)
-
-        inner4 = self._card(self._content_frame, "Legal")
-        tk.Label(inner4, text="ZEMmacOS is a tool for downloading macOS installer packages from Apple's servers.",
-                 font=("SF Pro Text", 10), fg=self.colors["text_secondary"],
+        inner2 = self._card(self._content_frame, "Legal")
+        tk.Label(inner2,
+                 text="ZEMmacOS is a tool for downloading macOS installer packages from Apple's servers.",
+                 font=("SF Pro Text", 10), fg=self.colors.get("text_secondary", "#555"),
                  bg=self.colors["card_bg"], wraplength=500, justify=tk.LEFT).pack(anchor=tk.W)
+
+    def _show_about_dialog(self):
+        engine = getattr(self.app, 'license_engine', None)
+        if not engine:
+            messagebox.showwarning("License Engine", "License engine not initialized.")
+            return
+        dlg = SDKAboutDialog(self.app.root, engine)
+        dlg.show()
 
     def _build_license(self):
         inner = self._card(self._content_frame, "License Information")

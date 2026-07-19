@@ -7,6 +7,7 @@ import time
 from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
+from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutWidget, AboutDialog
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -173,8 +174,26 @@ class ZEMmacOSUI:
         footer = tk.Frame(sidebar, bg=self.colors["sidebar_bg"])
         footer.pack(side=tk.BOTTOM, fill=tk.X, pady=16)
 
-        tk.Label(footer, text="Version 3.0", font=("SF Pro Text", 9),
-                 fg=self.colors["muted"], bg=self.colors["sidebar_bg"]).pack()
+        about_link = tk.Label(
+            footer,
+            text="About",
+            font=("SF Pro Text", 10, "bold"),
+            fg=self.colors.get("accent", "#0071e3"),
+            bg=self.colors["sidebar_bg"],
+            cursor="hand2",
+        )
+        about_link.pack(pady=(0, 6))
+        about_link.bind("<Button-1>", lambda e: self._on_about_clicked())
+
+        if hasattr(self, 'license_engine') and self.license_engine:
+            AboutWidget(footer, self.license_engine)
+
+    def _on_about_clicked(self):
+        engine = getattr(self, 'license_engine', None)
+        if not engine:
+            return
+        dlg = AboutDialog(self.root, engine)
+        dlg.show()
 
     def _nav_click(self, key):
         views = {

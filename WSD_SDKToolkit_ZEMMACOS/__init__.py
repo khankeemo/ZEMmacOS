@@ -9,6 +9,8 @@ __all__ = [
     "ActivationDialog",
     "RenewalDialog",
     "DeviceReplaceDialog",
+    "AboutWidget",
+    "AboutDialog",
 ]
 
 from .client import ApiClient, ApiError
@@ -19,3 +21,4 @@ from .welcome import WelcomeDialog
 from .activation import ActivationDialog
 from .renewal import RenewalDialog
 from .device_replace import DeviceReplaceDialog
+from .widgets.about import AboutWidget, AboutDialog
