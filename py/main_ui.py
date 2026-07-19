@@ -7,7 +7,7 @@ import time
 from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
-from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutWidget, AboutDialog
+from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutDialog
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -172,21 +172,30 @@ class ZEMmacOSUI:
         self._update_nav("dashboard")
 
         footer = tk.Frame(sidebar, bg=self.colors["sidebar_bg"])
-        footer.pack(side=tk.BOTTOM, fill=tk.X, pady=16)
+        footer.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 12))
 
-        about_link = tk.Label(
-            footer,
-            text="About",
-            font=("SF Pro Text", 10, "bold"),
-            fg=self.colors.get("accent", "#0071e3"),
-            bg=self.colors["sidebar_bg"],
-            cursor="hand2",
-        )
-        about_link.pack(pady=(0, 6))
-        about_link.bind("<Button-1>", lambda e: self._on_about_clicked())
+        sep = tk.Frame(footer, bg=self.colors["border"], height=1)
+        sep.pack(fill=tk.X, padx=16, pady=(0, 10))
 
-        if hasattr(self, 'license_engine') and self.license_engine:
-            AboutWidget(footer, self.license_engine)
+        footer_lines = [
+            ("Powered by Websmith Digital\u2122", ("SF Pro Text", 8, "bold"), True),
+            ("Universal License Controller", ("SF Pro Text", 7), False),
+            ("Protected by Brevo and Websmith", ("SF Pro Text", 7), False),
+            ("Kolkata, West Bengal, India", ("SF Pro Text", 7), False),
+        ]
+        for text, font, clickable in footer_lines:
+            lbl = tk.Label(
+                footer,
+                text=text,
+                font=font,
+                fg=self.colors.get("muted", "#86868b"),
+                bg=self.colors["sidebar_bg"],
+                cursor="hand2" if clickable else "",
+                anchor=tk.CENTER,
+            )
+            lbl.pack(fill=tk.X, pady=(0, 1))
+            if clickable:
+                lbl.bind("<Button-1>", lambda e: self._on_about_clicked())
 
     def _on_about_clicked(self):
         engine = getattr(self, 'license_engine', None)
