@@ -7,7 +7,7 @@ from tkinter import messagebox
 from themes import apply_theme
 
 # Get base directory for dynamic paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DEFAULT_CONFIG = {
     "theme": "light",
@@ -29,7 +29,7 @@ class SettingsManager:
     """Manages application settings via config.json"""
     
     def __init__(self):
-        self.config_path = os.path.join(BASE_DIR, "config.json")
+        self.config_path = os.path.join(BASE_DIR, "config", "config.json")
         self.settings = self.load()
         
     def _get_default_download_dir(self):

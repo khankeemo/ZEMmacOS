@@ -9,7 +9,7 @@ from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
 from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutWidget, AboutDialog
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _create_roundrect(canvas, x1, y1, x2, y2, r=8, **kwargs):

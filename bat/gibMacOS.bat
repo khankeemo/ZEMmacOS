@@ -1,6 +1,7 @@
 @echo off
 REM Get our local path and args before delayed expansion - allows % and !
-set "thisDir=%~dp0"
+for %%I in ("%~dp0..") do set "rootDir=%%~fI"
+set "thisDir=%rootDir%\"
 set "args=%*"
 
 setlocal enableDelayedExpansion
@@ -75,12 +76,15 @@ REM Check for our script first
 set "looking_for=!script_name!"
 if "!script_name!" == "" (
     set "looking_for=%~n0.py or %~n0.command"
-    set "script_name=%~n0.py"
-    if not exist "!thisDir!\!script_name!" (
+    set "script_name=py\%~n0.py"
+    if not exist "!thisDir!!script_name!" (
         set "script_name=%~n0.command"
+        if not exist "!thisDir!!script_name!" (
+            set "script_name=bat\%~n0.command"
+        )
     )
 )
-if not exist "!thisDir!\!script_name!" (
+if not exist "!thisDir!!script_name!" (
     cls
     echo   ###                      ###
     echo  #     Target Not Found     #

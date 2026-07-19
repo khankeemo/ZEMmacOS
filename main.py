@@ -8,6 +8,11 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import ttk, messagebox
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PY_DIR = os.path.join(BASE_DIR, 'py')
+sys.path.insert(0, BASE_DIR)
+sys.path.insert(0, PY_DIR)
+
 from main_ui import ZEMmacOSUI
 from gib_macos_wrapper import GibMacOSWrapper
 from logger import get_logger
@@ -16,9 +21,6 @@ from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 from live_log import get_live_log
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, BASE_DIR)
 from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus
 from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog, ActivationDialog
 

@@ -8,16 +8,16 @@ from PyInstaller.utils.hooks import collect_submodules
 # ANALYSIS - Collect all dependencies
 # ============================================================================
 a = Analysis(
-    ['main.py'],
-    pathex=[],
+    ['../main.py'],
+    pathex=['..', os.path.join('..', 'py')],
     binaries=[],
     datas=[
         # Project folders
-        ('config.json', '.'),
-        ('public/images', 'public/images'),
-        ('help', 'help'),
+        ('../config/config.json', '.'),
+        ('../public/images', 'public/images'),
+        ('../help', 'help'),
         # License SDK (entire package with config/assets)
-        ('SDKToolkit_prod_zemmacos', 'SDKToolkit_prod_zemmacos'),
+        ('../SDKToolkit_prod_zemmacos', 'SDKToolkit_prod_zemmacos'),
     ],
     # CRITICAL: Hidden imports for PyInstaller to include these modules
     hiddenimports=[
@@ -98,5 +98,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['public\\images\\logo.ico'],  # App icon
+    icon=['..\\public\\images\\logo.ico'],  # App icon
 )

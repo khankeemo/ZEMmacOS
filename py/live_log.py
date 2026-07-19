@@ -2,7 +2,8 @@ import os
 import threading
 from datetime import datetime
 
-LIVE_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LIVE_LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
 
 CATEGORIES = {
     "STARTUP": 0,

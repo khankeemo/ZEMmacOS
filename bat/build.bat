@@ -3,7 +3,7 @@ title ZEMmacOS Build System
 echo =====================================
 echo   ZEMmacOS BUILD STARTING...
 echo =====================================
-cd /d C:\ZEMmacOS
+cd /d "%~dp0.."
 
 REM ---------------- CLEAN OLD BUILD ----------------
 echo.
@@ -15,7 +15,7 @@ echo ✓ Clean complete
 REM ---------------- BUILD EXE ----------------
 echo.
 echo [2/5] Building EXE with PyInstaller...
-pyinstaller ZEMmacOS.spec
+pyinstaller spec\ZEMmacOS.spec
 
 REM ---------------- VERIFY BUILD ----------------
 echo.
