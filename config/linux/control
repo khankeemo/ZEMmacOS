@@ -1,0 +1,16 @@
+Package: zemmacos
+Version: 3.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: python3 (>= 3.11), libc6 (>= 2.31)
+Maintainer: WebSmithDigital <support@websmithdigital.com>
+Description: ZEMmacOS - macOS Download Manager
+ Download macOS installer files directly from Apple's servers.
+ Features multithreaded downloading, catalog browser,
+ and license management.
+ .
+ ZEMmacOS combines a gibMacOS-based catalog fetcher with an
+ IDM-style multithreaded downloader, wrapped in a modern
+ Tkinter GUI with commercial license management.
+Homepage: https://www.websmithdigital.com

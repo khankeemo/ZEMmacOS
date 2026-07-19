@@ -1,0 +1,53 @@
+PRIVACY POLICY
+
+Last Updated: July 2026
+
+Websmith Digital ("we", "our", "us") respects your privacy. This Privacy
+Policy describes how we collect, use, and protect your information.
+
+1. INFORMATION WE COLLECT
+   a) Device Information: Hardware identifiers (CPU ID, motherboard serial,
+      MAC address), operating system version, device name
+   b) License Information: License keys, activation status, trial status
+   c) Usage Data: Runtime duration, feature usage, error reports
+   d) Contact Information: Email address (for trial OTP, license communications)
+
+2. HOW WE USE YOUR INFORMATION
+   a) License validation and enforcement
+   b) Hardware binding verification
+   c) Trial management
+   d) Product improvement and analytics
+   e) Customer support
+   f) Security monitoring and fraud prevention
+
+3. DATA STORAGE
+   a) License data is stored on secure servers
+   b) Local cache is encrypted using AES-256-GCM
+   c) Data is retained as long as your license is active
+   d) Trial data is retained for 30 days after trial expiry
+
+4. DATA SHARING
+   We do NOT sell your personal information. Data may be shared with:
+   a) Payment processors (for paid transactions)
+   b) Email service providers (for transactional communications)
+   c) Legal authorities (when required by law)
+
+5. SECURITY
+   a) All API communications use HMAC-SHA256 signed requests
+   b) Local data is encrypted using AES-256-GCM
+   c) Server communications use TLS encryption
+   d) Rate limiting protects against abuse
+
+6. YOUR RIGHTS
+   You have the right to:
+   a) Access your personal data
+   b) Request data deletion
+   c) Withdraw consent (may affect license functionality)
+   d) Contact us regarding privacy concerns
+
+7. CONTACT
+   Privacy inquiries: support@websmithdigital.com
+   Address: Websmith Digital, Kolkata, West Bengal, India
+
+By clicking "Agree" you consent to the collection and use of your
+information as described in this Privacy Policy.

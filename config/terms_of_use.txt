@@ -1,0 +1,58 @@
+TERMS OF USE
+
+Last Updated: July 2026
+
+1. ACCEPTANCE OF TERMS
+   By installing and using ZEMmacOS ("Software"), you agree to these Terms
+   of Use. If you do not agree, do not install or use the Software.
+
+2. SINGLE-USER LICENSE
+   The Software is licensed on a per-user, per-device basis. Each license
+   authorizes one individual to use the Software on one device.
+
+3. TRIAL LIMITATIONS
+   Trial versions are time-limited and may have feature restrictions.
+   Trial data may not carry over to paid versions.
+
+4. HARDWARE BINDING POLICY
+   Licenses are cryptographically bound to device hardware. Hardware changes
+   may require license reactivation. Device replacement requests are handled
+   through the Device Replacement process.
+
+5. ACTIVATION POLICY
+   Valid license keys activate one device. Activation count is tracked
+   server-side. Exceeding device limits may block activation.
+
+6. RENEWAL POLICY
+   Subscription licenses must be renewed prior to expiry. A grace period may
+   apply. Licenses not renewed will expire and Software access will cease.
+
+7. REFUND POLICY
+   Refund requests are evaluated on a case-by-case basis. Contact
+   support@websmithdigital.com within 14 days of purchase for consideration.
+
+8. PROHIBITED MODIFICATIONS
+   You may NOT modify, adapt, or create derivative works of the Software.
+
+9. REVERSE ENGINEERING RESTRICTIONS
+   You may NOT reverse engineer, decompile, or extract source code.
+
+10. REDISTRIBUTION RESTRICTIONS
+    You may NOT redistribute the Software or any portion thereof.
+
+11. COMMERCIAL-USE RESTRICTIONS
+    Commercial use requires a separate commercial license agreement.
+
+12. ACCOUNT SUSPENSION RULES
+    Accounts may be suspended for violation of these terms, non-payment,
+    or activity that compromises Software integrity.
+
+13. DATA-PROCESSING NOTICE
+    The Software transmits device identification data for license validation.
+    See Privacy Policy for details.
+
+14. SUPPORT POLICY
+    Technical support is available via email at support@websmithdigital.com.
+    Response times vary based on support plan.
+
+These Terms of Use are governed by the laws of India.

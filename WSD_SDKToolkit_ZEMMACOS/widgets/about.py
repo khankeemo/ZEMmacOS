@@ -14,21 +14,20 @@ class AboutWidget:
         self.frame = tk.Frame(parent)
         self._build()
 
-    def _build(self) -> tk.Frame:
+    def _build(self):
         branding = self.engine.config.get('branding', {})
         colors = branding.get('colors', {})
         labels = branding.get('labels', {})
 
         bg = colors.get('bg_page', '#f8f9fa')
         text_muted = colors.get('text_muted', '#888888')
-        text_secondary = colors.get('text_secondary', '#555555')
         border = colors.get('border', '#dbe3ef')
 
         self.frame.configure(bg=bg)
-        self.frame.pack(fill=tk.X, side=tk.BOTTOM, padx=8, pady=(0, 8))
+        self.frame.pack(fill=tk.X, side=tk.BOTTOM, padx=8, pady=(0, 6))
 
         sep = tk.Frame(self.frame, bg=border, height=1)
-        sep.pack(fill=tk.X, pady=(0, 6))
+        sep.pack(fill=tk.X, pady=(0, 4))
 
         footer_frame = tk.Frame(self.frame, bg=bg)
         footer_frame.pack(fill=tk.X)
@@ -37,27 +36,27 @@ class AboutWidget:
         tk.Label(
             footer_frame,
             text=f"Powered by {company}",
-            font=("Segoe UI", 8, "bold"),
+            font=("Segoe UI", 7, "bold"),
             bg=bg,
             fg=text_muted
-        ).pack(anchor=tk.W)
+        ).pack(anchor=tk.CENTER)
 
         tk.Label(
             footer_frame,
-            text=labels.get('about_subtitle', 'Enterprise License Platform'),
-            font=("Segoe UI", 7),
+            text=labels.get('about_subtitle', 'Universal License Platform'),
+            font=("Segoe UI", 6),
             bg=bg,
             fg=text_muted
-        ).pack(anchor=tk.W)
+        ).pack(anchor=tk.CENTER)
 
-        location = branding.get('location', 'Kolkata, India')
+        location = branding.get('location', 'Kolkata, West Bengal, India')
         tk.Label(
             footer_frame,
             text=location,
-            font=("Segoe UI", 7),
+            font=("Segoe UI", 6),
             bg=bg,
             fg=text_muted
-        ).pack(anchor=tk.W, pady=(0, 2))
+        ).pack(anchor=tk.CENTER, pady=(0, 2))
 
         return self.frame
 
@@ -81,8 +80,9 @@ class AboutDialog:
 
         self._root = tk.Toplevel(self.parent)
         self._root.title(self.labels.get('about_title', 'About'))
-        self._root.geometry('420x520')
-        self._root.resizable(False, False)
+        self._root.geometry('540x620')
+        self._root.minsize(480, 560)
+        self._root.resizable(True, True)
         self._root.configure(bg=self.colors.get('bg_page', '#f8f9fa'))
         self._root.transient(self.parent)
         self._root.grab_set()
@@ -107,6 +107,19 @@ class AboutDialog:
             self._root.destroy()
             self._root = None
 
+    def _make_card(self, parent):
+        card_bg = self.colors.get('bg_card', '#ffffff')
+        border_color = self.colors.get('border', '#dbe3ef')
+        card = tk.Frame(
+            parent,
+            bg=card_bg,
+            bd=1,
+            relief=tk.SOLID,
+            highlightbackground=border_color,
+            highlightthickness=1
+        )
+        return card
+
     def _build_ui(self):
         root = self._root
         bg = self.colors.get('bg_page', '#f8f9fa')
@@ -114,149 +127,227 @@ class AboutDialog:
         text_primary = self.colors.get('text_primary', '#333333')
         text_secondary = self.colors.get('text_secondary', '#555555')
         text_muted = self.colors.get('text_muted', '#888888')
-        border = self.colors.get('border', '#dbe3ef')
         primary = self.colors.get('primary', '#1e40af')
 
-        main_frame = tk.Frame(root, bg=bg, padx=24, pady=24)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(root, bg=bg, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(root, orient=tk.VERTICAL, command=canvas.yview)
+        scroll_frame = tk.Frame(canvas, bg=bg)
+        scroll_frame.bind('<Configure>',
+                          lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas_window = canvas.create_window((0, 0), window=scroll_frame, anchor='nw')
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Header with logo/brand
-        header = tk.Frame(main_frame, bg=bg)
-        header.pack(fill=tk.X, pady=(0, 20))
+        def _on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width - 4)
+        canvas.bind('<Configure>', _on_canvas_configure)
+
+        content = tk.Frame(scroll_frame, bg=bg, padx=28, pady=28)
+        content.pack(fill=tk.BOTH, expand=True)
 
         company = self.branding.get('company_name', 'Websmith Digital™')
+
+        # ── HEADER CARD ──
+        header_card = self._make_card(content)
+        header_card.pack(fill=tk.X, pady=(0, 20))
+
+        header_inner = tk.Frame(header_card, bg=card_bg, padx=24, pady=20)
+        header_inner.pack(fill=tk.BOTH)
+
         tk.Label(
-            header,
+            header_inner,
             text=company,
-            font=("Segoe UI", 18, "bold"),
-            bg=bg,
+            font=("Segoe UI", 20, "bold"),
+            bg=card_bg,
             fg=primary
-        ).pack()
+        ).pack(anchor=tk.CENTER)
 
         tk.Label(
-            header,
-            text=self.labels.get('about_subtitle', 'Enterprise License & Activation Platform'),
-            font=("Segoe UI", 10),
-            bg=bg,
+            header_inner,
+            text=self.labels.get('about_subtitle',
+                                 'Universal License Platform'),
+            font=("Segoe UI", 11),
+            bg=card_bg,
             fg=text_secondary
-        ).pack(pady=(4, 0))
+        ).pack(anchor=tk.CENTER, pady=(4, 0))
 
-        # Product info card
-        card = tk.Frame(main_frame, bg=card_bg, bd=1, relief=tk.SOLID,
-                        highlightbackground=border, highlightthickness=1)
-        card.pack(fill=tk.X, pady=(0, 16))
+        location = self.branding.get('location',
+                                     'Kolkata, West Bengal, India')
+        tk.Label(
+            header_inner,
+            text=location,
+            font=("Segoe UI", 9),
+            bg=card_bg,
+            fg=text_muted
+        ).pack(anchor=tk.CENTER, pady=(4, 0))
 
-        inner = tk.Frame(card, bg=card_bg, padx=20, pady=16)
-        inner.pack(fill=tk.BOTH)
+        # ── PRODUCT INFORMATION CARD (Two-column) ──
+        product_card = self._make_card(content)
+        product_card.pack(fill=tk.X, pady=(0, 16))
+
+        product_inner = tk.Frame(product_card, bg=card_bg, padx=24, pady=18)
+        product_inner.pack(fill=tk.BOTH)
 
         tk.Label(
-            inner,
-            text=self.labels.get('about_product_info', 'Product Information'),
-            font=("Segoe UI", 11, "bold"),
+            product_inner,
+            text=self.labels.get('about_product_info',
+                                 'Product Information'),
+            font=("Segoe UI", 12, "bold"),
             bg=card_bg,
             fg=text_primary
-        ).pack(anchor=tk.W, pady=(0, 12))
+        ).pack(anchor=tk.W, pady=(0, 14))
 
-        self._add_info_row(inner, self.labels.get('product_label', 'Product'),
-                          self._get_product_name())
-        self._add_info_row(inner, self.labels.get('version_label', 'Version'),
-                          self._get_product_version())
-        self._add_info_row(inner, self.labels.get('sdk_version_label', 'SDK Version'),
-                          self._get_sdk_version())
-        self._add_info_row(inner, self.labels.get('runtime_label', 'Runtime'),
-                          self._get_runtime())
-        self._add_info_row(inner, self.labels.get('status_label', 'License Status'),
-                          self._get_license_status())
-        self._add_info_row(inner, self.labels.get('plan_label', 'Current Plan'),
-                          self._get_current_plan())
-        self._add_info_row(inner, self.labels.get('build_date_label', 'Build Date'),
-                          self._get_build_date())
+        info_data = [
+            (self.labels.get('product_label', 'Product'),
+             self._get_product_name(),
+             self.labels.get('sdk_version_label', 'SDK Version'),
+             self._get_sdk_version()),
+            (self.labels.get('version_label', 'Version'),
+             self._get_product_version(),
+             self.labels.get('runtime_label', 'Runtime'),
+             self._get_runtime()),
+            (self.labels.get('status_label', 'License Status'),
+             self._get_license_status(),
+             self.labels.get('plan_label', 'Current Plan'),
+             self._get_current_plan()),
+            (self.labels.get('build_date_label', 'Build Date'),
+             self._get_build_date(),
+             '', ''),
+        ]
 
-        # Description card
-        desc_card = tk.Frame(main_frame, bg=card_bg, bd=1, relief=tk.SOLID,
-                              highlightbackground=border, highlightthickness=1)
-        desc_card.pack(fill=tk.X, pady=(0, 16))
+        for row_idx, (lbl_l, val_l, lbl_r, val_r) in enumerate(info_data):
+            row_frame = tk.Frame(product_inner, bg=card_bg)
+            row_frame.pack(fill=tk.X, pady=(0, 6))
+            row_frame.columnconfigure(0, weight=1, uniform='col')
+            row_frame.columnconfigure(1, weight=1, uniform='col')
 
-        desc_inner = tk.Frame(desc_card, bg=card_bg, padx=20, pady=16)
-        desc_inner.pack(fill=tk.BOTH)
+            # Left column
+            left_frame = tk.Frame(row_frame, bg=card_bg)
+            left_frame.grid(row=0, column=0, sticky='nw', padx=(0, 8))
+            tk.Label(
+                left_frame,
+                text=lbl_l,
+                font=("Segoe UI", 8, "bold"),
+                bg=card_bg,
+                fg=text_primary
+            ).pack(anchor=tk.W, pady=(0, 1))
+            val_widget_l = tk.Label(
+                left_frame,
+                text=val_l,
+                font=("Segoe UI", 10),
+                bg=card_bg,
+                fg=text_secondary,
+                anchor=tk.W,
+                wraplength=200
+            )
+            val_widget_l.pack(anchor=tk.W)
 
-        desc_text = (
-            f"This product is powered by {company},\n"
-            f"Kolkata, India.\n\n"
-            f"Licensing, activation, customer onboarding,\n"
-            f"device security, and SDK services are\n"
-            f"provided by {company}."
+            # Right column
+            if lbl_r and val_r:
+                right_frame = tk.Frame(row_frame, bg=card_bg)
+                right_frame.grid(row=0, column=1, sticky='nw')
+                tk.Label(
+                    right_frame,
+                    text=lbl_r,
+                    font=("Segoe UI", 8, "bold"),
+                    bg=card_bg,
+                    fg=text_primary
+                ).pack(anchor=tk.W, pady=(0, 1))
+                val_widget_r = tk.Label(
+                    right_frame,
+                    text=val_r,
+                    font=("Segoe UI", 10),
+                    bg=card_bg,
+                    fg=text_secondary,
+                    anchor=tk.W,
+                    wraplength=200
+                )
+                val_widget_r.pack(anchor=tk.W)
+
+        # ── PLATFORM CARD ──
+        platform_card = self._make_card(content)
+        platform_card.pack(fill=tk.X, pady=(0, 16))
+
+        platform_inner = tk.Frame(platform_card, bg=card_bg, padx=24, pady=18)
+        platform_inner.pack(fill=tk.BOTH)
+
+        tk.Label(
+            platform_inner,
+            text=company,
+            font=("Segoe UI", 12, "bold"),
+            bg=card_bg,
+            fg=text_primary
+        ).pack(anchor=tk.W, pady=(0, 6))
+
+        tk.Label(
+            platform_inner,
+            text="Enterprise License & Activation Platform",
+            font=("Segoe UI", 9),
+            bg=card_bg,
+            fg=text_secondary
+        ).pack(anchor=tk.W, pady=(0, 10))
+
+        platform_desc = (
+            "Licensing, activation, onboarding,\n"
+            "device security, hardware binding,\n"
+            f"and SDK services are powered by\n"
+            f"{company}."
         )
         tk.Label(
-            desc_inner,
-            text=desc_text,
+            platform_inner,
+            text=platform_desc,
             font=("Segoe UI", 9),
             bg=card_bg,
             fg=text_secondary,
             justify=tk.LEFT
         ).pack(anchor=tk.W)
 
-        # Architecture card
-        arch_card = tk.Frame(main_frame, bg=card_bg, bd=1, relief=tk.SOLID,
-                              highlightbackground=border, highlightthickness=1)
+        # ── ARCHITECTURE CARD ──
+        arch_card = self._make_card(content)
         arch_card.pack(fill=tk.X, pady=(0, 16))
 
-        arch_inner = tk.Frame(arch_card, bg=card_bg, padx=20, pady=16)
+        arch_inner = tk.Frame(arch_card, bg=card_bg, padx=24, pady=18)
         arch_inner.pack(fill=tk.BOTH)
 
         tk.Label(
             arch_inner,
-            text=self.labels.get('about_architecture', 'Platform Architecture & Development'),
-            font=("Segoe UI", 11, "bold"),
+            text=self.labels.get('about_architecture',
+                                 'Platform Architecture & Development'),
+            font=("Segoe UI", 12, "bold"),
             bg=card_bg,
             fg=text_primary
-        ).pack(anchor=tk.W, pady=(0, 8))
+        ).pack(anchor=tk.W, pady=(0, 10))
 
-        dev_name = self.branding.get('developer_name', 'Mohammad Kalam Khan')
-        dev_title = self.branding.get('developer_title', 'Senior Developer')
-        arch_text = f"{dev_name}\n{dev_title}"
+        dev_name = self.branding.get('developer_name',
+                                     'Mohammad Kalam Khan')
+        dev_title = self.branding.get('developer_title',
+                                      'Senior Developer')
+
         tk.Label(
             arch_inner,
-            text=arch_text,
-            font=("Segoe UI", 9),
+            text=dev_name,
+            font=("Segoe UI", 10, "bold"),
             bg=card_bg,
-            fg=text_secondary,
-            justify=tk.LEFT
+            fg=text_primary
         ).pack(anchor=tk.W)
 
-        # Copyright footer
-        year = datetime.now().year
-        copyright_text = f"© {year} {company}. All rights reserved."
         tk.Label(
-            main_frame,
-            text=copyright_text,
-            font=("Segoe UI", 8),
-            bg=bg,
-            fg=text_muted
-        ).pack(pady=(8, 0))
-
-    def _add_info_row(self, parent, label: str, value: str):
-        row = tk.Frame(parent, bg=parent.cget('bg'))
-        row.pack(fill=tk.X, pady=2)
-        text_primary = self.colors.get('text_primary', '#333333')
-        text_secondary = self.colors.get('text_secondary', '#555555')
-        tk.Label(
-            row,
-            text=f"{label}:",
-            font=("Segoe UI", 9, "bold"),
-            bg=row.cget('bg'),
-            fg=text_primary,
-            width=18,
-            anchor=tk.W
-        ).pack(side=tk.LEFT)
-        tk.Label(
-            row,
-            text=value,
+            arch_inner,
+            text=dev_title,
             font=("Segoe UI", 9),
-            bg=row.cget('bg'),
-            fg=text_secondary,
-            anchor=tk.W
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+            bg=card_bg,
+            fg=text_secondary
+        ).pack(anchor=tk.W, pady=(0, 6))
+
+        year = datetime.now().year
+        tk.Label(
+            arch_inner,
+            text=f"\u00a9 {year} Websmith Digital",
+            font=("Segoe UI", 8),
+            bg=card_bg,
+            fg=text_muted
+        ).pack(anchor=tk.W)
 
     def _get_product_name(self) -> str:
         return self.config.get('product', {}).get('name', self.labels.get('unknown', 'Unknown'))
@@ -265,11 +356,21 @@ class AboutDialog:
         return self.config.get('product', {}).get('version', self.labels.get('unknown', 'Unknown'))
 
     def _get_sdk_version(self) -> str:
-        kit_version = self.config.get('kit_version')
-        if kit_version:
-            return kit_version
+        try:
+            from .. import __version__
+            if __version__:
+                return __version__
+        except ImportError:
+            pass
+        product = self.config.get('product', {})
+        ver = product.get('version')
+        if ver and ver != '${kit_version}':
+            return ver
         manifest = self.config.get('manifest', {})
-        return manifest.get('kit_version', self.labels.get('unknown', 'Unknown'))
+        mkv = manifest.get('kit_version')
+        if mkv:
+            return mkv
+        return '1.0.0'
 
     def _get_runtime(self) -> str:
         return self.config.get('runtime', 'Python')

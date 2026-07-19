@@ -14,16 +14,16 @@
   },
   "trial": {
     "enabled": true,
-    "days": 14,
+    "days": 1,
     "require_email": true,
     "require_company": false,
     "auto_convert": true,
-    "message": "Start your 14-day free trial. No credit card required."
+    "message": "Start your 1-day free trial. No credit card required."
   },
   "license": {
     "enabled": true,
     "hardware_binding": true,
-    "max_devices": 3,
+    "max_devices": 1,
     "offline_days": 7,
     "renewal_reminder_days": 7
   },

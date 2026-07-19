@@ -1,25 +1,34 @@
 # -*- mode: python ; coding: utf-8 -*-
-# ZEMmacOS - PyInstaller Specification File
+# ZEMmacOS - PyInstaller Specification File (Production Build)
 # Purpose: Build Windows EXE for macOS Downloader App
 
+import os
 from PyInstaller.utils.hooks import collect_submodules
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd(), '..')) if '__file__' in dir() else os.getcwd()
 
 # ============================================================================
 # ANALYSIS - Collect all dependencies
 # ============================================================================
 a = Analysis(
-    ['../main.py'],
-    pathex=['..', os.path.join('..', 'py')],
+    [os.path.join(PROJECT_ROOT, 'main.py')],
+    pathex=[PROJECT_ROOT, os.path.join(PROJECT_ROOT, 'py')],
     binaries=[],
     datas=[
-        # Project folders
-        ('../config/config.json', '.'),
-        ('../public/images', 'public/images'),
-        ('../help', 'help'),
+        # Project config (NO license_key bundled)
+        (os.path.join(PROJECT_ROOT, 'config', 'config.json'), 'config'),
+        (os.path.join(PROJECT_ROOT, 'config', 'project_manifest.json'), 'config'),
+        # License agreement, terms, privacy for installer pages
+        (os.path.join(PROJECT_ROOT, 'config', 'license_agreement.txt'), 'config'),
+        (os.path.join(PROJECT_ROOT, 'config', 'terms_of_use.txt'), 'config'),
+        (os.path.join(PROJECT_ROOT, 'config', 'privacy_policy.txt'), 'config'),
+        # Public images
+        (os.path.join(PROJECT_ROOT, 'public', 'images'), 'public/images'),
+        # Help files
+        (os.path.join(PROJECT_ROOT, 'help'), 'help'),
         # License SDK (entire package with config/assets)
-        ('../SDKToolkit_prod_zemmacos', 'SDKToolkit_prod_zemmacos'),
+        (os.path.join(PROJECT_ROOT, 'WSD_SDKToolkit_ZEMMACOS'), 'WSD_SDKToolkit_ZEMMACOS'),
     ],
-    # CRITICAL: Hidden imports for PyInstaller to include these modules
     hiddenimports=[
         # Core dependencies
         'requests',
@@ -44,17 +53,17 @@ a = Analysis(
         'modern_widgets',
         'gibMacOS',
         # SDK modules
-        'SDKToolkit_prod_zemmacos',
-        'SDKToolkit_prod_zemmacos.client',
-        'SDKToolkit_prod_zemmacos.crypto',
-        'SDKToolkit_prod_zemmacos.hardware',
-        'SDKToolkit_prod_zemmacos.cache',
-        'SDKToolkit_prod_zemmacos.license_engine',
-        'SDKToolkit_prod_zemmacos.welcome',
-        'SDKToolkit_prod_zemmacos.activation',
-        'SDKToolkit_prod_zemmacos.renewal',
-        'SDKToolkit_prod_zemmacos.device_replace',
-        'SDKToolkit_prod_zemmacos.widgets',
+        'WSD_SDKToolkit_ZEMMACOS',
+        'WSD_SDKToolkit_ZEMMACOS.client',
+        'WSD_SDKToolkit_ZEMMACOS.crypto',
+        'WSD_SDKToolkit_ZEMMACOS.hardware',
+        'WSD_SDKToolkit_ZEMMACOS.cache',
+        'WSD_SDKToolkit_ZEMMACOS.license_engine',
+        'WSD_SDKToolkit_ZEMMACOS.welcome',
+        'WSD_SDKToolkit_ZEMMACOS.activation',
+        'WSD_SDKToolkit_ZEMMACOS.renewal',
+        'WSD_SDKToolkit_ZEMMACOS.device_replace',
+        'WSD_SDKToolkit_ZEMMACOS.widgets',
         # Scripts subfolder modules
         'Scripts.run',
         'Scripts.utils',
@@ -66,9 +75,20 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        # Remove development/test tools
+        'unittest',
+        'test',
+        'pdb',
+        'pydevd',
+        'pytest',
+        # Remove unused UI toolkits
+        'tkinter.test',
+        'tkinter.tix',
+        'tkinter.dnd',
+    ],
     noarchive=False,
-    optimize=0,
+    optimize=2,
 )
 
 # ============================================================================
@@ -77,26 +97,40 @@ a = Analysis(
 pyz = PYZ(a.pure, a.zipped_data)
 
 # ============================================================================
-# EXE - Executable output
+# EXE - Executable output (production: no console, stripped)
 # ============================================================================
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
     a.datas,
-    [],  # No additional binaries
+    [],
     name='ZEMmacOS',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,  # Compress executable
+    strip=True,
+    upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,  # Keep console for debugging; set False for production
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['..\\public\\images\\logo.ico'],  # App icon
+    icon=[os.path.join(PROJECT_ROOT, 'public', 'images', 'logo.ico')],
+)
+
+# ============================================================================
+# COLLECT - Bundle all files into dist/
+# ============================================================================
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='ZEMmacOS',
 )
