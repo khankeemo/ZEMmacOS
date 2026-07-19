@@ -10,6 +10,5 @@
   "max_retries": 3,
   "timeout_seconds": 30,
   "notifications_enabled": true,
-  "compact_mode": false,
-  "license_key": ""
+  "compact_mode": false
 }

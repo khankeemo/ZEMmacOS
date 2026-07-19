@@ -137,7 +137,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def _license_startup(self):
         self.live_log.write("STARTUP", "INFO", "Splash screen created")
         self._create_splash()
-        self.root.after(50, self._init_license_thread)
+        self.root.after(50, self._init_server_check)
 
     def _create_splash(self):
         splash = tk.Toplevel(self.root)
@@ -152,73 +152,44 @@ class ZEMmacOSApp(ZEMmacOSUI):
                  fg="#ffffff", bg="#1d1d1f").pack(expand=True, pady=(40, 4))
         tk.Label(splash, text="macOS Download Manager", font=("SF Pro Text", 10),
                  fg="#86868b", bg="#1d1d1f").pack()
-        self._splash_status = tk.Label(splash, text="Initializing license...",
+        self._splash_status = tk.Label(splash, text="Checking server connectivity...",
                                        font=("SF Pro Text", 10),
                                        fg="#6e6e73", bg="#1d1d1f")
         self._splash_status.pack(pady=(24, 0))
         splash.update()
         self._splash = splash
 
-    def _init_license_thread(self):
+    def _init_server_check(self):
         config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        self.log_live("SDK", "INFO", "LicenseEngine initialization")
+        self.log_live("SDK", "INFO", "Server connectivity check")
         self.log_live("UI", "INFO", "UI locked")
 
         def do():
             live = self.live_log
             try:
-                live.write("SDK", "INFO", "Loading api-config.json")
+                live.write("SDK", "INFO", "Loading SDK config")
                 self.license_engine = LicenseEngine(config_path=config_path)
 
                 live.write("SDK", "INFO", "Hardware detection")
                 _ = self.license_engine.get_hardware_id()
 
-                # Load persisted license key so engine can validate if cache expired
-                stored_key = self.settings.get("license_key", "") or ""
-                if stored_key:
-                    live.write("SDK", "INFO", "Stored license key found — setting on engine")
-                    self.license_engine._license_key = stored_key
-
-                live.write("SDK", "INFO", "Cache check")
-                live.write("SDK", "INFO", "Trial check")
-                live.write("SDK", "INFO", "License validation")
+                live.write("SDK", "INFO", "Checking server connectivity")
+                _ = self.license_engine.get_hardware_id()
                 self.license_status = self.license_engine.initialize()
                 self._license_initialized = True
 
-                # Always validate stored license key against the backend.
-                # The trial endpoint returns has_trial=true even after paid activation
-                # with status='active', so checking status alone is insufficient.
-                if stored_key:
-                    live.write("SDK", "INFO", "Paid license exists — validating against server")
-                    try:
-                        result = self.license_engine.validate(stored_key)
-                        validated = self.license_engine.get_status()
-                        if validated and validated.valid:
-                            # Enrich LicenseStatus with device info from raw response
-                            data = result.get('data', result) if isinstance(result, dict) else {}
-                            validated.max_devices = data.get('max_devices', 0)
-                            validated.active_devices = data.get('active_devices', data.get('device_count', 0))
-                            validated.device_count = data.get('device_count', data.get('active_devices', 0))
-                            self.license_status = validated
-                            live.write("SDK", "SUCCESS", f"License validated: {validated.status} - {validated.plan}")
-                    except Exception as ve:
-                        live.write("SDK", "WARNING", f"Stored license validation failed: {ve}")
-
-                # Extract customer data from API response
-                self._extract_customer_from_api()
-
                 status = self.license_status
                 if status:
-                    live.write("SDK", "INFO", f"Final LicenseStatus: {status.status}")
+                    live.write("SDK", "INFO", f"Server status: {status.status}")
                     if status.valid:
                         msg = status.message or f"Status: {status.status}"
                         live.write("SDK", "SUCCESS", msg)
                     else:
-                        live.write("SDK", "WARNING", "No valid license or trial found")
+                        live.write("SDK", "INFO", "No license or trial found — onboarding required")
                 else:
-                    live.write("SDK", "ERROR", "LicenseStatus is None")
+                    live.write("SDK", "ERROR", "Server returned no status")
             except Exception as e:
-                live.write("SDK", "ERROR", f"License initialization failed: {e}")
+                live.write("SDK", "ERROR", f"Server check failed: {e}")
                 eng = None
                 try:
                     eng = LicenseEngine(config_path=config_path)
@@ -263,16 +234,16 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def _check_license_on_startup(self):
         status = self.license_status
         if status and status.valid:
-            self.log_live("UI", "INFO", "License valid — enabling UI immediately")
+            self.log_live("UI", "INFO", "License valid — enabling UI")
             self._unlock_ui()
         elif status and status.status == "trial":
             self.log_live("UI", "INFO", "Trial active — enabling UI")
             self._unlock_ui()
         elif status and status.status == "unlicensed":
-            self.log_live("WELCOME", "INFO", "No license found — opening welcome dialog")
+            self.log_live("WELCOME", "INFO", "No license — opening welcome dialog")
             self.root.after(200, self._run_welcome_flow)
         else:
-            self.log_live("WELCOME", "INFO", f"No license/trial — opening welcome dialog (status={status.status if status else 'None'})")
+            self.log_live("WELCOME", "INFO", f"Server returned {status.status if status else 'None'} — opening welcome dialog")
             self.root.after(200, self._run_welcome_flow)
 
     # -----------------------------------------------------------------
@@ -337,7 +308,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
     # WELCOME FLOW — closes app if dialog cancelled
     # -----------------------------------------------------------------
     def _run_welcome_flow(self):
-        self.log_live("WELCOME", "INFO", "Welcome dialog opened")
+        self.log_live("WELCOME", "INFO", "Opening welcome dialog")
         d = WelcomeDialog(
             self.license_engine._client,
             product_name='ZEM MAC OS',
@@ -345,12 +316,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
         )
         result = d.show()
         if result and result.get('onboarding_complete'):
-            self.log_live("WELCOME", "SUCCESS", "Welcome dialog completed — trial created")
+            self.log_live("WELCOME", "SUCCESS", "Onboarding completed — fetching server status")
             self.refresh_license()
             self.root.after(500, self._unlock_ui)
         else:
-            self.log_live("WELCOME", "WARNING", "Welcome dialog closed before verification")
-            self.log_live("WELCOME", "INFO", "Application shutdown initiated")
+            self.log_live("WELCOME", "WARNING", "Welcome dialog closed without completing registration")
             self._shutdown_app()
 
     # -----------------------------------------------------------------
@@ -360,16 +330,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
         if not self.license_engine:
             return
         self.log_live("ACTIVATION", "INFO", "Activation dialog opened")
-        # Monkey-patch: _update_ui ignores _hw_bound_badge, leaving it as "Not Bound"
-        # on refresh even when server confirms binding. Fix by wrapping the method.
-        from WSD_SDKToolkit_ZEMMACOS.activation import ActivationDialog as _ActDlg
-        _orig_update_ui = _ActDlg._update_ui
-        def _patched_update_ui(self, data):
-            _orig_update_ui(self, data)
-            dev_count = data.get('device_count', data.get('active_devices', 0))
-            if data.get('status') == 'active' and dev_count > 0:
-                self._hw_bound_badge.set('Bound', self._badge_bound)
-        _ActDlg._update_ui = _patched_update_ui
         d = ActivationDialog(
             self.license_engine._client,
             product_name='ZEM MAC OS',
@@ -380,18 +340,14 @@ class ZEMmacOSApp(ZEMmacOSUI):
             key = r.get('license_key', '')
             if key:
                 self.license_engine._license_key = key
-                self.settings.set("license_key", key)  # Persist across restart
-            # Re-initialize — cache was written by the dialog
             try:
                 self.license_status = self.license_engine.initialize()
-                self._extract_customer_from_api()
             except Exception as e:
                 self.log_live("ACTIVATION", "ERROR", f"Post-activation init failed: {e}")
             self.log_live("ACTIVATION", "SUCCESS", "License activation successful")
-            # Show modal popup, then restart on OK
             self.root.after(0, self._show_activation_success_dialog)
         elif r and r.get('cancelled'):
-            self.log_live("ACTIVATION", "WARNING", "Activation cancelled — continuing trial")
+            self.log_live("ACTIVATION", "WARNING", "Activation cancelled")
         return r
 
     def _show_activation_success_dialog(self):
@@ -463,14 +419,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.log_live("ACTIVATION", "ERROR", f"License refresh error: {e}")
         threading.Thread(target=do, daemon=True).start()
 
-    def _extract_customer_info(self, status):
-        """Extract customer info from license status and store locally."""
-        if status and status.valid:
-            self._customer_name = getattr(status, 'customer_name', '') or ''
-            self._customer_email = getattr(status, 'customer_email', '') or ''
-            # Prefer mobile over phone
-            self._customer_mobile = getattr(status, 'customer_mobile', '') or getattr(status, 'customer_phone', '') or ''
-
     def _extract_customer_from_api(self):
         """Get customer data using public SDK API."""
         if not self.license_engine or not self.license_status:
@@ -484,7 +432,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 result = self.license_engine.validate(
                     self.license_engine.get_license_key()
                 )
-                # validate() returns full API response dict
                 data = result.get('data', result)
                 if data.get('valid') or data.get('customer_name'):
                     self._customer_name = data.get('customer_name', '') or ''
@@ -492,11 +439,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     self._customer_mobile = data.get('customer_mobile', '') or data.get('customer_phone', '') or ''
                     return
 
-            # For trial: data already fetched during initialize()
-            # Trial customer data is in the trial API response but not exposed in LicenseStatus
-            # This is a known SDK limitation - backend fix already returns the data
-            # If license is not valid but trial is active, we can't access trial customer data via public SDK
-            # (requires SDK regeneration to expose trial customer fields in LicenseStatus)
+            # For trial: server returns customer data in trial API response
+            if self.license_status and self.license_status.status == 'trial':
+                self._customer_name = self.license_status.customer_name or ''
+                self._customer_email = self.license_status.customer_email or ''
+                self._customer_mobile = self.license_status.customer_mobile or self.license_status.customer_phone or ''
 
         except Exception as e:
             self.log_live("SDK", "WARNING", f"Could not extract customer from API: {e}")

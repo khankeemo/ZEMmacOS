@@ -36,7 +36,6 @@ if exist "env\.env.production" (
     echo [INFO] .env.production found - will not be bundled
 )
 
-REM Check that production sample config has no dev data
 echo [OK] Production configuration verified
 
 REM ---------------- STEP 1: Clean ----------------
@@ -200,10 +199,13 @@ echo.
 echo   Next Steps:
 echo     1. Verify the installer on a clean Windows VM
 echo     2. Test fresh install - no pre-activated license
-echo     3. Test trial activation flow
+echo     3. Test trial onboarding flow
 echo     4. Test paid activation flow
-echo     5. Sign the installer
-echo     6. Upload to distribution channel
+echo     5. Test application restart
+echo     6. Test revoked license
+echo     7. Test expired trial
+echo     8. Sign the installer
+echo     9. Upload to distribution channel
 echo.
 echo ===========================================================================
 

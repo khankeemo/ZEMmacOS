@@ -90,13 +90,6 @@ class LicenseEngine:
             return json.load(f)
 
     def initialize(self) -> LicenseStatus:
-        if self._cache.is_valid():
-            cached = self._cache.get_license_status()
-            if cached:
-                self._status = LicenseStatus.from_dict(cached)
-                if not self._license_key and self._status.license_key:
-                    self._license_key = self._status.license_key
-                return self._status
         try:
             hardware_id = self._hardware.get_fingerprint()
             # Priority 1: Validate active paid license from server
@@ -119,12 +112,10 @@ class LicenseEngine:
                             customer_mobile=data.get('customer_mobile'),
                             message='License active'
                         )
-                        if self._status.valid:
-                            self._cache.set_license_status(self._status.to_dict())
                         return self._status
                 except Exception:
-                    pass  # Server error — fall through to trial
-            # Priority 2: Check for active trial
+                    pass
+            # Priority 2: Check for active trial from server
             trial_response = self._client.get_trial_status(hardware_id)
             trial_data = trial_response.get('data', {})
             if trial_data.get('has_trial'):
@@ -142,10 +133,8 @@ class LicenseEngine:
                     customer_phone=trial_data.get('customer_phone'),
                     customer_mobile=trial_data.get('customer_mobile')
                 )
-                if self._status.valid:
-                    self._cache.set_license_status(self._status.to_dict())
                 return self._status
-            # No license or trial found
+            # No license or trial found on server
             self._status = LicenseStatus(
                 valid=False, status='unlicensed',
                 hardware_id=hardware_id,
@@ -154,9 +143,6 @@ class LicenseEngine:
             return self._status
         except Exception as e:
             logger.exception("Unexpected error during license initialization")
-            cached = self._cache.get_license_status()
-            if cached:
-                return LicenseStatus.from_dict(cached)
             self._status = LicenseStatus(
                 valid=False, status='error',
                 message=f"Unexpected error: {str(e)}"
@@ -185,7 +171,6 @@ class LicenseEngine:
         if data.get('valid'):
             if data.get('license_key'):
                 self._license_key = data['license_key']
-            # Create LicenseStatus from validation response which has all customer fields
             self._status = LicenseStatus(
                 valid=data.get('valid', True),
                 status=data.get('status', 'active'),
@@ -199,8 +184,6 @@ class LicenseEngine:
                 customer_phone=data.get('customer_phone'),
                 customer_mobile=data.get('customer_mobile')
             )
-            if self._status.valid:
-                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def activate(self, license_key: str) -> Dict[str, Any]:
@@ -221,8 +204,6 @@ class LicenseEngine:
                 customer_phone=data.get('customer_phone'),
                 customer_mobile=data.get('customer_mobile')
             )
-            if self._status.valid:
-                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def start_trial(self, email: str, customer_name: str = '',
@@ -242,8 +223,6 @@ class LicenseEngine:
                 customer_phone=data.get('customer_phone'),
                 customer_mobile=data.get('customer_mobile')
             )
-            if self._status.valid:
-                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def convert_trial(self, plan: Optional[str] = None, customer_name: str = '', customer_email: str = '') -> Dict[str, Any]:
@@ -269,8 +248,6 @@ class LicenseEngine:
                 customer_phone=data.get('customer_phone'),
                 customer_mobile=data.get('customer_mobile')
             )
-            if self._status.valid:
-                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def get_plans(self) -> Dict[str, Any]:
@@ -296,8 +273,6 @@ class LicenseEngine:
                 customer_phone=data.get('customer_phone'),
                 customer_mobile=data.get('customer_mobile')
             )
-            if self._status.valid:
-                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def deactivate(self, license_key: Optional[str] = None) -> Dict[str, Any]:
@@ -306,7 +281,6 @@ class LicenseEngine:
             raise ValueError("License key unavailable. Please provide a key.")
         result = self._client.deactivate_license(key)
         if result.get('success'):
-            self._cache.invalidate_license_status()
             self._status = None
             if license_key is None:
                 self._license_key = None
@@ -320,10 +294,6 @@ class LicenseEngine:
         if self._status and self._status.hardware_id:
             old_hardware_id = self._status.hardware_id
         if not old_hardware_id:
-            cached = self._cache.get_license_status()
-            if cached and cached.get('hardware_id'):
-                old_hardware_id = cached.get('hardware_id')
-        if not old_hardware_id:
             raise RuntimeError("Current hardware_id unavailable. Cannot replace device.")
         if old_hardware_id == new_hardware_id:
             return {'success': False, 'message': 'Old and new hardware IDs are identical.'}
@@ -334,7 +304,6 @@ class LicenseEngine:
             device_name=device_name
         )
         if result.get('success'):
-            self._cache.invalidate_license_status()
             data = result.get('data', result)
             self._status = LicenseStatus(
                 valid=True,
@@ -350,8 +319,6 @@ class LicenseEngine:
                 customer_mobile=data.get('customer_mobile'),
                 message='Hardware replaced'
             )
-            if self._status.valid:
-                self._cache.set_license_status(self._status.to_dict())
         return result
 
     def bind_device(self, license_key: Optional[str] = None, device_name: Optional[str] = None) -> Dict[str, Any]:
@@ -377,6 +344,4 @@ class LicenseEngine:
                 customer_mobile=data.get('customer_mobile'),
                 message='Device bound'
             )
-            if self._status.valid:
-                self._cache.set_license_status(self._status.to_dict())
         return result
