@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 import os
 import platform
 from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutDialog as SDKAboutDialog
+from dialogs.renew_license_dialog import RenewLicenseDialog
 
 class SettingsUI:
     def __init__(self, parent, app_instance):
@@ -372,91 +373,23 @@ class SettingsUI:
             act()
 
     def _renew_license(self):
-        branding = getattr(self.app, 'license_engine', None)
-        branding = branding.config.get('branding', {}) if branding and branding.config else {}
-        support_email = branding.get('support_email', 'support@websmithdigital.com')
-        status_obj = getattr(self.app, 'license_status', None)
+        engine = getattr(self.app, 'license_engine', None)
+        if not engine:
+            messagebox.showwarning("License Engine", "License engine not initialized.")
+            return
+        status_obj = getattr(self.app, 'license_status', None) if hasattr(self.app, 'license_status') else None
         license_key = (status_obj.license_key or '') if status_obj else ''
         customer_name = (status_obj.customer_name or '') if status_obj else ''
-        customer_email = (status_obj.customer_email or '') if status_obj else ''
-        colors = self.colors
-        d = tk.Toplevel(self.parent)
-        d.transient(self.parent)
-        d.grab_set()
-        d.title("Renew License")
-        d.geometry("440x340")
-        d.resizable(False, False)
-        d.configure(bg=colors.get("card_bg", "#ffffff"))
-        d.update_idletasks()
-        sw = d.winfo_screenwidth(); sh = d.winfo_screenheight()
-        w = d.winfo_width(); h = d.winfo_height()
-        d.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
-        header = tk.Frame(d, bg=colors.get("accent", "#6366f1"), height=50)
-        header.pack(fill=tk.X); header.pack_propagate(False)
-        tk.Label(header, text="Renew License", fg="white",
-                 bg=colors.get("accent", "#6366f1"),
-                 font=("SF Pro Text", 14, "bold")).pack(expand=True)
-        body = tk.Frame(d, bg=colors.get("card_bg", "#ffffff"), padx=24, pady=16)
-        body.pack(fill=tk.BOTH, expand=True)
-        tk.Label(body, text="Renewal requests are handled by the administrator.",
-                 font=("SF Pro Text", 11),
-                 fg=colors.get("text", "#333"),
-                 bg=colors.get("card_bg", "#ffffff"),
-                 wraplength=400, justify="left").pack(anchor=tk.W, pady=(8, 4))
-        tk.Label(body, text="Please contact:",
-                 font=("SF Pro Text", 10),
-                 fg=colors.get("muted", "#888"),
-                 bg=colors.get("card_bg", "#ffffff"),
-                 wraplength=400, justify="left").pack(anchor=tk.W, pady=(0, 6))
-        email_frame = tk.Frame(body, bg=colors.get("input_bg", "#f5f5f7"),
-                               highlightbackground=colors.get("border", "#d1d5db"),
-                               highlightthickness=1)
-        email_frame.pack(fill=tk.X, pady=(0, 14))
-        tk.Label(email_frame, text=support_email,
-                 font=("Courier", 11, "bold"),
-                 bg=colors.get("input_bg", "#f5f5f7"),
-                 fg=colors.get("accent", "#6366f1")).pack(padx=12, pady=8)
-        btn_frame = tk.Frame(body, bg=colors.get("card_bg", "#ffffff"))
-        btn_frame.pack(fill=tk.X)
-        close_btn = tk.Button(btn_frame, text="Close", command=d.destroy,
-                               font=("SF Pro Text", 11),
-                               bg=colors.get("btn_secondary_bg", "#e5e7eb"),
-                               fg=colors.get("text", "#333"),
-                               bd=0, padx=16, pady=6, cursor="hand2")
-        close_btn.pack(side=tk.LEFT, padx=(0, 8))
-        def copy_email():
-            d.clipboard_clear(); d.clipboard_append(support_email)
-            close_btn.config(text="Copied!", fg=colors.get("success", "#16a34a"))
-            d.after(1500, lambda: close_btn.config(text="Close", fg=colors.get("text", "#333")))
-        copy_btn = tk.Button(btn_frame, text="Copy Email", command=copy_email,
-                              font=("SF Pro Text", 11, "bold"),
-                              bg=colors.get("accent", "#6366f1"), fg="white",
-                              bd=0, padx=16, pady=6, cursor="hand2")
-        copy_btn.pack(side=tk.LEFT)
-        def open_email():
-            import webbrowser
-            subject = "License Renewal Request"
-            body_lines = [
-                "Hello,",
-                "",
-                "I would like to renew my license.",
-                "",
-                f"License Key: {license_key}",
-                f"Customer: {customer_name}",
-                f"Email: {customer_email}",
-                "",
-                "Thank you.",
-            ]
-            body_text = "\n".join(body_lines)
-            from urllib.parse import quote
-            mailto_url = f"mailto:{support_email}?subject={quote(subject)}&body={quote(body_text)}"
-            webbrowser.open(mailto_url)
-        open_btn = tk.Button(btn_frame, text="Open Email", command=open_email,
-                              font=("SF Pro Text", 11, "bold"),
-                              bg=colors.get("accent", "#6366f1"), fg="white",
-                              bd=0, padx=16, pady=6, cursor="hand2")
-        open_btn.pack(side=tk.LEFT, padx=(5, 0))
-        d.bind('<Escape>', lambda e: d.destroy())
+        email = (status_obj.customer_email or '') if status_obj else ''
+        mobile = getattr(status_obj, 'customer_mobile', '') if status_obj else ''
+        dlg = RenewLicenseDialog(
+            self.parent, engine,
+            license_key=license_key,
+            customer_name=customer_name,
+            email=email,
+            mobile=mobile,
+        )
+        dlg.show()
 
     def _refresh_license_status(self):
         ref = getattr(self.app, 'refresh_license', None)
