@@ -4,7 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 import os
 import platform
 from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutDialog as SDKAboutDialog
-from dialogs.renew_license_dialog import RenewLicenseDialog
+from renew_license_dialog import RenewLicenseDialog
 
 class SettingsUI:
     def __init__(self, parent, app_instance):
