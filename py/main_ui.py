@@ -658,8 +658,7 @@ class ZEMmacOSUI:
                   )
         self._btn_renew.bind('<Return>', lambda e: self._on_renew_license())
         self._btn_renew.bind('<KP_Enter>', lambda e: self._on_renew_license())
-        # Buttons start hidden; _update_dashboard_license shows the right ones
-        self._btn_renew.pack_forget()
+        self._btn_renew.pack(side=tk.LEFT, padx=2)
 
     def _update_dashboard_license(self):
         if not hasattr(self, '_dashboard_license_widgets'):
@@ -702,11 +701,6 @@ class ZEMmacOSUI:
                         w["expiry"].config(text=expiry.split('T')[0])
                 elif w.get("expiry") and w["expiry"].winfo_exists():
                     w["expiry"].config(text='--')
-                # Show Renew, hide Activate when already activated
-                if hasattr(self, '_btn_activate') and self._btn_activate.winfo_exists():
-                    self._btn_activate.pack_forget()
-                if hasattr(self, '_btn_renew') and self._btn_renew.winfo_exists():
-                    self._btn_renew.pack(side=tk.LEFT, padx=2)
             else:
                 for key in ('status', 'plan', 'validity', 'expiry'):
                     if w.get(key) and w[key].winfo_exists():
@@ -716,11 +710,6 @@ class ZEMmacOSUI:
                             w[key].config(text=txt, fg=fg)
                         else:
                             w[key].config(text=txt)
-                # Show Activate, hide Renew when unlicensed
-                if hasattr(self, '_btn_renew') and self._btn_renew.winfo_exists():
-                    self._btn_renew.pack_forget()
-                if hasattr(self, '_btn_activate') and self._btn_activate.winfo_exists():
-                    self._btn_activate.pack(side=tk.LEFT, padx=2)
         except tk.TclError:
             pass
 
