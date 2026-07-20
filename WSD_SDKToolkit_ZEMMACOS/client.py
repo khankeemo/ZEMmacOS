@@ -215,6 +215,39 @@ class ApiClient:
             self._cache.invalidate_license_status()
         return response
 
+    def verify_license_for_renewal(self, license_key: str) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {'license_key': license_key}
+        return self._request('license/verify-renewal', payload)
+
+    def get_license_details(self, license_key: str) -> Dict[str, Any]:
+        import requests as _requests
+        url = f"{self.base_url}/api/{self.api_version}/license/details/{license_key}"
+        api_path = f"/api/{self.api_version}/license/details/{license_key}"
+        headers = self._sign_request({}, method='GET', path=api_path)
+        headers['Content-Type'] = 'application/json'
+        try:
+            resp = _requests.get(url, headers=headers, timeout=self.timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            return {'success': False, 'error': resp.json().get('message', f'HTTP {resp.status_code}')}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def send_renewal_request(self, license_key: str, customer_name: str = '',
+                             email: str = '', mobile: str = '',
+                             subject: str = '', message: str = '',
+                             request_type: str = 'renew') -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            'license_key': license_key,
+            'customer_name': customer_name,
+            'email': email,
+            'mobile': mobile,
+            'subject': subject,
+            'message': message,
+            'request_type': request_type,
+        }
+        return self._request('license/send-renewal-request', payload)
+
     def get_products(self) -> Dict[str, Any]:
         import requests as _requests
         url = f"{self.base_url}/api/{self.api_version}/store/products"

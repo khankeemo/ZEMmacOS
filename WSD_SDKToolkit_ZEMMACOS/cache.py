@@ -121,3 +121,27 @@ class CacheManager:
 
     def is_onboarding_complete(self) -> bool:
         return self.get('onboarding_complete') is True
+
+    def save_license_key(self, license_key: str) -> None:
+        key_path = self._cache_dir / 'license.key'
+        try:
+            key_path.write_text(license_key.strip())
+        except Exception:
+            pass
+
+    def load_license_key(self) -> Optional[str]:
+        key_path = self._cache_dir / 'license.key'
+        if key_path.exists():
+            try:
+                return key_path.read_text().strip() or None
+            except Exception:
+                pass
+        return None
+
+    def clear_license_key(self) -> None:
+        key_path = self._cache_dir / 'license.key'
+        if key_path.exists():
+            try:
+                key_path.unlink()
+            except Exception:
+                pass

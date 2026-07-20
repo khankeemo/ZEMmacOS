@@ -24,7 +24,7 @@
     "enabled": true,
     "hardware_binding": true,
     "max_devices": 1,
-    "offline_days": 7,
+    "offline_days": 0,
     "renewal_reminder_days": 7
   },
   "hardware": {

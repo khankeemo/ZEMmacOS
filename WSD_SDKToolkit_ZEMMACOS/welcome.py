@@ -253,7 +253,7 @@ class WelcomeDialog:
         company = self._company_entry.get().strip()
         country_code = self._selected_country.get('code', '') if self._selected_country else ''
         hardware_id = self.hardware.get_fingerprint()
-        self._status_label.config(text='Completing registration...', fg=self._primary)
+        self._status_label.config(text='Activating trial...', fg=self._primary)
         self._root.update()
         try:
             self.client._request('customer/register', {
@@ -261,21 +261,16 @@ class WelcomeDialog:
                 'country_code': country_code, 'company_name': company,
                 'hardware_id': hardware_id
             })
-            # Fetch trial status from server — server decides if trial is granted
-            trial_result = self.client.get_trial_status(hardware_id)
-            trial_data = trial_result.get('data', {})
-            if not trial_data.get('has_trial'):
-                # Request trial from server — server enforces business rules
-                self.client.start_trial(email, name, {
-                    'mobile': mobile, 'country_code': country_code,
-                    'company_name': company, 'hardware_id': hardware_id
-                })
+            self.client.start_trial(email, name, {
+                'mobile': mobile, 'country_code': country_code,
+                'company_name': company, 'hardware_id': hardware_id
+            })
             self.cache.set_onboarding_complete()
             self._result = {
                 'name': name, 'email': email, 'hardware_id': hardware_id,
                 'onboarding_complete': True
             }
-            self._status_label.config(text='Registration complete! You can now use the software.', fg=self._success)
+            self._status_label.config(text='Trial activated! You can now use the software.', fg=self._success)
             self._root.after(2000, self._root.destroy)
         except Exception as e:
             self._show_error(str(e))
