@@ -72,6 +72,8 @@ class SettingsUI:
                      if b.cget("bg") != self.colors["accent"] else None)
             btn.bind("<Leave>", lambda e, b=btn: b.config(bg=self.colors["card_bg"])
                      if b.cget("bg") != self.colors["accent"] else None)
+            btn.bind('<Return>', lambda e, k=key: self._switch_section(k))
+            btn.bind('<KP_Enter>', lambda e, k=key: self._switch_section(k))
             self._nav_buttons[key] = btn
 
         self._content_frame = tk.Frame(body, bg=self.colors["content_bg"])
@@ -137,18 +139,27 @@ class SettingsUI:
                      state="readonly", font=("SF Pro Text", 11)).pack(fill=tk.X)
 
         inner2 = self._card(self._content_frame, "Actions")
-        tk.Button(inner2, text="Save Settings", command=self._save_settings,
+        btn_save = tk.Button(inner2, text="Save Settings", command=self._save_settings,
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["success"],
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
-        tk.Button(inner2, text="Activate License", command=self._activate_license,
+                  bd=0, padx=20, pady=8, cursor="hand2")
+        btn_save.pack(side=tk.LEFT, padx=5)
+        btn_save.bind('<Return>', lambda e: self._save_settings())
+        btn_save.bind('<KP_Enter>', lambda e: self._save_settings())
+        btn_act = tk.Button(inner2, text="Activate License", command=self._activate_license,
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["accent"],
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
-        tk.Button(inner2, text="Check for Updates", command=self._check_for_updates,
+                  bd=0, padx=20, pady=8, cursor="hand2")
+        btn_act.pack(side=tk.LEFT, padx=5)
+        btn_act.bind('<Return>', lambda e: self._activate_license())
+        btn_act.bind('<KP_Enter>', lambda e: self._activate_license())
+        btn_upd = tk.Button(inner2, text="Check for Updates", command=self._check_for_updates,
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["warning"],
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+                  bd=0, padx=20, pady=8, cursor="hand2")
+        btn_upd.pack(side=tk.LEFT, padx=5)
+        btn_upd.bind('<Return>', lambda e: self._check_for_updates())
+        btn_upd.bind('<KP_Enter>', lambda e: self._check_for_updates())
 
     def _build_downloads(self):
         inner = self._card(self._content_frame, "Download Settings")
@@ -182,10 +193,13 @@ class SettingsUI:
                      state="readonly", font=("SF Pro Text", 11), width=6).pack(side=tk.LEFT)
 
         inner2 = self._card(self._content_frame, "Actions")
-        tk.Button(inner2, text="Save Download Settings", command=self._save_download_settings,
+        btn_dl = tk.Button(inner2, text="Save Download Settings", command=self._save_download_settings,
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["success"],
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+                  bd=0, padx=20, pady=8, cursor="hand2")
+        btn_dl.pack(side=tk.LEFT, padx=5)
+        btn_dl.bind('<Return>', lambda e: self._save_download_settings())
+        btn_dl.bind('<KP_Enter>', lambda e: self._save_download_settings())
 
     def _build_appearance(self):
         inner = self._card(self._content_frame, "Theme")
@@ -236,10 +250,13 @@ class SettingsUI:
                  fg=self.colors["muted"], bg=self.colors["card_bg"]).pack(side=tk.LEFT, padx=6)
 
         inner2 = self._card(self._content_frame, "Actions")
-        tk.Button(inner2, text="Save Performance Settings", command=self._save_performance_settings,
+        btn_perf = tk.Button(inner2, text="Save Performance Settings", command=self._save_performance_settings,
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["success"],
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+                  bd=0, padx=20, pady=8, cursor="hand2")
+        btn_perf.pack(side=tk.LEFT, padx=5)
+        btn_perf.bind('<Return>', lambda e: self._save_performance_settings())
+        btn_perf.bind('<KP_Enter>', lambda e: self._save_performance_settings())
 
     def _build_updates(self):
         inner = self._card(self._content_frame, "Update Settings")
@@ -249,10 +266,13 @@ class SettingsUI:
                         style="TCheckbutton").pack(side=tk.LEFT)
 
         inner2 = self._card(self._content_frame, "Actions")
-        tk.Button(inner2, text="Check for Updates Now", command=self._check_for_updates,
+        btn_upd = tk.Button(inner2, text="Check for Updates Now", command=self._check_for_updates,
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors["accent"],
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(side=tk.LEFT, padx=5)
+                  bd=0, padx=20, pady=8, cursor="hand2")
+        btn_upd.pack(side=tk.LEFT, padx=5)
+        btn_upd.bind('<Return>', lambda e: self._check_for_updates())
+        btn_upd.bind('<KP_Enter>', lambda e: self._check_for_updates())
 
     def _build_about(self):
         inner = self._card(self._content_frame, "About ZEMmacOS")
@@ -260,11 +280,14 @@ class SettingsUI:
                  text="View detailed product and license information using the SDK About dialog.",
                  font=("SF Pro Text", 10), fg=self.colors.get("text_secondary", "#555"),
                  bg=self.colors["card_bg"], wraplength=500, justify=tk.LEFT).pack(anchor=tk.W, pady=10)
-        tk.Button(inner, text="Open About Dialog",
+        btn_about = tk.Button(inner, text="Open About Dialog",
                   command=self._show_about_dialog,
                   font=("SF Pro Text", 11, "bold"),
                   fg="white", bg=self.colors.get("accent", "#0071e3"),
-                  bd=0, padx=20, pady=8, cursor="hand2").pack(anchor=tk.W)
+                  bd=0, padx=20, pady=8, cursor="hand2")
+        btn_about.pack(anchor=tk.W)
+        btn_about.bind('<Return>', lambda e: self._show_about_dialog())
+        btn_about.bind('<KP_Enter>', lambda e: self._show_about_dialog())
 
         inner2 = self._card(self._content_frame, "Legal")
         tk.Label(inner2,
@@ -346,11 +369,14 @@ class SettingsUI:
             ("Refresh Status", self._refresh_license_status, self.colors["muted"]),
         ]
         for text, cmd, clr in buttons:
-            tk.Button(btn_frame, text=text, command=cmd,
+            btn = tk.Button(btn_frame, text=text, command=cmd,
                       font=("SF Pro Text", 11, "bold"),
                       fg="white", bg=clr,
                       bd=0, padx=20, pady=8, cursor="hand2",
-                      width=24).pack(side=tk.LEFT, padx=5)
+                      width=24)
+            btn.pack(side=tk.LEFT, padx=5)
+            btn.bind('<Return>', lambda e, c=cmd: c())
+            btn.bind('<KP_Enter>', lambda e, c=cmd: c())
 
     def _toggle_license_key_visibility(self):
         """Toggle license key visibility."""

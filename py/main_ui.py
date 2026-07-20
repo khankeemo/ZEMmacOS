@@ -570,11 +570,14 @@ class ZEMmacOSUI:
             ("Clean Temp Files", self._on_clean_temp, colors["warning"]),
             ("Clean Old Logs", self._on_clean_logs, colors["error"]),
         ]:
-            tk.Button(act_frame, text=text, command=cmd,
+            btn = tk.Button(act_frame, text=text, command=cmd,
                       font=("SF Pro Text", 11, "bold"),
                       fg="white", bg=clr, activebackground="#5a5a5e",
                       bd=0, padx=20, pady=8, cursor="hand2",
-                      width=18).pack(side=tk.LEFT, padx=5)
+                      width=18)
+            btn.pack(side=tk.LEFT, padx=5)
+            btn.bind('<Return>', lambda e, c=cmd: c())
+            btn.bind('<KP_Enter>', lambda e, c=cmd: c())
 
         history_card = ModernCard(body_frame, colors, title="Recent Activity", subtitle="Your latest download actions", padding=18)
         history_card.pack(fill=tk.X, pady=12)
@@ -627,18 +630,24 @@ class ZEMmacOSUI:
 
         action_row = tk.Frame(body, bg=colors["card_bg"])
         action_row.pack(fill=tk.X, pady=(12, 0))
-        tk.Button(action_row, text="Activate License",
+        btn_activate = tk.Button(action_row, text="Activate License",
                   command=self._on_activate_license,
                   font=("SF Pro Text", 10, "bold"),
                   fg="white", bg=colors["accent"],
                   bd=0, padx=14, pady=6, cursor="hand2"
-                  ).pack(side=tk.LEFT, padx=2)
-        tk.Button(action_row, text="Refresh",
+                  )
+        btn_activate.pack(side=tk.LEFT, padx=2)
+        btn_activate.bind('<Return>', lambda e: self._on_activate_license())
+        btn_activate.bind('<KP_Enter>', lambda e: self._on_activate_license())
+        btn_refresh = tk.Button(action_row, text="Refresh",
                   command=self._on_refresh_license,
                   font=("SF Pro Text", 10, "bold"),
                   fg=colors["text"], bg=colors["btn_secondary_bg"],
                   bd=0, padx=14, pady=6, cursor="hand2"
-                  ).pack(side=tk.LEFT, padx=2)
+                  )
+        btn_refresh.pack(side=tk.LEFT, padx=2)
+        btn_refresh.bind('<Return>', lambda e: self._on_refresh_license())
+        btn_refresh.bind('<KP_Enter>', lambda e: self._on_refresh_license())
 
     def _update_dashboard_license(self):
         if not hasattr(self, '_dashboard_license_widgets'):
@@ -874,6 +883,8 @@ class ZEMmacOSUI:
                                    activebackground="#0056b3",
                                    bd=0, padx=16, pady=7, cursor="hand2")
         self.fetch_btn.pack(side=tk.RIGHT)
+        self.fetch_btn.bind('<Return>', lambda e: self._on_fetch_clicked())
+        self.fetch_btn.bind('<KP_Enter>', lambda e: self._on_fetch_clicked())
 
         list_frame = tk.Frame(list_body, bg=colors["card_bg"])
         list_frame.pack(fill=tk.BOTH, expand=True)
@@ -939,6 +950,8 @@ class ZEMmacOSUI:
             bd=0, padx=20, cursor="hand2",
         )
         self.download_btn.pack(side=tk.RIGHT, ipady=9)
+        self.download_btn.bind('<Return>', lambda e: self._on_download_clicked())
+        self.download_btn.bind('<KP_Enter>', lambda e: self._on_download_clicked())
 
         self.index_error_label = tk.Label(index_body, text="", font=("SF Pro Text", 9),
                                           fg=colors["error"], bg=colors["card_bg"])
@@ -997,6 +1010,8 @@ class ZEMmacOSUI:
                             activebackground=self.colors.get("btn_secondary_hover", "#d1d1d6"),
                             bd=0, padx=16, pady=6, cursor="hand2", state=tk.DISABLED)
             btn.pack(side=tk.LEFT, padx=4, fill=tk.X, expand=True)
+            btn.bind('<Return>', lambda e, c=btn_data[1]: c())
+            btn.bind('<KP_Enter>', lambda e, c=btn_data[1]: c())
             setattr(self, btn_data[3], btn)
 
         # Debug Console Card

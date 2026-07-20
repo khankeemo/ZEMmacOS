@@ -160,6 +160,10 @@ class RenewLicenseDialog:
             activebackground=self._primary, activeforeground='white',
             bd=0, padx=20, pady=6, cursor='hand2')
         self._btn_verify.pack(side=tk.RIGHT)
+        self._entry_key.bind('<Return>', lambda e: self._on_verify())
+        self._entry_key.bind('<KP_Enter>', lambda e: self._on_verify())
+        self._btn_verify.bind('<Return>', lambda e: self._on_verify())
+        self._btn_verify.bind('<KP_Enter>', lambda e: self._on_verify())
 
         # Status row
         self._var_status = tk.StringVar(value='Not Verified')
@@ -184,9 +188,12 @@ class RenewLicenseDialog:
         self._var_email = tk.StringVar()
         self._var_mobile = tk.StringVar()
 
-        for lbl, var in [('Customer Name', self._var_cust_name),
-                         ('Email Address', self._var_email),
-                         ('Mobile Number', self._var_mobile)]:
+        self._entry_cust_name = None
+        self._entry_email = None
+        self._entry_mobile = None
+        for lbl, var, entry_attr in [('Customer Name', self._var_cust_name, '_entry_cust_name'),
+                         ('Email Address', self._var_email, '_entry_email'),
+                         ('Mobile Number', self._var_mobile, '_entry_mobile')]:
             row = tk.Frame(inner, bg=self._card_bg)
             row.pack(fill=tk.X, pady=(0, 8))
             tk.Label(row, text=lbl, font=('Segoe UI', 10, 'bold'),
@@ -197,6 +204,9 @@ class RenewLicenseDialog:
                              highlightbackground=self._border, highlightthickness=1,
                              relief=tk.FLAT, bd=2)
             entry.pack(fill=tk.X, ipady=6)
+            entry.bind('<Return>', lambda e: None)
+            entry.bind('<KP_Enter>', lambda e: None)
+            setattr(self, entry_attr, entry)
 
     # ── License Information ──
     def _build_license_info(self, parent):
@@ -283,6 +293,8 @@ class RenewLicenseDialog:
                                  height=5, wrap=tk.WORD)
         self._msg_text.pack(fill=tk.X)
         self._msg_text.insert(tk.END, 'Additional details...')
+        self._msg_text.bind('<Control-Return>', lambda e: self._on_send())
+        self._msg_text.bind('<Control-KP_Enter>', lambda e: self._on_send())
 
     # ── Footer Buttons ──
     def _build_footer(self, parent):
@@ -302,6 +314,8 @@ class RenewLicenseDialog:
             activebackground=self.colors.get('bg_button', '#e5e7eb'),
             bd=0, padx=16, pady=6, cursor='hand2')
         self._btn_cancel.pack(side=tk.LEFT, padx=(0, 8))
+        self._btn_cancel.bind('<Return>', lambda e: self._on_close())
+        self._btn_cancel.bind('<KP_Enter>', lambda e: self._on_close())
 
         self._btn_reset = tk.Button(
             btn_frame, text='Reset', command=self._on_reset,
@@ -310,6 +324,8 @@ class RenewLicenseDialog:
             activebackground=self.colors.get('bg_button', '#e5e7eb'),
             bd=0, padx=16, pady=6, cursor='hand2')
         self._btn_reset.pack(side=tk.LEFT, padx=(0, 8))
+        self._btn_reset.bind('<Return>', lambda e: self._on_reset())
+        self._btn_reset.bind('<KP_Enter>', lambda e: self._on_reset())
 
         self._btn_send = tk.Button(
             btn_frame, text='Send Request', command=self._on_send,
@@ -318,6 +334,8 @@ class RenewLicenseDialog:
             activebackground=self._primary, activeforeground='white',
             bd=0, padx=20, pady=6, cursor='hand2')
         self._btn_send.pack(side=tk.RIGHT)
+        self._btn_send.bind('<Return>', lambda e: self._on_send())
+        self._btn_send.bind('<KP_Enter>', lambda e: self._on_send())
 
     # ------------------------------------------------------------------
     # Helpers
@@ -341,6 +359,10 @@ class RenewLicenseDialog:
         state = tk.DISABLED if disabled else tk.NORMAL
         for w in (self._entry_key,):
             w.config(state=state)
+        for entry_attr in ('_entry_cust_name', '_entry_email', '_entry_mobile'):
+            entry = getattr(self, entry_attr, None)
+            if entry:
+                entry.config(state=state)
         self._btn_verify.config(state=tk.DISABLED if disabled and not self._verified else tk.NORMAL)
         self._msg_text.config(state=state)
 
@@ -420,6 +442,10 @@ class RenewLicenseDialog:
 
         # Enable fields
         self._set_fields_disabled(False)
+
+        # Focus first editable field
+        if hasattr(self, '_entry_cust_name') and self._entry_cust_name:
+            self._entry_cust_name.focus_set()
 
     def _verify_failed(self, msg: str):
         self._verified = False

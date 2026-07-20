@@ -340,12 +340,21 @@ class ZEMmacOSApp(ZEMmacOSUI):
             key = r.get('license_key', '')
             if key:
                 self.license_engine._license_key = key
-            try:
-                self.license_status = self.license_engine.initialize()
-            except Exception as e:
-                self.log_live("ACTIVATION", "ERROR", f"Post-activation init failed: {e}")
-            self.log_live("ACTIVATION", "SUCCESS", "License activation successful")
-            self.root.after(0, self._show_activation_success_dialog)
+            def _post_activation():
+                try:
+                    new_status = self.license_engine.initialize()
+                    if new_status is not None:
+                        self.license_status = new_status
+                    self.log_live("ACTIVATION", "SUCCESS", "License activation successful")
+                    self.root.after(0, self._show_activation_success_dialog)
+                except Exception as e:
+                    self.log_live("ACTIVATION", "ERROR", f"Post-activation init failed: {e}")
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "Refresh Error",
+                        f"License activated but refresh failed: {e}\n\nThe application will restart."
+                    ))
+                    self.root.after(0, self._restart_app)
+            threading.Thread(target=_post_activation, daemon=True).start()
         elif r and r.get('cancelled'):
             self.log_live("ACTIVATION", "WARNING", "Activation cancelled")
         return r
