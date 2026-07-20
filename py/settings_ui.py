@@ -383,7 +383,7 @@ class SettingsUI:
         email = (status_obj.customer_email or '') if status_obj else ''
         mobile = getattr(status_obj, 'customer_mobile', '') if status_obj else ''
         dlg = RenewLicenseDialog(
-            self.parent, engine,
+            self.app.root, engine,
             license_key=license_key,
             customer_name=customer_name,
             email=email,
