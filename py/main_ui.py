@@ -167,6 +167,8 @@ class ZEMmacOSUI:
                      if b.cget("bg") != self.colors["nav_active_bg"] else None)
             btn.bind("<Leave>", lambda e, b=btn: b.config(bg=self.colors["sidebar_bg"])
                      if b.cget("bg") != self.colors["nav_active_bg"] else None)
+            btn.bind('<Return>', lambda e, k=key: self._nav_click(k))
+            btn.bind('<KP_Enter>', lambda e, k=key: self._nav_click(k))
             self._nav_buttons[key] = btn
 
         self._update_nav("dashboard")
@@ -630,24 +632,34 @@ class ZEMmacOSUI:
 
         action_row = tk.Frame(body, bg=colors["card_bg"])
         action_row.pack(fill=tk.X, pady=(12, 0))
-        btn_activate = tk.Button(action_row, text="Activate License",
+        self._btn_activate = tk.Button(action_row, text="Activate License",
                   command=self._on_activate_license,
                   font=("SF Pro Text", 10, "bold"),
                   fg="white", bg=colors["accent"],
                   bd=0, padx=14, pady=6, cursor="hand2"
                   )
-        btn_activate.pack(side=tk.LEFT, padx=2)
-        btn_activate.bind('<Return>', lambda e: self._on_activate_license())
-        btn_activate.bind('<KP_Enter>', lambda e: self._on_activate_license())
-        btn_refresh = tk.Button(action_row, text="Refresh",
+        self._btn_activate.pack(side=tk.LEFT, padx=2)
+        self._btn_activate.bind('<Return>', lambda e: self._on_activate_license())
+        self._btn_activate.bind('<KP_Enter>', lambda e: self._on_activate_license())
+        self._btn_refresh = tk.Button(action_row, text="Refresh",
                   command=self._on_refresh_license,
                   font=("SF Pro Text", 10, "bold"),
                   fg=colors["text"], bg=colors["btn_secondary_bg"],
                   bd=0, padx=14, pady=6, cursor="hand2"
                   )
-        btn_refresh.pack(side=tk.LEFT, padx=2)
-        btn_refresh.bind('<Return>', lambda e: self._on_refresh_license())
-        btn_refresh.bind('<KP_Enter>', lambda e: self._on_refresh_license())
+        self._btn_refresh.pack(side=tk.LEFT, padx=2)
+        self._btn_refresh.bind('<Return>', lambda e: self._on_refresh_license())
+        self._btn_refresh.bind('<KP_Enter>', lambda e: self._on_refresh_license())
+        self._btn_renew = tk.Button(action_row, text="Renew License",
+                  command=self._on_renew_license,
+                  font=("SF Pro Text", 10, "bold"),
+                  fg="white", bg=colors["success"],
+                  bd=0, padx=14, pady=6, cursor="hand2"
+                  )
+        self._btn_renew.bind('<Return>', lambda e: self._on_renew_license())
+        self._btn_renew.bind('<KP_Enter>', lambda e: self._on_renew_license())
+        # Buttons start hidden; _update_dashboard_license shows the right ones
+        self._btn_renew.pack_forget()
 
     def _update_dashboard_license(self):
         if not hasattr(self, '_dashboard_license_widgets'):
@@ -690,6 +702,11 @@ class ZEMmacOSUI:
                         w["expiry"].config(text=expiry.split('T')[0])
                 elif w.get("expiry") and w["expiry"].winfo_exists():
                     w["expiry"].config(text='--')
+                # Show Renew, hide Activate when already activated
+                if hasattr(self, '_btn_activate') and self._btn_activate.winfo_exists():
+                    self._btn_activate.pack_forget()
+                if hasattr(self, '_btn_renew') and self._btn_renew.winfo_exists():
+                    self._btn_renew.pack(side=tk.LEFT, padx=2)
             else:
                 for key in ('status', 'plan', 'validity', 'expiry'):
                     if w.get(key) and w[key].winfo_exists():
@@ -699,6 +716,11 @@ class ZEMmacOSUI:
                             w[key].config(text=txt, fg=fg)
                         else:
                             w[key].config(text=txt)
+                # Show Activate, hide Renew when unlicensed
+                if hasattr(self, '_btn_renew') and self._btn_renew.winfo_exists():
+                    self._btn_renew.pack_forget()
+                if hasattr(self, '_btn_activate') and self._btn_activate.winfo_exists():
+                    self._btn_activate.pack(side=tk.LEFT, padx=2)
         except tk.TclError:
             pass
 
@@ -734,6 +756,11 @@ class ZEMmacOSUI:
         ref = getattr(self, 'refresh_license', None)
         if ref:
             ref()
+
+    def _on_renew_license(self):
+        ren = getattr(self, 'open_renew_license', None)
+        if ren:
+            ren()
 
     # ---- Live Log Viewer ----
 

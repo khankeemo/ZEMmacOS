@@ -71,6 +71,7 @@ class RenewLicenseDialog:
         self._root.transient(self._parent)
         self._root.grab_set()
         self._root.protocol('WM_DELETE_WINDOW', self._on_close)
+        self._root.bind('<Escape>', lambda e: self._on_close())
 
         # ── Scrollable canvas ──
         canvas = tk.Canvas(self._root, bg=self._bg, highlightthickness=0)

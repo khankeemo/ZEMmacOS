@@ -22,7 +22,8 @@ from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 from live_log import get_live_log
 from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus
-from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog, ActivationDialog
+from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog
+from dialogs.activation_dialog import ActivationDialog
 
 
 def main():
@@ -359,6 +360,27 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self.log_live("ACTIVATION", "WARNING", "Activation cancelled")
         return r
 
+    # -----------------------------------------------------------------
+    # RENEW FLOW
+    # -----------------------------------------------------------------
+    def open_renew_license(self):
+        if not self.license_engine:
+            return
+        from dialogs.renew_license_dialog import RenewLicenseDialog
+        status_obj = self.license_status
+        license_key = (status_obj.license_key or '') if status_obj else ''
+        name = getattr(self, '_customer_name', '') or (status_obj.customer_name if status_obj else '') or ''
+        email = getattr(self, '_customer_email', '') or (status_obj.customer_email if status_obj else '') or ''
+        mobile = getattr(self, '_customer_mobile', '') or (status_obj.customer_mobile if status_obj else '') or ''
+        dlg = RenewLicenseDialog(
+            self.root, self.license_engine,
+            license_key=license_key,
+            customer_name=name,
+            email=email,
+            mobile=mobile,
+        )
+        dlg.show()
+
     def _show_activation_success_dialog(self):
         messagebox.showinfo(
             "License Activated",
@@ -464,12 +486,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
         except Exception:
             pass
         # Also update settings license panel if open
-        if hasattr(self, '_settings_license_widgets') and self._settings_license_widgets:
-            try:
-                if hasattr(self, '_update_settings_license_panel'):
-                    self._update_settings_license_panel()
-            except Exception:
-                pass
+        try:
+            if hasattr(self, 'settings_ui') and self.settings_ui:
+                self.settings_ui._update_license_panel()
+        except Exception:
+            pass
 
     def _update_validity_countdown(self):
         """Update validity countdown every second."""

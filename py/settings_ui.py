@@ -363,20 +363,30 @@ class SettingsUI:
         inner2 = self._card(self._content_frame, "Actions")
         btn_frame = tk.Frame(inner2, bg=self.colors["card_bg"])
         btn_frame.pack(fill=tk.X)
-        buttons = [
-            ("Activate License", self._activate_license, self.colors["accent"]),
-            ("Renew License", self._renew_license, self.colors["success"]),
-            ("Refresh Status", self._refresh_license_status, self.colors["muted"]),
-        ]
-        for text, cmd, clr in buttons:
-            btn = tk.Button(btn_frame, text=text, command=cmd,
+        self._btn_activate_lic = tk.Button(btn_frame, text="Activate License", command=self._activate_license,
                       font=("SF Pro Text", 11, "bold"),
-                      fg="white", bg=clr,
+                      fg="white", bg=self.colors["accent"],
                       bd=0, padx=20, pady=8, cursor="hand2",
                       width=24)
-            btn.pack(side=tk.LEFT, padx=5)
-            btn.bind('<Return>', lambda e, c=cmd: c())
-            btn.bind('<KP_Enter>', lambda e, c=cmd: c())
+        self._btn_activate_lic.pack(side=tk.LEFT, padx=5)
+        self._btn_activate_lic.bind('<Return>', lambda e: self._activate_license())
+        self._btn_activate_lic.bind('<KP_Enter>', lambda e: self._activate_license())
+        self._btn_renew_lic = tk.Button(btn_frame, text="Renew License", command=self._renew_license,
+                      font=("SF Pro Text", 11, "bold"),
+                      fg="white", bg=self.colors["success"],
+                      bd=0, padx=20, pady=8, cursor="hand2",
+                      width=24)
+        self._btn_renew_lic.bind('<Return>', lambda e: self._renew_license())
+        self._btn_renew_lic.bind('<KP_Enter>', lambda e: self._renew_license())
+        self._btn_renew_lic.pack_forget()
+        self._btn_refresh_lic = tk.Button(btn_frame, text="Refresh Status", command=self._refresh_license_status,
+                      font=("SF Pro Text", 11, "bold"),
+                      fg="white", bg=self.colors["muted"],
+                      bd=0, padx=20, pady=8, cursor="hand2",
+                      width=24)
+        self._btn_refresh_lic.pack(side=tk.LEFT, padx=5)
+        self._btn_refresh_lic.bind('<Return>', lambda e: self._refresh_license_status())
+        self._btn_refresh_lic.bind('<KP_Enter>', lambda e: self._refresh_license_status())
 
     def _toggle_license_key_visibility(self):
         """Toggle license key visibility."""
@@ -392,6 +402,30 @@ class SettingsUI:
             self._license_key_var.set('•' * len(license_key) if license_key else '--')
             self._license_key_show_btn.config(text="Show")
             self._license_key_hidden = True
+
+    def _update_license_panel(self):
+        """Refresh the license section if currently visible."""
+        if self._current_section == "license":
+            # Update the existing widgets in-place rather than rebuilding
+            status_obj = getattr(self.app, 'license_status', None) if hasattr(self.app, 'license_status') else None
+            if status_obj and status_obj.valid:
+                if hasattr(self, '_btn_activate_lic'):
+                    self._btn_activate_lic.pack_forget()
+                if hasattr(self, '_btn_renew_lic'):
+                    self._btn_renew_lic.pack(side=tk.LEFT, padx=5)
+            else:
+                if hasattr(self, '_btn_renew_lic'):
+                    self._btn_renew_lic.pack_forget()
+                if hasattr(self, '_btn_activate_lic'):
+                    self._btn_activate_lic.pack(side=tk.LEFT, padx=5)
+            # Also update badge
+            if hasattr(self, '_license_badge') and self._license_badge.winfo_exists():
+                if status_obj and status_obj.valid:
+                    text = f'ACTIVE  {status_obj.days_left}d' if not status_obj.trial_active else f'TRIAL  {status_obj.days_left}d'
+                    fg = self.colors["success"] if not status_obj.trial_active else self.colors["warning"]
+                    self._license_badge.config(text=text, fg=fg)
+                else:
+                    self._license_badge.config(text='UNLICENSED', fg=self.colors["error"])
 
     def _activate_license(self):
         act = getattr(self.app, 'open_activation', None)
