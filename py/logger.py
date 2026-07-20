@@ -37,7 +37,8 @@ class Logger:
         
     def _create_log_dir(self):
         """Create logs directory if it doesn't exist"""
-        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+        PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_dir = os.path.join(PROJECT_ROOT, "logs")
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
         return log_dir

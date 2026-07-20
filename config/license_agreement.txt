@@ -1,0 +1,81 @@
+SOFTWARE LICENSE AGREEMENT
+
+This Software License Agreement ("Agreement") is between you ("Licensee") and
+Websmith Digital ("Licensor"). By installing, copying, or using the ZEMmacOS
+software ("Software"), you agree to be bound by the terms of this Agreement.
+
+1. GRANT OF LICENSE
+   Licensor grants Licensee a non-exclusive, non-transferable, single-user
+   license to use the Software on a single device, subject to the terms herein.
+
+2. TRIAL LICENSE
+   Licensor may offer a free trial period. Trial licenses are limited in
+   duration and functionality as specified at the time of trial activation.
+   Trial versions may contain feature limitations.
+
+3. PAID LICENSE
+   Paid licenses grant full access to the Software for the duration purchased.
+   Licenses are device-locked via hardware binding.
+
+4. HARDWARE BINDING
+   Licenses are bound to the hardware fingerprint of the device on which
+   activation occurs. Hardware binding prevents license sharing across
+   multiple devices unless explicitly permitted by the license plan.
+
+5. ACTIVATION
+   Activation requires a valid license key and internet connection.
+   Offline activation is not supported for initial activation.
+   License status is verified periodically against Licensor's servers.
+
+6. RENEWAL
+   Subscription licenses must be renewed before expiration to continue use.
+   Renewal terms and pricing are available on Licensor's website.
+
+7. REFUND POLICY
+   Refunds are handled per Licensor's published refund policy.
+   Contact support@websmithdigital.com for refund requests.
+
+8. PROHIBITED ACTIVITIES
+   Licensee agrees NOT to:
+   a) Reverse engineer, decompile, or disassemble the Software
+   b) Modify, patch, or alter the Software binaries
+   c) Bypass or circumvent license activation or validation mechanisms
+   d) Share, distribute, or transfer license keys to third parties
+   e) Resell the Software without written authorization from Licensor
+   f) Circumvent trial limitations or time restrictions
+   g) Tamper with SDK files, configuration, or license cache
+   h) Remove or alter copyright or trademark notices
+
+9. RESTRICTIONS
+   a) Commercial use requires a commercial license
+   b) Redistribution of the Software is prohibited
+   c) Use on unauthorized devices is prohibited
+   d) License sharing or sublicensing is prohibited
+
+10. ACCOUNT SUSPENSION
+    Licensor reserves the right to suspend or terminate access for:
+    a) Violation of this Agreement
+    b) Fraudulent or abusive activity
+    c) Non-payment of fees
+    d) Any activity that threatens Software integrity
+
+11. DATA PROCESSING
+    The Software collects device information for license validation purposes
+    including hardware identifiers and operating system details. This data
+    is processed per Licensor's Privacy Policy.
+
+12. SUPPORT
+    Support is provided per Licensor's published support policy.
+    Support channels: email (support@websmithdigital.com).
+
+13. DISCLAIMER OF WARRANTY
+    THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND.
+
+14. LIMITATION OF LIABILITY
+    Licensor shall not be liable for any damages arising from Software use.
+
+15. TERMINATION
+    This Agreement terminates automatically upon violation of its terms.
+    Upon termination, Licensee must uninstall and destroy all copies.
+
+By clicking "Agree" you acknowledge that you have read and accept these terms.

@@ -3,9 +3,9 @@
 # Get the curent directory, the script name
 # and the script name with "py" substituted for the extension.
 args=( "$@" )
-dir="$(cd -- "$(dirname "$0")" >/dev/null 2>&1; pwd -P)"
+dir="$(cd -- "$(dirname "$0")/.." >/dev/null 2>&1; pwd -P)"
 script="${0##*/}"
-target="${script%.*}.py"
+target="py/${script%.*}.py"
 
 # use_py3:
 #   TRUE  = Use if found, use py2 otherwise

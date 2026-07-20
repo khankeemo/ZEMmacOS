@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+
+echo "Removing ZEMmacOS..."
+echo "Note: License cache and user configuration in ~/.config/ZEMmacOS/ will remain."
+echo "To remove user data: rm -rf ~/.config/ZEMmacOS/"

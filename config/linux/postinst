@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+APP_NAME="ZEMmacOS"
+APP_PATH="/usr/share/$APP_NAME"
+
+echo "ZEMmacOS v3.0.0 - Post-installation"
+
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database
+fi
+
+# Update icon cache
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+echo "ZEMmacOS installed successfully."
+echo ""
+echo "To launch:"
+echo "  zemmacos                       # From terminal"
+echo "  # Or launch from application menu"
+echo ""
+echo "Configuration:"
+echo "  /usr/share/ZEMmacOS/config/"
+echo ""
+echo "To uninstall:"
+echo "  sudo dpkg -r zemmacos"

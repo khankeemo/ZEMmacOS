@@ -115,7 +115,8 @@ class Cleaner:
         Returns:
             Number of files deleted
         """
-        logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+        PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        logs_dir = os.path.join(PROJECT_ROOT, "logs")
         if not os.path.exists(logs_dir):
             self.log("No logs directory found", "warning")
             return 0
@@ -216,7 +217,8 @@ class Cleaner:
         Clear gibMacOS specific temporary files
         """
         # Clear macOS Downloads temp files
-        downloads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "macOS Downloads")
+        PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        downloads_dir = os.path.join(PROJECT_ROOT, "macOS Downloads")
         if os.path.exists(downloads_dir):
             # Remove incomplete downloads (files with .part extension)
             for file in Path(downloads_dir).glob("*.part"):

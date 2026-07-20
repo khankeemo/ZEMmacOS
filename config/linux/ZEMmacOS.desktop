@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ZEMmacOS
+Comment=macOS Download Manager - Download macOS installer files from Apple
+Exec=zemmacos
+Icon=zemmacos
+Terminal=false
+Categories=Utility;FileTransfer;Development;
+Keywords=macOS;downloader;apple;installer;recovery
+StartupNotify=true

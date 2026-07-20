@@ -9,6 +9,8 @@ class ProgramError(Exception):
 
 
 class gibMacOS:
+    _script_dir = os.path.dirname(os.path.realpath(__file__))
+    _project_root = os.path.abspath(os.path.join(_script_dir, ".."))
     def __init__(self, interactive = True, download_dir = None):
         self.interactive = interactive
         self.download_dir = download_dir
@@ -30,14 +32,14 @@ class gibMacOS:
         }
         
         # Load settings.json if it exists in the Scripts folder
-        self.settings_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"Scripts","settings.json")
+        self.settings_path = os.path.join(self._project_root,"Scripts","settings.json")
         self.settings = {}
         if os.path.exists(self.settings_path):
             try: self.settings = json.load(open(self.settings_path))
             except: pass
 
         # Load prod_cache.json if it exists in the Scripts folder
-        self.prod_cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"Scripts","prod_cache.plist")
+        self.prod_cache_path = os.path.join(self._project_root,"Scripts","prod_cache.plist")
         self.prod_cache = {}
         if os.path.exists(self.prod_cache_path):
             try:
@@ -83,7 +85,7 @@ class gibMacOS:
         self.current_catalog = self.settings.get("current_catalog","publicrelease")
         self.catalog_data    = None
         self.scripts = "Scripts"
-        self.local_catalog = os.path.join(os.path.dirname(os.path.realpath(__file__)),self.scripts,"sucatalog.plist")
+        self.local_catalog = os.path.join(self._project_root,self.scripts,"sucatalog.plist")
         self.caffeinate_downloads = self.settings.get("caffeinate_downloads",True)
         self.caffeinate_process = None
         self.save_local = False
@@ -439,7 +441,7 @@ class gibMacOS:
         # Takes a dictonary of details and downloads it
         self.resize()
         name = "{} - {} {} ({})".format(prod["product"], prod["version"], prod["title"], prod["build"]).replace(":","").strip()
-        download_dir = self.download_dir or os.path.join(os.path.dirname(os.path.realpath(__file__)), "macOS Downloads", self.current_catalog, name)
+        download_dir = self.download_dir or os.path.join(self._project_root, "macOS Downloads", self.current_catalog, name)
         dl_list = []
         for x in prod["packages"]:
             if not x.get("URL",None):

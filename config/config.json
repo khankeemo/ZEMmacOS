@@ -1,6 +1,6 @@
 {
   "theme": "light",
-  "download_directory": "C:/Users/Admin/Downloads/MacOS Download",
+  "download_directory": "~/Downloads/MacOS Download",
   "catalog": "publicrelease",
   "download_threads": 8,
   "window_width": 1200,
@@ -10,6 +10,5 @@
   "max_retries": 3,
   "timeout_seconds": 30,
   "notifications_enabled": true,
-  "compact_mode": false,
-  "license_key": "MROC-49VK-886S-Z8JI-Z1KS-ITJU"
+  "compact_mode": false
 }
