@@ -23,7 +23,7 @@ from update import AppUpdater
 from live_log import get_live_log
 from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus
 from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog
-from dialogs.activation_dialog import ActivationDialog
+from WSD_SDKToolkit_ZEMMACOS import ActivationDialog
 
 
 def main():
