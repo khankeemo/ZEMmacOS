@@ -335,7 +335,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
             product_name='ZEM MAC OS',
             cache=self.license_engine._cache
         )
-        self._monitor_activation(d)
         r = d.show()
         if r and r.get('activated'):
             key = r.get('license_key', '')
@@ -350,39 +349,19 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self.log_live("ACTIVATION", "WARNING", "Activation cancelled")
         return r
 
-    def _monitor_activation(self, dialog):
-        try:
-            if dialog._activated:
-                try:
-                    dialog._root.destroy()
-                except Exception:
-                    pass
-                return
-        except Exception:
-            pass
-        try:
-            dialog._root.after(200, lambda: self._monitor_activation(dialog))
-        except Exception:
-            pass
-
     # -----------------------------------------------------------------
     # RENEW FLOW
     # -----------------------------------------------------------------
     def open_renew_license(self):
         if not self.license_engine:
             return
-        from renew_license_dialog import RenewLicenseDialog
+        from WSD_SDKToolkit_ZEMMACOS import RenewalDialog
         status_obj = self.license_status
         license_key = (status_obj.license_key or '') if status_obj else ''
-        name = getattr(self, '_customer_name', '') or (status_obj.customer_name if status_obj else '') or ''
-        email = getattr(self, '_customer_email', '') or (status_obj.customer_email if status_obj else '') or ''
-        mobile = getattr(self, '_customer_mobile', '') or (status_obj.customer_mobile if status_obj else '') or ''
-        dlg = RenewLicenseDialog(
-            self.root, self.license_engine,
+        dlg = RenewalDialog(
+            self.license_engine,
             license_key=license_key,
-            customer_name=name,
-            email=email,
-            mobile=mobile,
+            parent=self.root,
         )
         dlg.show()
 

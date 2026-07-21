@@ -823,8 +823,9 @@ class ActivationDialog:
                 self._expiry_var.set(expiry)
                 dcount = data.get('device_count', 0)
                 self._device_limit_var.set(f'{dcount} / {max_dev}')
+                self.cache.save_license_key(license_key)
                 self.cache.invalidate_license_status()
-                self._root.after(1000, lambda: self._on_refresh())
+                self._root.destroy()
             else:
                 err = result.get('message', result.get('error', 'Activation failed'))
                 self._status_label.config(text=f'Activation failed: {err}', fg=self._error)
