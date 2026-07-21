@@ -8,6 +8,7 @@ __all__ = [
     "WelcomeDialog",
     "ActivationDialog",
     "RenewalDialog",
+    "RenewLicenseDialog",
     "DeviceReplaceDialog",
     "AboutWidget",
     "AboutDialog",
@@ -20,5 +21,6 @@ from .cache import CacheManager
 from .welcome import WelcomeDialog
 from .activation import ActivationDialog
 from .renewal import RenewalDialog
+from .renew_license_dialog import RenewLicenseDialog
 from .device_replace import DeviceReplaceDialog
 from .widgets.about import AboutWidget, AboutDialog

@@ -20,6 +20,7 @@ WSD_SDK_PROJECTNAME_PRODUCTID/
 ├── welcome.py
 ├── activation.py
 ├── renewal.py
+├── renew_license_dialog.py
 ├── device_replace.py
 ├── manifest.json
 
