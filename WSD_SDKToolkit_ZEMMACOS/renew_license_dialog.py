@@ -1,7 +1,7 @@
 """Renew License Dialog - generic renewal window with license verification"""
 import tkinter as tk
 from tkinter import ttk, messagebox
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 class RenewLicenseDialog:
@@ -20,6 +20,8 @@ class RenewLicenseDialog:
         self.root = None
         self._verified = False
         self._license_data: Dict[str, Any] = {}
+        self._plans: list = []
+        self._selected_plan: Optional[Dict[str, Any]] = None
 
         branding = self.config.get('branding', {})
         self._colors = branding.get('colors', {})
@@ -232,6 +234,18 @@ class RenewLicenseDialog:
                            activebackground=self._card_bg,
                            indicatoron=True).pack(side=tk.LEFT, padx=(0, 20))
 
+        tk.Label(inner, text='Select Plan',
+                 font=('Helvetica', 10, 'bold'),
+                 bg=self._card_bg, fg=self._text_sec).pack(anchor=tk.W, pady=(6, 4))
+        plan_frame = tk.Frame(inner, bg=self._card_bg)
+        plan_frame.pack(fill=tk.X, pady=(0, 6))
+        self._var_plan_name = tk.StringVar(value='No plans available')
+        self._plan_dropdown = ttk.Combobox(
+            plan_frame, textvariable=self._var_plan_name,
+            font=('Helvetica', 11), state='disabled')
+        self._plan_dropdown.pack(fill=tk.X, ipady=4)
+        self._plan_dropdown.bind('<<ComboboxSelected>>', self._on_plan_selected)
+
         tk.Label(inner, text='Message',
                  font=('Helvetica', 10, 'bold'),
                  bg=self._card_bg, fg=self._text_sec).pack(anchor=tk.W, pady=(6, 4))
@@ -334,6 +348,30 @@ class RenewLicenseDialog:
 
         threading.Thread(target=_do_verify, daemon=True).start()
 
+    def _load_plans(self):
+        plans = self._license_data.get('available_plans', [])
+        if plans:
+            self._plans = plans
+            plan_names = [p.get('name', f'Plan {i+1}') for i, p in enumerate(plans)]
+            self._plan_dropdown['values'] = plan_names
+            self._plan_dropdown['state'] = 'readonly'
+            self._var_plan_name.set('')
+            self._selected_plan = None
+        else:
+            self._plans = []
+            self._plan_dropdown['values'] = []
+            self._plan_dropdown['state'] = 'disabled'
+            self._var_plan_name.set('No plans available')
+            self._selected_plan = None
+
+    def _on_plan_selected(self, event=None):
+        sel = self._var_plan_name.get()
+        for p in self._plans:
+            if p.get('name') == sel:
+                self._selected_plan = p
+                return
+        self._selected_plan = None
+
     def _verify_success(self, data: Dict[str, Any]):
         self._verified = True
         self._license_data = data
@@ -361,9 +399,16 @@ class RenewLicenseDialog:
                 pass
         self._var_expiry.set(expiry)
 
+        self._load_plans()
+
     def _verify_failed(self, msg: str):
         self._verified = False
         self._license_data = {}
+        self._plans = []
+        self._selected_plan = None
+        self._plan_dropdown['state'] = 'disabled'
+        self._plan_dropdown['values'] = []
+        self._var_plan_name.set('No plans available')
         self._var_status.set(f'\u2717 {msg}')
         self._status_label.config(fg=self._error)
         self._btn_verify.config(state=tk.NORMAL, text='Verify')
@@ -382,6 +427,11 @@ class RenewLicenseDialog:
         self._msg_text.insert(tk.END, 'Additional details...')
         self._verified = False
         self._license_data = {}
+        self._plans = []
+        self._selected_plan = None
+        self._plan_dropdown['state'] = 'disabled'
+        self._plan_dropdown['values'] = []
+        self._var_plan_name.set('No plans available')
         self._var_status.set('Not Verified')
         self._status_label.config(fg=self._muted)
 
@@ -413,6 +463,12 @@ class RenewLicenseDialog:
 
         import threading
 
+        plan_id = ''
+        plan_name = ''
+        if self._selected_plan:
+            plan_id = str(self._selected_plan.get('id', ''))
+            plan_name = self._selected_plan.get('name', '')
+
         def _do_send():
             try:
                 client = self.client
@@ -427,6 +483,8 @@ class RenewLicenseDialog:
                     subject=subject,
                     message=msg,
                     request_type=req_type,
+                    selected_plan_id=plan_id,
+                    selected_plan_name=plan_name,
                 )
                 self.root.after(0, lambda: self._send_done(resp))
 

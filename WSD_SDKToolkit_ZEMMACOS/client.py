@@ -233,10 +233,35 @@ class ApiClient:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
+    def get_available_plans(self, license_key: str) -> Dict[str, Any]:
+        import requests as _requests
+        payload: Dict[str, Any] = {'license_key': license_key}
+        api_path = f"/api/{self.api_version}/license/verify-renewal"
+        headers = self._sign_request(payload, method='POST', path=api_path, query='')
+        headers['Content-Type'] = 'application/json'
+        url = f"{self.base_url}{api_path}"
+        try:
+            resp = _requests.post(url, json=payload, headers=headers, timeout=self.timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                plans = data.get('available_plans', [])
+                return {
+                    'success': True,
+                    'product': {'id': data.get('product_id', ''), 'name': data.get('product_name', '')},
+                    'current_plan': {'id': data.get('plan_id', ''), 'name': data.get('plan', '')},
+                    'plans': plans,
+                }
+            return {'success': False, 'plans': []}
+        except Exception:
+            return {'success': False, 'plans': []}
+
     def send_renewal_request(self, license_key: str, customer_name: str = '',
                              email: str = '', mobile: str = '',
                              subject: str = '', message: str = '',
-                             request_type: str = 'renew') -> Dict[str, Any]:
+                             request_type: str = 'renew',
+                             selected_plan_id: str = '',
+                             selected_plan_name: str = '') -> Dict[str, Any]:
+        import requests as _requests
         payload: Dict[str, Any] = {
             'license_key': license_key,
             'customer_name': customer_name,
@@ -246,7 +271,19 @@ class ApiClient:
             'message': message,
             'request_type': request_type,
         }
-        return self._request('license/send-renewal-request', payload)
+        if selected_plan_id:
+            payload['selected_plan_id'] = selected_plan_id
+        if selected_plan_name:
+            payload['selected_plan_name'] = selected_plan_name
+        url = f"{self.base_url}/internal/backend/licenses/renewal-request"
+        try:
+            resp = _requests.post(url, json=payload, timeout=self.timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            data = resp.json() if resp.text else {}
+            return {'success': False, 'error': data.get('error', f'HTTP {resp.status_code}')}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
     def get_products(self) -> Dict[str, Any]:
         import requests as _requests
