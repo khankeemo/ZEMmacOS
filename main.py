@@ -23,7 +23,7 @@ from update import AppUpdater
 from live_log import get_live_log
 from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus
 from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog
-from activation import show_activation_dialog
+from WSD_SDKToolkit_ZEMMACOS import ActivationDialog
 
 
 def main():
@@ -172,10 +172,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.license_engine = LicenseEngine(config_path=config_path)
 
                 live.write("SDK", "INFO", "Hardware detection")
-                _ = self.license_engine.get_hardware_id()
+                self.license_engine.get_hardware_id()
 
                 live.write("SDK", "INFO", "Checking server connectivity")
-                _ = self.license_engine.get_hardware_id()
                 self.license_status = self.license_engine.initialize()
                 self._license_initialized = True
 
@@ -325,58 +324,46 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self._shutdown_app()
 
     # -----------------------------------------------------------------
-    # ACTIVATION FLOW — restarts app after successful activation
+    # ACTIVATION FLOW — auto-closes dialog, persists license, restarts app
     # -----------------------------------------------------------------
     def open_activation(self, license_key=None):
         if not self.license_engine:
             return
         self.log_live("ACTIVATION", "INFO", "Activation dialog opened")
-        r = show_activation_dialog(
+        d = ActivationDialog(
             self.license_engine._client,
             product_name='ZEM MAC OS',
             cache=self.license_engine._cache
         )
+        self._monitor_activation(d)
+        r = d.show()
         if r and r.get('activated'):
             key = r.get('license_key', '')
-            self.log_live("ACTIVATION", "SUCCESS", "Activation completed — refreshing license state")
-            def _post_activation():
-                try:
-                    eng = self.license_engine
-                    if key:
-                        eng._license_key = key
-                    new_status = eng.initialize()
-                    if new_status is not None:
-                        self.license_status = new_status
-                    eng._cache.invalidate_license_status()
-                    # Fetch full license details via validate() to populate license_key, plan, expiry
-                    if eng.has_license_key():
-                        try:
-                            validate_result = eng.validate(eng.get_license_key())
-                            vdata = validate_result.get('data', validate_result)
-                            if vdata.get('valid'):
-                                self._customer_name = vdata.get('customer_name', '') or ''
-                                self._customer_email = vdata.get('customer_email', '') or ''
-                                self._customer_mobile = vdata.get('customer_mobile', '') or vdata.get('customer_phone', '') or ''
-                        except Exception:
-                            pass
-                        # Re-initialize to get fresh LicenseStatus with all fields
-                        refreshed = eng.initialize()
-                        if refreshed is not None:
-                            self.license_status = refreshed
-                    self.log_live("ACTIVATION", "SUCCESS", "License state refreshed — updating dashboard")
-                    self.root.after(0, self._update_all_license_ui)
-                    self.root.after(300, self._show_stylish_activation_success)
-                except Exception as e:
-                    self.log_live("ACTIVATION", "ERROR", f"Post-activation refresh failed: {e}")
-                    self.root.after(0, lambda: messagebox.showerror(
-                        "Refresh Error",
-                        f"License activated but refresh failed: {e}\n\nThe application will restart."
-                    ))
-                    self.root.after(0, self._restart_app)
-            threading.Thread(target=_post_activation, daemon=True).start()
+            if key:
+                self.license_engine._license_key = key
+                self.license_engine._cache.save_license_key(key)
+            self.log_live("ACTIVATION", "SUCCESS", "Activation successful — refreshing license state")
+            self.license_status = self.license_engine.initialize()
+            self._update_all_license_ui()
+            self._show_stylish_activation_success()
         elif r and r.get('cancelled'):
             self.log_live("ACTIVATION", "WARNING", "Activation cancelled")
         return r
+
+    def _monitor_activation(self, dialog):
+        try:
+            if dialog._activated:
+                try:
+                    dialog._root.destroy()
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
+        try:
+            dialog._root.after(200, lambda: self._monitor_activation(dialog))
+        except Exception:
+            pass
 
     # -----------------------------------------------------------------
     # RENEW FLOW
@@ -384,7 +371,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def open_renew_license(self):
         if not self.license_engine:
             return
-        from dialogs.renew_license_dialog import RenewLicenseDialog
+        from renew_license_dialog import RenewLicenseDialog
         status_obj = self.license_status
         license_key = (status_obj.license_key or '') if status_obj else ''
         name = getattr(self, '_customer_name', '') or (status_obj.customer_name if status_obj else '') or ''
@@ -401,25 +388,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def _show_stylish_activation_success(self):
         status = self.license_status
-        eng = self.license_engine
-        # Pull plan from status or engine validate result
         plan_name = (status.plan or '') if status else ''
-        if not plan_name and eng and eng.has_license_key():
-            try:
-                vr = eng.validate(eng.get_license_key())
-                vd = vr.get('data', vr)
-                plan_name = vd.get('plan', '') or ''
-            except Exception:
-                pass
-        if not plan_name:
-            plan_name = 'Professional'
-        # Pull license key
         lic_key = (status.license_key or '') if status else ''
-        if not lic_key and eng:
-            try:
-                lic_key = eng.get_license_key() or ''
-            except Exception:
-                pass
         if lic_key and len(lic_key) > 12:
             formatted = ''
             for i, ch in enumerate(lic_key):
@@ -427,15 +397,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     formatted += '-'
                 formatted += ch
             lic_key = formatted
-        # Pull expiry date
         expiry = (status.expiry_date or '') if status else ''
-        if not expiry and eng and eng.has_license_key():
-            try:
-                vr = eng.validate(eng.get_license_key())
-                vd = vr.get('data', vr)
-                expiry = vd.get('expiry_date', '') or ''
-            except Exception:
-                pass
         if expiry and 'T' in expiry:
             try:
                 from datetime import datetime
@@ -443,82 +405,63 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 expiry = dt.strftime('%d %b %Y')
             except Exception:
                 expiry = expiry.split('T')[0]
-        elif not expiry:
-            expiry = 'N/A'
 
-        d = tk.Toplevel(self.root)
-        d.title("")
-        d.overrideredirect(True)
-        d.transient(self.root)
-        d.resizable(False, False)
-        d.configure(bg='#1d1d1f')
-        W, H = 420, 380
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
-        d.geometry(f"{W}x{H}+{(sw-W)//2}+{(sh-H)//2}")
-        d.attributes("-topmost", True)
-        d.grab_set()
+        c = self.colors
+        W, H = 400, 300
 
-        canvas = tk.Canvas(d, width=W, height=H, bg='#1d1d1f', highlightthickness=0)
-        canvas.pack()
-        canvas.create_rectangle(0, 0, W, H, fill='#1d1d1f', outline='#2d2d2f', width=2)
+        def on_restart():
+            try:
+                d.destroy()
+            except Exception:
+                pass
+            self._restart_app()
 
-        # Success icon (checkmark circle)
-        cx, cy = W // 2, 60
-        canvas.create_oval(cx-24, cy-24, cx+24, cy+24, fill='#34c759', outline='')
-        canvas.create_line(cx-14, cy, cx-5, cy+10, fill='white', width=3, capstyle='round')
-        canvas.create_line(cx-5, cy+10, cx+16, cy-12, fill='white', width=3, capstyle='round')
+        def on_later():
+            try:
+                d.destroy()
+            except Exception:
+                pass
 
-        # Title
-        canvas.create_text(W//2, 110, text="License Activated Successfully",
+        d, canvas = self._make_modal_dialog(W, H, close_cb=on_later)
+        cx = W // 2
+
+        canvas.create_oval(cx - 20, 28, cx + 20, 68,
+                           fill=c["success"], outline="")
+        canvas.create_line(cx - 10, 48, cx - 3, 55,
+                           fill="white", width=3, capstyle="round")
+        canvas.create_line(cx - 3, 55, cx + 12, 38,
+                           fill="white", width=3, capstyle="round")
+
+        canvas.create_text(cx, 95, text="License Activated Successfully",
                            font=("SF Pro Display", 16, "bold"),
-                           fill='#ffffff', anchor='center')
+                           fill=c["text"], anchor="center")
 
-        # Details box
-        detail_bg = '#2d2d2f'
-        canvas.create_rectangle(30, 135, W-30, 275, fill=detail_bg, outline='#3d3d3f', width=1)
+        detail_bg = c.get("input_bg", "#f5f5f7")
+        canvas.create_rectangle(24, 115, W - 24, 215,
+                                fill=detail_bg, outline=c["border"], width=1)
 
         details = [
-            ("Plan:", plan_name),
-            ("License:", lic_key or 'N/A'),
-            ("Expires:", expiry),
+            ("Plan:", plan_name or '--'),
+            ("License:", lic_key or '--'),
+            ("Expires:", expiry or '--'),
         ]
         for i, (label, value) in enumerate(details):
-            y = 155 + i * 38
-            canvas.create_text(50, y, text=label, font=("SF Pro Text", 10, "bold"),
-                               fill='#86868b', anchor='w')
-            canvas.create_text(180, y, text=value, font=("SF Pro Text", 10, "bold"),
-                               fill='#ffffff', anchor='w')
+            y = 130 + i * 28
+            canvas.create_text(40, y, text=label, font=("SF Pro Text", 9, "bold"),
+                               fill=c["text_secondary"], anchor='w')
+            canvas.create_text(130, y, text=value, font=("SF Pro Text", 9, "bold"),
+                               fill=c["text"], anchor='w')
 
-        # Restart message
-        canvas.create_text(W//2, 295, text="Please restart ZEMmacOS to apply changes.",
-                           font=("SF Pro Text", 10), fill='#6e6e73', anchor='center')
+        canvas.create_text(cx, 235, text="Restart to load your new license.",
+                           font=("SF Pro Text", 10),
+                           fill=c["muted"], anchor="center")
 
-        # Restart Now button
-        btn_w, btn_h = 180, 40
-        bx, by = (W - btn_w) // 2, 320
-        btn_canvas = tk.Canvas(d, width=btn_w, height=btn_h, bg='#1d1d1f', highlightthickness=0)
-        btn_canvas.place(x=bx, y=by)
-        def _draw_restart_btn(fill):
-            btn_canvas.delete('all')
-            r = 8
-            points = [r,0, btn_w-r,0, btn_w,0, btn_w,r, btn_w,btn_h-r, btn_w,btn_h, btn_w-r,btn_h, r,btn_h, 0,btn_h, 0,btn_h-r, 0,r, 0,0]
-            btn_canvas.create_polygon(points, smooth=True, fill=fill, outline=fill)
-            btn_canvas.create_text(btn_w//2, btn_h//2, text="Restart Now",
-                                   font=("SF Pro Text", 12, "bold"),
-                                   fill='#ffffff', anchor='center')
-        _draw_restart_btn('#0071e3')
-        btn_canvas.configure(cursor='hand2')
-        btn_canvas.bind('<Button-1>', lambda e: self._restart_app())
-        btn_canvas.bind('<Enter>', lambda e: _draw_restart_btn('#0077ed'))
-        btn_canvas.bind('<Leave>', lambda e: _draw_restart_btn('#0071e3'))
-
-        # Bind Escape to restart
-        d.bind('<Escape>', lambda e: self._restart_app())
-        d.bind('<Return>', lambda e: self._restart_app())
-        d.focus_force()
-
-        d.wait_window()
+        bw, bh = 130, 34
+        by = 258
+        self._make_dialog_button(d, "Restart Now", c["accent"], "white",
+                                 on_restart, cx - bw - 6, by, bw, bh)
+        self._make_dialog_button(d, "Later", c["btn_secondary_bg"], c["text"],
+                                 on_later, cx + 6, by, bw, bh)
 
     def _restart_app(self):
         # Stop the validity countdown BEFORE destroying anything
@@ -569,11 +512,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
         def do():
             try:
                 new_status = self.license_engine.initialize()
-                # Only update if we got valid data
                 if new_status is not None:
                     self.license_status = new_status
-                    # Extract customer info from API response
-                    self._extract_customer_from_api()
                     self.root.after(0, self._update_all_license_ui)
                     self.log_live("ACTIVATION", "SUCCESS", "License refresh completed")
                 else:
@@ -581,35 +521,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
             except Exception as e:
                 self.log_live("ACTIVATION", "ERROR", f"License refresh error: {e}")
         threading.Thread(target=do, daemon=True).start()
-
-    def _extract_customer_from_api(self):
-        """Get customer data using public SDK API."""
-        if not self.license_engine or not self.license_status:
-            return
-
-        try:
-            hw_id = self.license_engine.get_hardware_id()
-
-            # If we have a license key, use public validate() method
-            if self.license_engine.has_license_key():
-                result = self.license_engine.validate(
-                    self.license_engine.get_license_key()
-                )
-                data = result.get('data', result)
-                if data.get('valid') or data.get('customer_name'):
-                    self._customer_name = data.get('customer_name', '') or ''
-                    self._customer_email = data.get('customer_email', '') or ''
-                    self._customer_mobile = data.get('customer_mobile', '') or data.get('customer_phone', '') or ''
-                    return
-
-            # For trial: server returns customer data in trial API response
-            if self.license_status and self.license_status.status == 'trial':
-                self._customer_name = self.license_status.customer_name or ''
-                self._customer_email = self.license_status.customer_email or ''
-                self._customer_mobile = self.license_status.customer_mobile or self.license_status.customer_phone or ''
-
-        except Exception as e:
-            self.log_live("SDK", "WARNING", f"Could not extract customer from API: {e}")
 
     def _update_all_license_ui(self):
         try:
