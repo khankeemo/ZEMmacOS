@@ -682,8 +682,13 @@ class ZEMmacOSUI:
                 fg = colors["warning"] if is_trial else colors["success"]
                 plan_text = status_obj.plan or ('Trial' if is_trial else 'Active')
                 lic_key = getattr(status_obj, 'license_key', '') or ''
-                if lic_key and len(lic_key) > 15:
-                    lic_key = lic_key[:4] + '-' + lic_key[4:9] + '-' + lic_key[9:]
+                if lic_key and len(lic_key) > 12:
+                    formatted = ''
+                    for i, ch in enumerate(lic_key):
+                        if i > 0 and i % 4 == 0:
+                            formatted += '-'
+                        formatted += ch
+                    lic_key = formatted
                 if w.get("status") and w["status"].winfo_exists():
                     w["status"].config(text=status_text, fg=fg)
                 if w.get("plan") and w["plan"].winfo_exists():

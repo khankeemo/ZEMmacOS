@@ -23,7 +23,7 @@ from update import AppUpdater
 from live_log import get_live_log
 from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus
 from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog
-from WSD_SDKToolkit_ZEMMACOS import ActivationDialog
+from activation import show_activation_dialog
 
 
 def main():
@@ -331,28 +331,43 @@ class ZEMmacOSApp(ZEMmacOSUI):
         if not self.license_engine:
             return
         self.log_live("ACTIVATION", "INFO", "Activation dialog opened")
-        d = ActivationDialog(
+        r = show_activation_dialog(
             self.license_engine._client,
             product_name='ZEM MAC OS',
             cache=self.license_engine._cache
         )
-        r = d.show()
         if r and r.get('activated'):
             key = r.get('license_key', '')
-            if key:
-                self.license_engine._license_key = key
+            self.log_live("ACTIVATION", "SUCCESS", "Activation completed — refreshing license state")
             def _post_activation():
                 try:
-                    new_status = self.license_engine.initialize()
+                    eng = self.license_engine
+                    if key:
+                        eng._license_key = key
+                    new_status = eng.initialize()
                     if new_status is not None:
                         self.license_status = new_status
-                        self._extract_customer_from_api()
-                    self.log_live("ACTIVATION", "SUCCESS", "License activation successful")
-                    # Refresh dashboard immediately before showing popup
+                    eng._cache.invalidate_license_status()
+                    # Fetch full license details via validate() to populate license_key, plan, expiry
+                    if eng.has_license_key():
+                        try:
+                            validate_result = eng.validate(eng.get_license_key())
+                            vdata = validate_result.get('data', validate_result)
+                            if vdata.get('valid'):
+                                self._customer_name = vdata.get('customer_name', '') or ''
+                                self._customer_email = vdata.get('customer_email', '') or ''
+                                self._customer_mobile = vdata.get('customer_mobile', '') or vdata.get('customer_phone', '') or ''
+                        except Exception:
+                            pass
+                        # Re-initialize to get fresh LicenseStatus with all fields
+                        refreshed = eng.initialize()
+                        if refreshed is not None:
+                            self.license_status = refreshed
+                    self.log_live("ACTIVATION", "SUCCESS", "License state refreshed — updating dashboard")
                     self.root.after(0, self._update_all_license_ui)
-                    self.root.after(200, lambda: self._show_stylish_activation_success())
+                    self.root.after(300, self._show_stylish_activation_success)
                 except Exception as e:
-                    self.log_live("ACTIVATION", "ERROR", f"Post-activation init failed: {e}")
+                    self.log_live("ACTIVATION", "ERROR", f"Post-activation refresh failed: {e}")
                     self.root.after(0, lambda: messagebox.showerror(
                         "Refresh Error",
                         f"License activated but refresh failed: {e}\n\nThe application will restart."
@@ -386,11 +401,41 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def _show_stylish_activation_success(self):
         status = self.license_status
-        plan_name = (status.plan or 'Professional') if status else 'Professional'
+        eng = self.license_engine
+        # Pull plan from status or engine validate result
+        plan_name = (status.plan or '') if status else ''
+        if not plan_name and eng and eng.has_license_key():
+            try:
+                vr = eng.validate(eng.get_license_key())
+                vd = vr.get('data', vr)
+                plan_name = vd.get('plan', '') or ''
+            except Exception:
+                pass
+        if not plan_name:
+            plan_name = 'Professional'
+        # Pull license key
         lic_key = (status.license_key or '') if status else ''
-        if lic_key and len(lic_key) > 15:
-            lic_key = lic_key[:4] + '-' + lic_key[4:9] + '-' + lic_key[9:]
+        if not lic_key and eng:
+            try:
+                lic_key = eng.get_license_key() or ''
+            except Exception:
+                pass
+        if lic_key and len(lic_key) > 12:
+            formatted = ''
+            for i, ch in enumerate(lic_key):
+                if i > 0 and i % 4 == 0:
+                    formatted += '-'
+                formatted += ch
+            lic_key = formatted
+        # Pull expiry date
         expiry = (status.expiry_date or '') if status else ''
+        if not expiry and eng and eng.has_license_key():
+            try:
+                vr = eng.validate(eng.get_license_key())
+                vd = vr.get('data', vr)
+                expiry = vd.get('expiry_date', '') or ''
+            except Exception:
+                pass
         if expiry and 'T' in expiry:
             try:
                 from datetime import datetime
