@@ -615,6 +615,7 @@ class ZEMmacOSUI:
         rows = [
             ("status", "Status", "--"),
             ("plan", "Plan", "--"),
+            ("license_key", "License Number", "--"),
             ("validity", "Validity", "--"),
             ("expiry", "Valid until", "--"),
         ]
@@ -664,7 +665,6 @@ class ZEMmacOSUI:
         if not hasattr(self, '_dashboard_license_widgets'):
             return
         w = self._dashboard_license_widgets
-        # Guard: widgets may have been destroyed by page switch or app shutdown
         try:
             key = next(iter(w))
             if not w[key] or not w[key].winfo_exists():
@@ -677,17 +677,19 @@ class ZEMmacOSUI:
 
         try:
             if status_obj and status_obj.valid:
+                is_trial = getattr(status_obj, 'trial_active', False)
                 status_text = status_obj.status.upper()
-                if status_obj.trial_active:
-                    fg = colors["warning"]
-                    plan_text = status_obj.plan or 'Trial'
-                else:
-                    fg = colors["success"]
-                    plan_text = status_obj.plan or 'Active'
+                fg = colors["warning"] if is_trial else colors["success"]
+                plan_text = status_obj.plan or ('Trial' if is_trial else 'Active')
+                lic_key = getattr(status_obj, 'license_key', '') or ''
+                if lic_key and len(lic_key) > 15:
+                    lic_key = lic_key[:4] + '-' + lic_key[4:9] + '-' + lic_key[9:]
                 if w.get("status") and w["status"].winfo_exists():
                     w["status"].config(text=status_text, fg=fg)
                 if w.get("plan") and w["plan"].winfo_exists():
                     w["plan"].config(text=plan_text)
+                if w.get("license_key") and w["license_key"].winfo_exists():
+                    w["license_key"].config(text=lic_key or '--')
                 days_left = getattr(status_obj, 'days_left', 0) or 0
                 if w.get("validity") and w["validity"].winfo_exists():
                     w["validity"].config(text=f"{days_left} days remaining")
@@ -702,7 +704,7 @@ class ZEMmacOSUI:
                 elif w.get("expiry") and w["expiry"].winfo_exists():
                     w["expiry"].config(text='--')
             else:
-                for key in ('status', 'plan', 'validity', 'expiry'):
+                for key in ('status', 'plan', 'license_key', 'validity', 'expiry'):
                     if w.get(key) and w[key].winfo_exists():
                         txt = "UNLICENSED" if key == 'status' else '--'
                         fg = colors["error"] if key == 'status' else None
