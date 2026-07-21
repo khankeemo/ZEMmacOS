@@ -355,10 +355,10 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def open_renew_license(self):
         if not self.license_engine:
             return
-        from WSD_SDKToolkit_ZEMMACOS import RenewalDialog
+        from WSD_SDKToolkit_ZEMMACOS.renew_license_dialog import RenewLicenseDialog
         status_obj = self.license_status
         license_key = (status_obj.license_key or '') if status_obj else ''
-        dlg = RenewalDialog(
+        dlg = RenewLicenseDialog(
             self.license_engine,
             license_key=license_key,
             parent=self.root,
