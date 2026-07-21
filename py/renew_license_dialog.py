@@ -30,6 +30,8 @@ class RenewLicenseDialog:
         self._root: Optional[tk.Toplevel] = None
         self._verified = False
         self._license_data: Dict[str, Any] = {}
+        self._product_id = ''
+        self._plans_list: list[str] = []
 
         # Theme colours
         self._primary = self.colors.get('primary', '#1e40af')
@@ -212,6 +214,7 @@ class RenewLicenseDialog:
         self._var_plan = tk.StringVar(value='--')
         self._var_lic_status = tk.StringVar(value='--')
         self._var_expiry = tk.StringVar(value='--')
+        self._var_requested_plan = tk.StringVar(value='')
 
         for lbl, var in [('Current Plan', self._var_plan),
                          ('Status', self._var_lic_status),
@@ -223,6 +226,34 @@ class RenewLicenseDialog:
                      width=18, anchor=tk.W).pack(side=tk.LEFT)
             tk.Label(row, textvariable=var, font=('Segoe UI', 11, 'bold'),
                      bg=self._card_bg, fg=self._text).pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Requested Plan dropdown
+        plan_row = tk.Frame(inner, bg=self._card_bg)
+        plan_row.pack(fill=tk.X, pady=(6, 4))
+        tk.Label(plan_row, text='Requested Plan:', font=('Segoe UI', 10, 'bold'),
+                 bg=self._card_bg, fg=self._text_sec,
+                 width=18, anchor=tk.W).pack(side=tk.LEFT)
+        self._plan_dropdown = ttk.Combobox(
+            plan_row, textvariable=self._var_requested_plan,
+            font=('Segoe UI', 11),
+            state='readonly', width=30)
+        self._plan_dropdown.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Support message
+        sup_frame = tk.Frame(inner, bg=self._card_bg)
+        sup_frame.pack(fill=tk.X, pady=(8, 0))
+        tk.Label(sup_frame,
+                 text='Need a custom or enterprise plan?',
+                 font=('Segoe UI', 9, 'bold'),
+                 bg=self._card_bg, fg=self._text_sec).pack(anchor=tk.W)
+        tk.Label(sup_frame,
+                 text='For pricing, upgrades, and additional details, contact:',
+                 font=('Segoe UI', 9),
+                 bg=self._card_bg, fg=self._muted).pack(anchor=tk.W)
+        tk.Label(sup_frame, text=self._support_email,
+                 font=('Segoe UI', 9, 'underline'),
+                 bg=self._card_bg, fg=self._primary,
+                 cursor='hand2').pack(anchor=tk.W)
 
     # ── Renewal Request ──
     def _build_renewal_request(self, parent):
@@ -338,16 +369,46 @@ class RenewLicenseDialog:
         self._root.geometry(f'{w}x{h}+{x}+{y}')
 
     def _set_fields_disabled(self, disabled: bool):
+        # License Number and Verify button ALWAYS remain enabled
         state = tk.DISABLED if disabled else tk.NORMAL
-        for w in (self._entry_key,):
-            w.config(state=state)
-        self._btn_verify.config(state=tk.DISABLED if disabled and not self._verified else tk.NORMAL)
         self._msg_text.config(state=state)
 
-    def _on_close(self):
-        if self._root:
-            self._root.destroy()
-            self._root = None
+    def _fetch_plans(self, product_id: str):
+        """Fetch available plans for the given product from Websmith."""
+        try:
+            import requests as _requests
+            base = self._client.base_url if self._client else ''
+            api_ver = self._client.api_version if self._client else 'v1'
+            url = f"{base}/api/{api_ver}/store/products?id={product_id}"
+            resp = _requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                products = data.get('products', []) if data.get('success') else data.get('products', [])
+                if products:
+                    plans = products[0].get('plans', [])
+                    self._plans_list = [p.get('name', '') for p in plans if p.get('name')]
+                    self._root.after(0, self._populate_plan_dropdown)
+                    return
+            self._root.after(0, lambda: self._populate_plan_dropdown(fallback=True))
+        except Exception:
+            self._root.after(0, lambda: self._populate_plan_dropdown(fallback=True))
+
+    def _populate_plan_dropdown(self, fallback: bool = False):
+        plan_names = self._plans_list if self._plans_list else []
+        if fallback or not plan_names:
+            current = self._var_plan.get()
+            if current and current != '--':
+                plan_names = [current]
+            else:
+                plan_names = []
+        self._plan_dropdown['values'] = plan_names
+        current = self._var_plan.get()
+        if current in plan_names:
+            self._var_requested_plan.set(current)
+        elif plan_names:
+            self._var_requested_plan.set(plan_names[0])
+        else:
+            self._var_requested_plan.set('')
 
     # ------------------------------------------------------------------
     # Actions
@@ -418,6 +479,12 @@ class RenewLicenseDialog:
                 pass
         self._var_expiry.set(expiry)
 
+        # Store product_id and fetch available plans
+        self._product_id = data.get('product_id', '')
+        if self._product_id:
+            import threading
+            threading.Thread(target=self._fetch_plans, args=(self._product_id,), daemon=True).start()
+
         # Enable fields
         self._set_fields_disabled(False)
 
@@ -437,6 +504,10 @@ class RenewLicenseDialog:
         self._var_plan.set('--')
         self._var_lic_status.set('--')
         self._var_expiry.set('--')
+        self._var_requested_plan.set('')
+        self._plan_dropdown['values'] = []
+        self._plans_list = []
+        self._product_id = ''
         self._var_subject.set('License Renewal Request')
         self._var_req_type.set('renew')
         self._msg_text.delete('1.0', tk.END)
@@ -450,8 +521,8 @@ class RenewLicenseDialog:
     def _on_send(self):
         if not self._verified:
             messagebox.showwarning('Not Verified',
-                                   'Verify your license first.',
-                                   parent=self._root)
+                                    'Verify your license first.',
+                                    parent=self._root)
             return
 
         key = self._var_license_key.get().strip()
@@ -461,13 +532,16 @@ class RenewLicenseDialog:
         subject = self._var_subject.get().strip()
         msg = self._msg_text.get('1.0', tk.END).strip()
         req_type = self._var_req_type.get()
+        current_plan = self._var_plan.get()
+        selected_plan = self._var_requested_plan.get()
+        product_id = self._product_id
 
         if not msg or msg == 'Additional details...':
             msg = ''
 
         if not key:
             messagebox.showwarning('Input Required', 'License key is missing.',
-                                   parent=self._root)
+                                    parent=self._root)
             return
 
         self._btn_send.config(state=tk.DISABLED, text='Sending...')
@@ -479,15 +553,20 @@ class RenewLicenseDialog:
                 if sdk is None:
                     raise RuntimeError('SDK client not available')
 
-                resp = sdk.send_renewal_request(
-                    license_key=key,
-                    customer_name=cust_name,
-                    email=email,
-                    mobile=mobile,
-                    subject=subject,
-                    message=msg,
-                    request_type=req_type,
-                )
+                cplan = current_plan if current_plan and current_plan != '--' else selected_plan
+                payload = {
+                    'license_key': key,
+                    'customer_name': cust_name,
+                    'email': email,
+                    'mobile': mobile,
+                    'subject': subject,
+                    'message': msg,
+                    'request_type': req_type,
+                    'current_plan': cplan,
+                    'selected_plan': selected_plan,
+                    'product_id': product_id,
+                }
+                resp = sdk._request('license/send-renewal-request', payload)
                 self._root.after(0, lambda: self._send_done(resp))
 
             except Exception as exc:
