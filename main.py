@@ -342,9 +342,20 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.license_engine._license_key = key
                 self.license_engine._cache.save_license_key(key)
             self.log_live("ACTIVATION", "SUCCESS", "Activation successful — refreshing license state")
-            self.license_status = self.license_engine.initialize()
-            self._update_all_license_ui()
-            self._show_stylish_activation_success()
+
+            def _refresh():
+                try:
+                    new_status = self.license_engine.initialize()
+                    if new_status is not None:
+                        self.license_status = new_status
+                    self.root.after(0, self._update_all_license_ui)
+                    self.root.after(0, self._show_stylish_activation_success)
+                    self.log_live("ACTIVATION", "SUCCESS", "License refresh completed after activation")
+                except Exception as e:
+                    self.log_live("ACTIVATION", "ERROR", f"License refresh error after activation: {e}")
+                    self.root.after(0, self._show_stylish_activation_success)
+
+            threading.Thread(target=_refresh, daemon=True).start()
         elif r and r.get('cancelled'):
             self.log_live("ACTIVATION", "WARNING", "Activation cancelled")
         return r
@@ -363,7 +374,19 @@ class ZEMmacOSApp(ZEMmacOSUI):
             license_key=license_key,
             parent=self.root,
         )
-        dlg.show()
+        result = dlg.show()
+        if result:
+            self.log_live("RENEWAL", "SUCCESS", "Renewal request submitted — refreshing license state")
+            def _refresh_renew():
+                try:
+                    new_status = self.license_engine.initialize()
+                    if new_status is not None:
+                        self.license_status = new_status
+                    self.root.after(0, self._update_all_license_ui)
+                    self.log_live("RENEWAL", "SUCCESS", "License refreshed after renew")
+                except Exception as e:
+                    self.log_live("RENEWAL", "ERROR", f"License refresh error after renew: {e}")
+            threading.Thread(target=_refresh_renew, daemon=True).start()
 
     def _show_stylish_activation_success(self):
         status = self.license_status

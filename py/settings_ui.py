@@ -4,7 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 import os
 import platform
 from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutDialog as SDKAboutDialog
-from renew_license_dialog import RenewLicenseDialog
+from WSD_SDKToolkit_ZEMMACOS.renew_license_dialog import RenewLicenseDialog
 
 class SettingsUI:
     def __init__(self, parent, app_instance):
@@ -427,15 +427,10 @@ class SettingsUI:
             return
         status_obj = getattr(self.app, 'license_status', None) if hasattr(self.app, 'license_status') else None
         license_key = (status_obj.license_key or '') if status_obj else ''
-        customer_name = (status_obj.customer_name or '') if status_obj else ''
-        email = (status_obj.customer_email or '') if status_obj else ''
-        mobile = getattr(status_obj, 'customer_mobile', '') if status_obj else ''
         dlg = RenewLicenseDialog(
-            self.app.root, engine,
+            engine,
             license_key=license_key,
-            customer_name=customer_name,
-            email=email,
-            mobile=mobile,
+            parent=self.app.root,
         )
         dlg.show()
 
