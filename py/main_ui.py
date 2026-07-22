@@ -499,6 +499,89 @@ class ZEMmacOSUI:
                                  cleanup,
                                  cx + 8, by, bw, bh)
 
+    # -----------------------------------------------------------------
+    # AWS-01: Inactive License Dialog
+    # -----------------------------------------------------------------
+    def _show_inactive_license_dialog(self):
+        if getattr(self, "_inactive_license_dialog_open", False):
+            return
+        self._inactive_license_dialog_open = True
+
+        c = self.colors
+        W, H = 380, 320
+
+        def cleanup():
+            self._inactive_license_dialog_open = False
+            if hasattr(self, "_inactive_license_dialog") and self._inactive_license_dialog:
+                try:
+                    self._inactive_license_dialog.destroy()
+                except Exception:
+                    pass
+                self._inactive_license_dialog = None
+
+        d, canvas = self._make_modal_dialog(W, H, close_cb=cleanup)
+        self._inactive_license_dialog = d
+        cx = W // 2
+
+        canvas.create_oval(cx - 18, 24, cx + 18, 60,
+                           fill=c["error"], outline="")
+        canvas.create_text(cx, 42, text="!",
+                           font=("SF Pro Display", 22, "bold"),
+                           fill="white", anchor="center")
+
+        canvas.create_text(cx, 88, text="License Inactive",
+                           font=("SF Pro Display", 16, "bold"),
+                           fill=c["text"], anchor="center")
+        canvas.create_text(cx, 110, text="Device Not Registered",
+                           font=("SF Pro Text", 11),
+                           fill=c["text_secondary"], anchor="center")
+
+        canvas.create_text(cx, 148, text="License inactive or device not registered.",
+                           font=("SF Pro Text", 10),
+                           fill=c["text"], anchor="center")
+
+        canvas.create_text(cx, 178, text="Please contact administrator:",
+                           font=("SF Pro Text", 10),
+                           fill=c["muted"], anchor="center")
+        canvas.create_text(cx, 196, text="support@websmithdigital.com",
+                           font=("SF Pro Text", 10, "bold"),
+                           fill=c["accent"], anchor="center")
+
+        canvas.create_line(50, 214, W - 50, 214, fill=c["border"], width=1)
+
+        canvas.create_text(cx, 232, text="OR",
+                           font=("SF Pro Text", 10, "bold"),
+                           fill=c["muted"], anchor="center")
+
+        canvas.create_text(cx, 252, text="Activate using another registered license.",
+                           font=("SF Pro Text", 10),
+                           fill=c["text"], anchor="center")
+
+        bw, bh = 140, 34
+        by = 276
+
+        self._make_dialog_button(d, "Contact Support", c["accent"], "white",
+                                  lambda: self._on_contact_support(),
+                                  cx - bw - 6, by, bw, bh)
+        self._make_dialog_button(d, "Activate License", c["success"], "white",
+                                  lambda: self._on_activate_from_inactive(),
+                                  cx + 6, by, bw, bh)
+
+    def _on_contact_support(self):
+        self.root.clipboard_clear()
+        self.root.clipboard_append("support@websmithdigital.com")
+        self.show_toast("Support email copied to clipboard", "info", 2000)
+
+    def _on_activate_from_inactive(self):
+        if hasattr(self, "_inactive_license_dialog") and self._inactive_license_dialog:
+            try:
+                self._inactive_license_dialog.destroy()
+            except Exception:
+                pass
+            self._inactive_license_dialog = None
+            self._inactive_license_dialog_open = False
+        self._on_activate_license()
+
     # ---- Dashboard ----
 
     def show_dashboard(self):

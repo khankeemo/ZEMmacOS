@@ -245,6 +245,38 @@ class ZEMmacOSApp(ZEMmacOSUI):
         else:
             self.log_live("WELCOME", "INFO", f"Server returned {status.status if status else 'None'} — opening welcome dialog")
             self.root.after(200, self._run_welcome_flow)
+        self.root.after(500, self._check_aws01_condition)
+
+    # -----------------------------------------------------------------
+    # AWS-01: Inactive License + Unbound Hardware Detection
+    # -----------------------------------------------------------------
+    def _check_aws01_condition(self):
+        if not self.license_engine or not self.license_status:
+            return
+        if self.license_status.valid or self.license_status.status == 'trial':
+            return
+        if not self.license_engine.has_license_key():
+            return
+        if getattr(self, '_inactive_license_dialog_open', False):
+            return
+
+        self.log_live("AWS01", "INFO", "Checking AWS-01 condition")
+
+        def do():
+            try:
+                result = self.license_engine.validate()
+                data = result.get('data', result)
+                status_str = (data.get('status', '') or '').upper()
+                hw_id = data.get('hardware_id')
+                if status_str == 'INACTIVE' and not hw_id:
+                    self.log_live("AWS01", "WARNING", "License inactive & hardware unbound — showing dialog")
+                    self.root.after(0, self._show_inactive_license_dialog)
+                else:
+                    self.log_live("AWS01", "INFO", "AWS-01 condition not met")
+            except Exception as e:
+                self.log_live("AWS01", "ERROR", f"AWS-01 check failed: {e}")
+
+        threading.Thread(target=do, daemon=True).start()
 
     # -----------------------------------------------------------------
     # UI LOCK / UNLOCK
@@ -518,6 +550,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     self.license_status = new_status
                     self.root.after(0, self._update_all_license_ui)
                     self.log_live("ACTIVATION", "SUCCESS", "License refresh completed")
+                    self.root.after(100, self._check_aws01_condition)
                 else:
                     self.log_live("ACTIVATION", "WARNING", "License refresh returned None - keeping previous data")
             except Exception as e:
@@ -536,6 +569,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 self.settings_ui._update_license_panel()
         except Exception:
             pass
+        now = time.time()
+        last = getattr(self, '_last_aws01_check', 0)
+        if now - last > 30:
+            self._last_aws01_check = now
+            self._check_aws01_condition()
 
     def _update_validity_countdown(self):
         """Update validity countdown every second."""
