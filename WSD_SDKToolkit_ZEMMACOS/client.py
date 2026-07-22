@@ -234,31 +234,26 @@ class ApiClient:
             return {'success': False, 'error': str(e)}
 
     def get_available_plans(self, license_key: str) -> Dict[str, Any]:
+        import requests as _requests
         payload: Dict[str, Any] = {'license_key': license_key}
-        return self._request('license/available-plans', payload)
-
-    def send_renewal_request(self, license_key: str, customer_name: str = '',
-                             customer_email: str = '', customer_mobile: str = '',
-                             message: str = '', request_type: str = 'renew',
-                             current_plan_id: str = '', current_plan_name: str = '',
-                             requested_plan_id: str = '', requested_plan_name: str = '') -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
-            'license_key': license_key,
-            'customer_name': customer_name,
-            'customer_email': customer_email,
-            'customer_mobile': customer_mobile,
-            'message': message,
-            'request_type': request_type,
-        }
-        if current_plan_id:
-            payload['current_plan_id'] = current_plan_id
-        if current_plan_name:
-            payload['current_plan_name'] = current_plan_name
-        if requested_plan_id:
-            payload['requested_plan_id'] = requested_plan_id
-        if requested_plan_name:
-            payload['requested_plan_name'] = requested_plan_name
-        return self._request('license/send-renewal-request', payload)
+        api_path = f"/api/{self.api_version}/license/verify-renewal"
+        headers = self._sign_request(payload, method='POST', path=api_path, query='')
+        headers['Content-Type'] = 'application/json'
+        url = f"{self.base_url}{api_path}"
+        try:
+            resp = _requests.post(url, json=payload, headers=headers, timeout=self.timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                plans = data.get('available_plans', [])
+                return {
+                    'success': True,
+                    'product': {'id': data.get('product_id', ''), 'name': data.get('product_name', '')},
+                    'current_plan': {'id': data.get('plan_id', ''), 'name': data.get('plan', '')},
+                    'plans': plans,
+                }
+            return {'success': False, 'plans': []}
+        except Exception:
+            return {'success': False, 'plans': []}
 
     def get_products(self) -> Dict[str, Any]:
         import requests as _requests
