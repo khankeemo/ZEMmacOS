@@ -832,4 +832,7 @@ class ActivationDialog:
         except Exception as e:
             self._status_label.config(text=f'Activation error: {str(e)}', fg=self._error)
         finally:
-            self._activate_btn.set_loading(False)
+            try:
+                self._activate_btn.set_loading(False)
+            except tk.TclError:
+                pass
