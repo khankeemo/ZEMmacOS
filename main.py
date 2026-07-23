@@ -359,7 +359,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
         center = UniversalLicenseCenter(config_path=str(config_path))
         result = center.show()
         self.log_live("WELCOME", "INFO", "License center closed")
-        if result and result.get('status') is not None:
+
+        status_dict = result.get('status') if result else None
+        if status_dict and status_dict.get('valid'):
             self.log_live("WELCOME", "SUCCESS", "License session completed — refreshing status")
             self.refresh_license()
             self.root.after(500, self._unlock_ui)
@@ -379,7 +381,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
         result = center.show()
         self.log_live("ACTIVATION", "INFO", f"License center closed")
 
-        if result and result.get('status') is not None:
+        status_dict = result.get('status') if result else None
+        if status_dict and status_dict.get('valid'):
             self.log_live("ACTIVATION", "SUCCESS", "Activation session completed — refreshing license state")
 
             def _refresh():
@@ -423,7 +426,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
         result = center.show()
         self.log_live("RENEWAL", "INFO", "Renewal dialog closed")
 
-        if result and result.get('status') is not None:
+        status_dict = result.get('status') if result else None
+        if status_dict and status_dict.get('valid'):
             self.log_live("RENEWAL", "SUCCESS", "Renewal session completed — refreshing license state")
             def _refresh_renew():
                 try:
@@ -580,6 +584,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self._update_header_license_badge()
         except Exception:
             pass
+        st = getattr(self, 'license_status', None)
+        if st:
+            self._customer_name = st.customer_name or ''
+            self._customer_email = st.customer_email or ''
+            self._customer_mobile = st.customer_mobile or ''
         # Also update settings license panel if open
         try:
             if hasattr(self, 'settings_ui') and self.settings_ui:
