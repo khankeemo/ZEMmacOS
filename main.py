@@ -368,6 +368,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
             cache=self.license_engine._cache
         )
         r = d.show()
+        self.log_live(
+            "ACTIVATION",
+            "INFO",
+            f"Activation dialog result: {r}"
+        )
         if r and r.get('activated'):
             key = r.get('license_key', '')
             if key:
@@ -380,11 +385,33 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     new_status = self.license_engine.initialize()
                     if new_status is not None:
                         self.license_status = new_status
+
                     self.root.after(0, self._update_all_license_ui)
-                    self.root.after(0, self._show_stylish_activation_success)
-                    self.log_live("ACTIVATION", "SUCCESS", "License refresh completed after activation")
+
+                    if r.get("restart_requested"):
+                        self.log_live(
+                            "ACTIVATION",
+                            "INFO",
+                            "Restart requested by activation dialog"
+                        )
+                        self.root.after(0, self._restart_app)
+                    else:
+                        self.root.after(
+                            0,
+                            self._show_stylish_activation_success
+                        )
+
+                    self.log_live(
+                        "ACTIVATION",
+                        "SUCCESS",
+                        "License refresh completed after activation"
+                    )
                 except Exception as e:
-                    self.log_live("ACTIVATION", "ERROR", f"License refresh error after activation: {e}")
+                    self.log_live(
+                        "ACTIVATION",
+                        "ERROR",
+                        f"License refresh error after activation: {e}"
+                    )
                     self.root.after(0, self._show_stylish_activation_success)
 
             threading.Thread(target=_refresh, daemon=True).start()
