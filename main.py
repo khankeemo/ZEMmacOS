@@ -394,7 +394,15 @@ class ZEMmacOSApp(ZEMmacOSUI):
                             "INFO",
                             "Restart requested by activation dialog"
                         )
-                        self.root.after(0, self._restart_app)
+                        def _do_restart():
+                            self.log_live(
+                                "ACTIVATION",
+                                "INFO",
+                                "Entering _restart_app wrapper"
+                            )
+                            self._restart_app()
+
+                        self.root.after(100, _do_restart)
                     else:
                         self.root.after(
                             0,
@@ -525,6 +533,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
                                  on_later, cx + 6, by, bw, bh)
 
     def _restart_app(self):
+        self.log_live("ACTIVATION", "INFO", "Inside _restart_app")
         # Stop the validity countdown BEFORE destroying anything
         self._countdown_running = False
         self.log_live("ACTIVATION", "INFO", "Restarting application to load new license")
