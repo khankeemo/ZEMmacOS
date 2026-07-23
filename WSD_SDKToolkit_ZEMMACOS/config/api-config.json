@@ -14,11 +14,11 @@
   },
   "trial": {
     "enabled": true,
-    "days": 1,
+    "days": 7,
     "require_email": true,
     "require_company": false,
     "auto_convert": true,
-    "message": "Start your 1-day free trial. No credit card required."
+    "message": "Start your 7-day free trial. No credit card required."
   },
   "license": {
     "enabled": true,
@@ -62,7 +62,7 @@
     "primary_color": "#6366f1",
     "secondary_color": "#4f46e5",
     "accent_color": "#8b5cf6",
-    "support_email": "support@websmithdigital.com",
+    "support_email": "support@example.com",
     "support_url": "",
     "labels": {
       "activation_title": "Activate License",
