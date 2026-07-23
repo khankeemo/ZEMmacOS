@@ -1,26 +1,17 @@
-"""ZEM MAC OS SDK - License Management Client"""
+"""ZEM MAC OS SDK - Universal License Center"""
 __version__ = "1.0.0"
 __all__ = [
-    "ApiClient", "ApiError",
+    "UniversalLicenseCenter",
+    "UniversalEmailDialog",
     "LicenseEngine", "LicenseStatus",
+    "ApiClient", "ApiError",
     "HardwareDetector",
     "CacheManager",
-    "WelcomeDialog",
-    "ActivationDialog",
-    "RenewalDialog",
-    "RenewLicenseDialog",
-    "DeviceReplaceDialog",
-    "AboutWidget",
-    "AboutDialog",
 ]
 
 from .client import ApiClient, ApiError
 from .license_engine import LicenseEngine, LicenseStatus
 from .hardware import HardwareDetector
 from .cache import CacheManager
-from .welcome import WelcomeDialog
-from .activation import ActivationDialog
-from .renewal import RenewalDialog
-from .renew_license_dialog import RenewLicenseDialog
-from .device_replace import DeviceReplaceDialog
-from .widgets.about import AboutWidget, AboutDialog
+from .universal_license_center import UniversalLicenseCenter
+from .universal_email_dialog import UniversalEmailDialog

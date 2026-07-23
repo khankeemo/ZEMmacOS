@@ -3,8 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
 import platform
-from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutDialog as SDKAboutDialog
-from WSD_SDKToolkit_ZEMMACOS.renew_license_dialog import RenewLicenseDialog
+
 
 class SettingsUI:
     def __init__(self, parent, app_instance):
@@ -296,12 +295,13 @@ class SettingsUI:
                  bg=self.colors["card_bg"], wraplength=500, justify=tk.LEFT).pack(anchor=tk.W)
 
     def _show_about_dialog(self):
-        engine = getattr(self.app, 'license_engine', None)
-        if not engine:
-            messagebox.showwarning("License Engine", "License engine not initialized.")
-            return
-        dlg = SDKAboutDialog(self.app.root, engine)
-        dlg.show()
+        from WSD_SDKToolkit_ZEMMACOS import UniversalLicenseCenter
+        import os
+        from pathlib import Path
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = Path(base) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
+        center = UniversalLicenseCenter(config_path=str(config_path))
+        center.show()
 
     def _build_license(self):
         inner = self._card(self._content_frame, "License Information")
@@ -425,14 +425,9 @@ class SettingsUI:
         if not engine:
             messagebox.showwarning("License Engine", "License engine not initialized.")
             return
-        status_obj = getattr(self.app, 'license_status', None) if hasattr(self.app, 'license_status') else None
-        license_key = (status_obj.license_key or '') if status_obj else ''
-        dlg = RenewLicenseDialog(
-            engine,
-            license_key=license_key,
-            parent=self.app.root,
-        )
-        dlg.show()
+        act = getattr(self.app, 'open_renew_license', None)
+        if act:
+            act()
 
     def _refresh_license_status(self):
         ref = getattr(self.app, 'refresh_license', None)

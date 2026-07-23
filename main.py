@@ -22,8 +22,7 @@ from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 from live_log import get_live_log
 from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus
-from WSD_SDKToolkit_ZEMMACOS import WelcomeDialog
-from WSD_SDKToolkit_ZEMMACOS import ActivationDialog
+from WSD_SDKToolkit_ZEMMACOS import UniversalLicenseCenter
 
 
 def main():
@@ -352,48 +351,36 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._lock_overlay = None
 
     # -----------------------------------------------------------------
-    # WELCOME FLOW — closes app if dialog cancelled
+    # UNIVERSAL LICENSE CENTER FLOW
     # -----------------------------------------------------------------
     def _run_welcome_flow(self):
-        self.log_live("WELCOME", "INFO", "Opening welcome dialog")
-        d = WelcomeDialog(
-            self.license_engine._client,
-            product_name='ZEM MAC OS',
-            cache=self.license_engine._cache
-        )
-        result = d.show()
-        if result and result.get('onboarding_complete'):
-            self.log_live("WELCOME", "SUCCESS", "Onboarding completed — fetching server status")
+        self.log_live("WELCOME", "INFO", "Opening Universal License Center")
+        config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
+        center = UniversalLicenseCenter(config_path=str(config_path))
+        result = center.show()
+        self.log_live("WELCOME", "INFO", "License center closed")
+        if result and result.get('status') is not None:
+            self.log_live("WELCOME", "SUCCESS", "License session completed — refreshing status")
             self.refresh_license()
             self.root.after(500, self._unlock_ui)
         else:
-            self.log_live("WELCOME", "WARNING", "Welcome dialog closed without completing registration")
+            self.log_live("WELCOME", "WARNING", "License center closed without completing registration")
             self._shutdown_app()
 
     # -----------------------------------------------------------------
-    # ACTIVATION FLOW — auto-closes dialog, persists license, restarts app
+    # ACTIVATION FLOW — uses Universal License Center
     # -----------------------------------------------------------------
     def open_activation(self, license_key=None):
         if not self.license_engine:
             return
-        self.log_live("ACTIVATION", "INFO", "Activation dialog opened")
-        d = ActivationDialog(
-            self.license_engine._client,
-            product_name='ZEM MAC OS',
-            cache=self.license_engine._cache
-        )
-        r = d.show()
-        self.log_live(
-            "ACTIVATION",
-            "INFO",
-            f"Activation dialog result: {r}"
-        )
-        if r and r.get('activated'):
-            key = r.get('license_key', '')
-            if key:
-                self.license_engine._license_key = key
-                self.license_engine._cache.save_license_key(key)
-            self.log_live("ACTIVATION", "SUCCESS", "Activation successful — refreshing license state")
+        self.log_live("ACTIVATION", "INFO", "Opening Universal License Center for activation")
+        config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
+        center = UniversalLicenseCenter(config_path=str(config_path))
+        result = center.show()
+        self.log_live("ACTIVATION", "INFO", f"License center closed")
+
+        if result and result.get('status') is not None:
+            self.log_live("ACTIVATION", "SUCCESS", "Activation session completed — refreshing license state")
 
             def _refresh():
                 try:
@@ -403,26 +390,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
                     self.root.after(0, self._update_all_license_ui)
 
-                    if r.get("restart_requested"):
-                        self.log_live(
-                            "ACTIVATION",
-                            "INFO",
-                            "Restart requested by activation dialog"
-                        )
-                        def _do_restart():
-                            self.log_live(
-                                "ACTIVATION",
-                                "INFO",
-                                "Entering _restart_app wrapper"
-                            )
-                            self._restart_app()
-
-                        self.root.after(100, _do_restart)
-                    else:
-                        self.root.after(
-                            0,
-                            self._show_stylish_activation_success
-                        )
+                    if self.license_status and self.license_status.valid:
+                        self.root.after(0, self._show_stylish_activation_success)
 
                     self.log_live(
                         "ACTIVATION",
@@ -438,27 +407,24 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     self.root.after(0, self._show_stylish_activation_success)
 
             threading.Thread(target=_refresh, daemon=True).start()
-        elif r and r.get('cancelled'):
-            self.log_live("ACTIVATION", "WARNING", "Activation cancelled")
-        return r
+        else:
+            self.log_live("ACTIVATION", "WARNING", "Activation dialog cancelled")
+        return result
 
     # -----------------------------------------------------------------
-    # RENEW FLOW
+    # RENEW FLOW — uses Universal License Center
     # -----------------------------------------------------------------
     def open_renew_license(self):
         if not self.license_engine:
             return
-        from WSD_SDKToolkit_ZEMMACOS.renew_license_dialog import RenewLicenseDialog
-        status_obj = self.license_status
-        license_key = (status_obj.license_key or '') if status_obj else ''
-        dlg = RenewLicenseDialog(
-            self.license_engine,
-            license_key=license_key,
-            parent=self.root,
-        )
-        result = dlg.show()
-        if result:
-            self.log_live("RENEWAL", "SUCCESS", "Renewal request submitted — refreshing license state")
+        self.log_live("RENEWAL", "INFO", "Opening Universal License Center for renewal")
+        config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
+        center = UniversalLicenseCenter(config_path=str(config_path))
+        result = center.show()
+        self.log_live("RENEWAL", "INFO", "Renewal dialog closed")
+
+        if result and result.get('status') is not None:
+            self.log_live("RENEWAL", "SUCCESS", "Renewal session completed — refreshing license state")
             def _refresh_renew():
                 try:
                     new_status = self.license_engine.initialize()

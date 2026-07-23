@@ -41,22 +41,61 @@ from WSD_SDKToolkit_ZEMMACOS import LicenseEngine
 engine = LicenseEngine()
 status = engine.initialize()
 if status.valid:
-    print(f"License valid until {status.expires_at}")
+    print(f"License valid until {status.expiry_date}")
 elif status.status == "trial":
-    print(f"Trial active, {status.days_remaining} days remaining")
+    print(f"Trial active, {status.days_left} days remaining")
 else:
     print(f"Status: {status.status} - {status.message}")
+```
+
+### Launch Universal License Center
+
+```python
+from WSD_SDKToolkit_ZEMMACOS import LicenseEngine
+from WSD_SDKToolkit_ZEMMACOS.universal_license_center import UniversalLicenseCenter
+
+engine = LicenseEngine()
+status = engine.initialize()
+
+center = UniversalLicenseCenter(engine)
+center.show()
+```
+
+### Send Request via Email Dialog
+
+```python
+from WSD_SDKToolkit_ZEMMACOS.license_engine import LicenseEngine
+from WSD_SDKToolkit_ZEMMACOS.universal_email_dialog import UniversalEmailDialog
+
+engine = LicenseEngine()
+engine.initialize()
+
+dialog = UniversalEmailDialog(
+    engine._client.config, engine._client,
+    engine._hardware, engine._cache
+)
+result = dialog.show(
+    "SUPPORT",
+    customer_name="John Doe",
+    customer_email="john@example.com",
+    message_text="I need help with activation"
+)
+if result.get("sent"):
+    print("Request sent successfully")
 ```
 
 ### Start Trial
 
 ```python
 engine = LicenseEngine()
+engine.initialize()
+
 result = engine.start_trial("user@example.com", customer_name="John Doe")
 if result.get("success"):
     print("Trial started successfully")
     status = engine.get_status()
-    print(f"Days remaining: {status.days_remaining}")
+    if status:
+        print(f"Days remaining: {status.days_left}")
 ```
 
 ### Convert Trial to License
@@ -80,7 +119,9 @@ engine = LicenseEngine()
 result = engine.activate("XXXXX-XXXXX-XXXXX-XXXXX")
 if result.get("success"):
     print("License activated")
-    print(f"Plan: {engine.get_status().plan}")
+    status = engine.get_status()
+    if status:
+        print(f"Plan: {status.plan}")
 ```
 
 ### Renew License
@@ -88,9 +129,6 @@ if result.get("success"):
 ```python
 engine = LicenseEngine()
 status = engine.initialize()
-if not status.valid:
-    print("Please activate your license first")
-    engine.activate("XXXXX-XXXXX-XXXXX-XXXXX")
 
 try:
     result = engine.renew()
@@ -110,29 +148,8 @@ try:
     result = engine.replace_hardware()
     if result.get("success"):
         print("Hardware replaced")
-except ValueError:
-    print("Please re-enter your license key")
-    engine.activate("XXXXX-XXXXX-XXXXX-XXXXX")
-    result = engine.replace_hardware()
-```
-
-### Show Welcome Dialog
-
-```python
-from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, WelcomeDialog
-
-engine = LicenseEngine()
-status = engine.initialize()
-if not status.valid:
-    result = WelcomeDialog(engine._client, product_name="ZEM MAC OS").show()
-    if result.get("onboarding_complete"):
-        print("Onboarding done for:", result["email"])
-        status = engine.initialize()
-        print(f"Trial active: {status.days_remaining} days")
-    elif result.get("skipped"):
-        print("Onboarding skipped — application will close")
-        import sys
-        sys.exit(0)
+except ValueError as e:
+    print(f"Error: {e}")
 ```
 
 ### Deactivate License
@@ -218,55 +235,48 @@ The SDK communicates with the following Neon PostgreSQL tables managed by Websmi
 | `trials` | Active trials (`id`, `customer_id`, `hardware_id`, `expires_at`) |
 | `licenses` | License records (`id`, `license_key`, `customer_id`, `expires_at`, `status`) |
 
-## Welcome Flow
+## Email Request Flow
 
-When a customer runs the application for the first time, the SDK orchestrates this flow:
+All customer communications flow through the Universal Email Dialog backed by `POST /api/v1/request`.
 
 ```
-Application starts
+User clicks action button (e.g. "Contact Support")
         ↓
-LicenseEngine.initialize()
+UniversalEmailDialog opens (pre-filled with context)
         ↓
-No license/trial found
+User enters name, email, subject, message
         ↓
-Welcome dialog opens
+POST /api/v1/request (type: SUPPORT, BUY, RENEW, etc.)
         ↓
-Customer enters email
+Websmith Internal API receives and validates
         ↓
-Send OTP
+Email Service sends to support@websmithdigital.com
         ↓
-Verify OTP
-        ↓
-Select country
-        ↓
-Enter name + mobile
-        ↓
-Create customer row in Neon PostgreSQL
-        ↓
-Start trial (trials row + otp_verifications updated)
-        ↓
-Application opens
+Support team responds via email
 ```
 
 **Rules:**
-- Close dialog (X) → `sys.exit(0)` — entire application closes
-- OTP not verified → Start Trial button stays disabled
-- OTP verified + dialog closed before trial → application exits
-- Trial created → application opens normally
+- SDK never sends SMTP email directly
+- All request types use the same endpoint: `POST /api/v1/request`
+- Customer name and email are auto-populated from cache if available
+- Hardware ID, license key, and plan are auto-populated from context
 
 **Integration pattern:**
 
 ```python
-from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, WelcomeDialog
+from WSD_SDKToolkit_ZEMMACOS.license_engine import LicenseEngine
+from WSD_SDKToolkit_ZEMMACOS.universal_email_dialog import UniversalEmailDialog
 
 engine = LicenseEngine()
-status = engine.initialize()
-if not status.valid:
-    result = WelcomeDialog(engine._client).show()
-    if result.get("skipped") and not result.get("onboarding_complete"):
-        import sys
-        sys.exit(0)  # User closed dialog or declined
-    status = engine.initialize()  # Re-check after onboarding
+engine.initialize()
+
+dialog = UniversalEmailDialog(
+    engine._client.config, engine._client,
+    engine._hardware, engine._cache
+)
+result = dialog.show("SUPPORT", customer_name="John", customer_email="john@example.com")
+if result.get("sent"):
+    print("Support request sent")
 ```
 
 ## SDK Architecture
@@ -274,27 +284,28 @@ if not status.valid:
 The SDK follows this layered architecture:
 
 ```
-┌─────────────────────────────────────────────┐
-│               Your Application               │
-├─────────────────────────────────────────────┤
-│  WelcomeDialog  │  Widgets  │  LicenseEngine │
-├─────────────────────────────────────────────┤
-│  CacheManager    │   HardwareFingerprint     │
-├─────────────────────────────────────────────┤
-│          ApiClient (HMAC-signed)             │
-├─────────────────────────────────────────────┤
-│       Websmith Internal API (REST)           │
-├─────────────────────────────────────────────┤
-│              Neon PostgreSQL                 │
-└─────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│               Your Application                      │
+├────────────────────────────────────────────────────┤
+│  UniversalLicenseCenter  │  UniversalEmailDialog    │
+│  (full Tkinter GUI)      │  (single email form)    │
+├────────────────────────────────────────────────────┤
+│  LicenseEngine  │  CacheManager  │  HardwareDetector │
+├────────────────────────────────────────────────────┤
+│               ApiClient (HMAC-signed)               │
+├────────────────────────────────────────────────────┤
+│            Websmith Internal API (REST)             │
+├────────────────────────────────────────────────────┤
+│          PostgreSQL + Email Service                 │
+└────────────────────────────────────────────────────┘
 ```
 
 ## Developer Responsibilities
 
 - ✅ Call `engine.initialize()` on application startup
-- ✅ Handle the `WelcomeDialog` for new customer onboarding
+- ✅ Launch `UniversalLicenseCenter` for full license management
 - ❌ Do NOT hardcode trial days, country lists, or license rules
-- ❌ Do NOT bypass OTP verification
+- ❌ Do NOT bypass API request validation
 - ❌ Do NOT patch or modify generated SDK files
 
 ## License

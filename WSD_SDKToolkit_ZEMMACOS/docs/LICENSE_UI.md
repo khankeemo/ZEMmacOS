@@ -1,97 +1,68 @@
 # License UI Components
 
-## Welcome Dialog
+## Universal License Center
 
-**File:** `welcome.py`
+**File:** `universal_license_center.py`
 
-Handles trial onboarding on first launch.
+**Purpose:** Primary Tkinter GUI for all license management operations.
 
-**Fields:** Name, Email, Mobile, Country, Company
+**Status Display:**
+- License status (Active / Trial / Unlicensed)
+- Plan name
+- Expiry date
+- Days remaining
+- Hardware ID
+- Customer name and email
 
-**Buttons:** Send OTP, Verify OTP
+**Buttons:**
+| Button | Opens | Request Type |
+|--------|-------|-------------|
+| View License Status | Status panel | — |
+| Start Free Trial | Email dialog | TRIAL |
+| Activate License | Email dialog | ACTIVATION |
+| Buy License | Email dialog | BUY |
+| Renew License | Email dialog | RENEW |
+| Replace Device | Email dialog | DEVICE_REPLACEMENT |
+| Hardware Issue | Email dialog | HARDWARE |
+| Contact Support | Email dialog | SUPPORT |
+| Request History | History view | — |
 
-**Flow:**
-1. Collect customer information
-2. Send OTP to email
-3. Verify OTP code
-4. Register customer
-5. Start trial automatically
-6. Bind hardware automatically
+## Universal Email Dialog
 
-**Security:** Closing the Welcome dialog closes the entire application.
+**File:** `universal_email_dialog.py`
 
-## Activation Dialog
+**Purpose:** Single reusable email form for all request types.
 
-**File:** `activation.py`
+**Fields:**
+- Your Name (required)
+- Your Email (required)
+- License Key (auto-populated if available)
+- Plan (auto-populated if available)
+- Subject (auto-generated from request type)
+- Message (required)
 
-Handles license key activation for purchased licenses.
+**Request Types:**
+`BUY`, `RENEW`, `SUPPORT`, `ACTIVATION`, `DEVICE_REPLACEMENT`, `HARDWARE`, `GENERAL`
 
-**Displays:**
-- Product name and version
-- Hardware ID and device name
-- License key text field
-- Plan name, expiry date, remaining days, device count
+**API:** All types use `POST /api/v1/request`
 
-**Buttons:** Activate, Renew, Replace Device
+## Import Pattern
 
-**Flow:**
-1. Generate hardware fingerprint automatically
-2. Enable license textbox (disabled until hardware is ready)
-3. Enter license key
-4. Fetch license details automatically
-5. Click Activate
-6. Hardware binds automatically
-7. Cache refreshes
+```python
+from WSD_SDK_PROJECTNAME_PRODUCTID import UniversalLicenseCenter, UniversalEmailDialog
+from WSD_SDK_PROJECTNAME_PRODUCTID.license_engine import LicenseEngine
 
-## Renewal Dialog
+engine = LicenseEngine()
+status = engine.initialize()
 
-**File:** `renewal.py`
+# Full GUI
+center = UniversalLicenseCenter(engine)
+center.show()
 
-Handles license renewal.
-
-**Displays:**
-- Current plan and expiry
-- Available plans from API
-
-**API:**
-- `GET /api/v1/plans`
-- `POST /api/v1/license/renew`
-
-## Device Replacement Dialog
-
-**File:** `device_replace.py`
-
-Handles transferring a license to another machine.
-
-**Displays:**
-- Old hardware ID
-- New hardware ID (auto-generated)
-- Device name field
-
-**API:** `POST /api/v1/license/replace-device`
-
-## Widgets
-
-### LicenseWidget
-- **File:** `widgets/dashboard_widget.py`
-- **Placement:** Dashboard top-right corner
-- **Contents:** License status, remaining days, expiry, hardware status
-- **Auto-refresh:** Every 60 seconds
-
-### SettingsWidget
-- **File:** `widgets/settings_widget.py`
-- **Placement:** Settings > License
-- **Contents:** Full license details panel with action buttons
-
-### StatusWidget
-- **File:** `widgets/status_widget.py`
-- **Placement:** Status bar
-- **Contents:** Compact status indicator with colored icon
-
-### ActivationButton
-- **File:** `widgets/activation_button.py`
-- **Placement:** Any toolbar
-- **Contents:** One-click activation button
+# Direct email dialog
+dialog = UniversalEmailDialog(engine._config, engine._client, engine._hardware, engine._cache)
+result = dialog.show("SUPPORT", customer_name="User")
+```
 
 ## Recommended UI Structure
 
@@ -105,9 +76,6 @@ Settings
        ├── Hardware ID
        ├── Expiry
        ├── Remaining Days
-       ├── [Activate]
-       ├── [Renew]
-       ├── [Replace Device]
-       ├── [Refresh]
-       └── [Open Welcome]
+       ├── [Launch License Center]
+       └── [Refresh]
 ```

@@ -120,6 +120,25 @@ class ApiClient:
                 raise ApiError(500, f'Request failed: {str(e)}')
         raise ApiError(500, f'Failed after {max_retries} retries')
 
+    def send_request(self, request_type: str, customer_name: str, customer_email: str,
+                     subject: str = '', message: str = '',
+                     license_key: str = '', hardware_id: str = '',
+                     plan_name: str = '', product_name: str = '') -> Dict[str, Any]:
+        payload = {
+            'request_type': request_type,
+            'customer_name': customer_name,
+            'customer_email': customer_email,
+            'product_name': product_name or self.config.get('product', {}).get('name', ''),
+            'plan_name': plan_name,
+            'license_key': license_key,
+            'hardware_id': hardware_id or self._get_hardware_id(),
+            'sdk_version': SDK_VERSION,
+            'runtime_type': RUNTIME_TYPE,
+            'subject': subject or f'{request_type} Request',
+            'message': message or f'{request_type} request from SDK',
+        }
+        return self._request('request', payload)
+
     def validate_license(self, license_key: str, hardware_id: Optional[str] = None) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
@@ -266,31 +285,13 @@ class ApiClient:
         except Exception:
             return {'success': False, 'products': []}
 
-    def update_customer(self, name: str, email: str, phone: str,
-                         hardware_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_request_history(self, email: str) -> Dict[str, Any]:
         import requests as _requests
-        if hardware_id is None:
-            hardware_id = self._get_hardware_id()
-        url = f"{self.base_url}/api/{self.api_version}/customer/register"
-        payload = {
-            'name': name,
-            'email': email,
-            'mobile': phone,
-            'hardware_id': hardware_id,
-        }
+        url = f"{self.base_url}/api/{self.api_version}/request?email={email}"
         try:
-            resp = _requests.post(
-                url, json=payload,
-                headers={'X-API-Key': self.api_key,
-                         'Content-Type': 'application/json'},
-                timeout=self.timeout
-            )
+            resp = _requests.get(url, timeout=self.timeout)
             if resp.status_code == 200:
-                data = resp.json()
-                if data.get('success') and self._cache:
-                    self._cache.invalidate_license_status()
-                return data
-            return {'success': False,
-                    'error': resp.json().get('error', f'HTTP {resp.status_code}')}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+                return resp.json()
+            return {'success': False, 'requests': []}
+        except Exception:
+            return {'success': False, 'requests': []}

@@ -7,44 +7,47 @@
 │ Developer Application                               │
 │  ┌───────────────────────────────────────────────┐  │
 │  │ WSD SDK                                       │  │
-│  │  ┌─────────┐ ┌──────────┐ ┌───────────────┐  │  │
-│  │  │ Welcome │ │Activation│ │Device Replace  │  │  │
-│  │  │ Dialog  │ │ Dialog   │ │ Dialog        │  │  │
-│  │  └─────────┘ └──────────┘ └───────────────┘  │  │
-│  │  ┌─────────┐ ┌──────────┐ ┌───────────────┐  │  │
-│  │  │Renewal  │ │ License  │ │  Widgets      │  │  │
-│  │  │ Dialog  │ │ Engine   │ │  (4 widgets)  │  │  │
-│  │  └─────────┘ └──────────┘ └───────────────┘  │  │
-│  │  ┌─────────┐ ┌──────────┐ ┌───────────────┐  │  │
-│  │  │Hardware │ │  Cache   │ │  API Client   │  │  │
-│  │  │ Manager │ │  Manager │ │  (HMAC auth)  │  │  │
-│  │  └─────────┘ └──────────┘ └───────────────┘  │  │
-│  └───────────────────────────────────────────────┘  │
-└──────────────────────┬──────────────────────────────┘
-                       │ HTTPS + HMAC
-                       ▼
+│  │  ┌─────────────────────────────────────┐     │  │
+│  │  │ Universal License Center (Tkinter)  │     │  │
+│  │  │  • Status Panel                     │     │  │
+│  │  │  • Action Buttons (9)               │     │  │
+│  │  └──────────────┬──────────────────────┘     │  │
+│  │                 │ opens                      │  │
+│  │  ┌──────────────▼──────────────────────┐     │  │
+│  │  │ Universal Email Dialog              │     │  │
+│  │  │ (single form — all request types)   │     │  │
+│  │  └──────────────┬──────────────────────┘     │  │
+│  │  ┌─────────┐ ┌───────┐ ┌──────────────┐     │  │
+│  │  │License  │ │Cache  │ │Hardware      │     │  │
+│  │  │Engine   │ │Manager│ │Detector      │     │  │
+│  │  └────┬────┘ └───────┘ └──────────────┘     │  │
+│  │  ┌────▼────┐                               │  │
+│  │  │ApiClient│ (HMAC-SHA256)                  │  │
+│  │  └────┬────┘                               │  │
+│  └───────┼───────────────────────────────────┘  │
+└──────────┼──────────────────────────────────────┘
+           │ HTTPS + HMAC
+           ▼
 ┌─────────────────────────────────────────────────────┐
 │ Websmith Internal API                                │
-│  ┌──────────┐ ┌──────────┐ ┌───────────────────┐   │
-│  │ Auth     │ │ License  │ │ Trial             │   │
-│  │ (OTP)    │ │ (CRUD)   │ │ (Management)      │   │
-│  └──────────┘ └──────────┘ └───────────────────┘   │
+│  ┌───────────┐ ┌──────────┐ ┌───────────────────┐  │
+│  │ /api/v1/  │ │ License  │ │ Trial             │  │
+│  │ request   │ │ (CRUD)   │ │ (Management)      │  │
+│  └───────────┘ └──────────┘ └───────────────────┘  │
 │  ┌──────────┐ ┌──────────┐ ┌───────────────────┐   │
 │  │ Customer │ │ Plans    │ │ Admin             │   │
 │  │ (Store)  │ │ (Pricing)│ │ (Dashboard)       │   │
 │  └──────────┘ └──────────┘ └───────────────────┘   │
 └──────────────────────┬──────────────────────────────┘
-                       │ SQL
-                       ▼
+           │ SQL + Email Service
+           ▼
 ┌─────────────────────────────────────────────────────┐
-│ PostgreSQL (Neon)                                    │
+│ PostgreSQL (Neon) + Email Service                    │
 │  ┌──────────┐ ┌──────────┐ ┌───────────────────┐   │
-│  │ customers│ │ licenses │ │ trials             │   │
+│  │ customers│ │ licenses │ │ email_queue       │   │
 │  ├──────────┤ ├──────────┤ ├───────────────────┤   │
-│  │ products │ │ plans    │ │ activations        │   │
-│  ├──────────┤ ├──────────┤ ├───────────────────┤   │
-│  │ otp_     │ │ audit_   │ │ developer_api_keys │   │
-│  │ verif.   │ │ logs     │ │                    │   │
+│  │ products │ │ plans    │ │ support@          │   │
+│  │          │ │          │ │ websmithdigital   │   │
 │  └──────────┘ └──────────┘ └───────────────────┘   │
 └─────────────────────────────────────────────────────┘
 ```
@@ -58,40 +61,41 @@
 | Cache Manager | `cache.py` | Local status cache |
 | Hardware Detector | `hardware.py` | Machine fingerprint |
 | Crypto Utils | `crypto.py` | HMAC signature generation |
-| Welcome Dialog | `welcome.py` | Trial onboarding UI |
-| Activation Dialog | `activation.py` | License activation UI |
-| Renewal Dialog | `renewal.py` | License renewal UI |
-| Device Replace | `device_replace.py` | Device transfer UI |
-| Dashboard Widget | `widgets/dashboard_widget.py` | Status display |
-| Settings Widget | `widgets/settings_widget.py` | License management |
-| Status Widget | `widgets/status_widget.py` | Compact indicator |
-| Activation Button | `widgets/activation_button.py` | Quick activation |
+| Universal License Center | `universal_license_center.py` | Full Tkinter license GUI |
+| Universal Email Dialog | `universal_email_dialog.py` | Single email form for all requests |
 
-## Data Flow
+## Data Flows
 
-### Trial Onboarding
+### Email Request (all types)
 ```
-User enters info → Send OTP → Verify OTP → Register Customer → Start Trial → Bind Hardware
+UniversalEmailDialog.show("SUPPORT", ...)
+        ↓
+POST /api/v1/request (BUY|RENEW|SUPPORT|ACTIVATION|DEVICE_REPLACEMENT|HARDWARE|GENERAL)
+        ↓
+Websmith Internal API validates and queues
+        ↓
+Email Service sends to support@websmithdigital.com
 ```
 
 ### License Activation
 ```
-User enters key → Fetch details → Verify → Activate → Bind Hardware → Cache Status
+User clicks "Activate License" in UniversalLicenseCenter
+        ↓
+UniversalEmailDialog opens (pre-filled with ACTIVATION type)
+        ↓
+User submits form → POST /api/v1/request
+        ↓
+Support team processes and sends license key
 ```
 
 ### Startup
 ```
-Load cache → Check onboarding → Check trial → Check license → Validate hardware → Open app
+Load cache → Check trial → Check license → Validate hardware → Open app
 ```
 
-### Renewal
+### Trial Start
 ```
-Fetch plans → Select plan → Renew → Update cache
-```
-
-### Device Replacement
-```
-Old hardware → New hardware → Confirm → Replace → Refresh
+User clicks "Start Free Trial" → Email dialog → POST /api/v1/trial → Bind hardware
 ```
 
 ## Technology Stack
@@ -99,6 +103,8 @@ Old hardware → New hardware → Confirm → Replace → Refresh
 - **Client SDK:** Python 3.8+
 - **API:** Next.js serverless (Vercel)
 - **Database:** PostgreSQL (Neon)
+- **Email:** Internal Email Service → support@websmithdigital.com
 - **Auth:** HMAC-SHA256 request signing
 - **Cache:** Local JSON file
 - **Hardware ID:** CPU + machine fingerprint
+- **UI:** Tkinter (built-in)

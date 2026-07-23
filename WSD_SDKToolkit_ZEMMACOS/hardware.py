@@ -100,7 +100,7 @@ class HardwareDetector:
         try:
             with open('/proc/cpuinfo', 'r') as f:
                 content = f.read()
-            serial_match = re.search(r'Serials*:s*([0-9a-f]+)', content, re.IGNORECASE)
+            serial_match = re.search(r'Serial\s*:\s*([0-9a-f]+)', content, re.IGNORECASE)
             if serial_match:
                 return f"cpu-{serial_match.group(1)}"
             vendor = ''

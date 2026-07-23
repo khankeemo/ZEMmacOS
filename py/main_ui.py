@@ -7,7 +7,6 @@ import time
 from PIL import Image, ImageTk, ImageDraw
 from safe_console import SafeConsole
 from modern_widgets import ModernCard, ModernProgressBar, StatusBadge, ThemeToggle, DebugConsole
-from WSD_SDKToolkit_ZEMMACOS.widgets.about import AboutDialog
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -200,11 +199,13 @@ class ZEMmacOSUI:
                 lbl.bind("<Button-1>", lambda e: self._on_about_clicked())
 
     def _on_about_clicked(self):
-        engine = getattr(self, 'license_engine', None)
-        if not engine:
-            return
-        dlg = AboutDialog(self.root, engine)
-        dlg.show()
+        from WSD_SDKToolkit_ZEMMACOS import UniversalLicenseCenter
+        import os
+        from pathlib import Path
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = Path(base) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
+        center = UniversalLicenseCenter(config_path=str(config_path))
+        center.show()
 
     def _nav_click(self, key):
         views = {

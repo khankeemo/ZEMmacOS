@@ -59,11 +59,8 @@ a = Analysis(
         'WSD_SDKToolkit_ZEMMACOS.hardware',
         'WSD_SDKToolkit_ZEMMACOS.cache',
         'WSD_SDKToolkit_ZEMMACOS.license_engine',
-        'WSD_SDKToolkit_ZEMMACOS.welcome',
-        'WSD_SDKToolkit_ZEMMACOS.activation',
-        'WSD_SDKToolkit_ZEMMACOS.renewal',
-        'WSD_SDKToolkit_ZEMMACOS.device_replace',
-        'WSD_SDKToolkit_ZEMMACOS.widgets',
+        'WSD_SDKToolkit_ZEMMACOS.universal_license_center',
+        'WSD_SDKToolkit_ZEMMACOS.universal_email_dialog',
         # Scripts subfolder modules
         'Scripts.run',
         'Scripts.utils',

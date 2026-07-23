@@ -2,7 +2,7 @@
 
 ## What Is WSD SDK?
 
-WSD SDK is a complete plug-and-play license system. Copy the folder, add a dashboard widget, add an activation button, and run your application.
+WSD SDK is a complete plug-and-play license system. Copy the folder, initialize the engine, and run your application. All license operations (activation, trial, renewal, device replacement, support) go through a single Universal Email Dialog backed by `POST /api/v1/request`.
 
 No additional licensing code is required.
 
@@ -17,18 +17,8 @@ WSD_SDK_PROJECTNAME_PRODUCTID/
 ├── crypto.py
 ├── hardware.py
 ├── license_engine.py
-├── welcome.py
-├── activation.py
-├── renewal.py
-├── renew_license_dialog.py
-├── device_replace.py
-├── manifest.json
-
-├── widgets/
-│   ├── dashboard_widget.py
-│   ├── settings_widget.py
-│   ├── status_widget.py
-│   └── activation_button.py
+├── universal_email_dialog.py
+├── universal_license_center.py
 
 ├── config/
 │   └── api-config.json
@@ -52,34 +42,15 @@ WSD_SDK_PROJECTNAME_PRODUCTID/
 
 ```python
 from WSD_SDK_PROJECTNAME_PRODUCTID.license_engine import LicenseEngine
-from WSD_SDK_PROJECTNAME_PRODUCTID.widgets.dashboard_widget import LicenseWidget
-from WSD_SDK_PROJECTNAME_PRODUCTID.widgets.activation_button import ActivationButton
 
 engine = LicenseEngine()
-LicenseWidget(parent).build()
-ActivationButton(parent, engine).build()
-engine.initialize()
+status = engine.initialize()
+print(f"Status: {status.status} — {status.message}")
 ```
 
-## Dashboard
+## Universal License Center
 
-Import:
-
-```python
-from WSD_SDK_PROJECTNAME_PRODUCTID.widgets.dashboard_widget import LicenseWidget
-```
-
-Place in top-right corner.
-
-## Settings
-
-Import:
-
-```python
-from WSD_SDK_PROJECTNAME_PRODUCTID.widgets.settings_widget import SettingsWidget
-```
-
-Place under: `Settings > License`
+The `UniversalLicenseCenter` provides a full-featured Tkinter GUI with one-click access to all license operations. It is the primary user-facing component.
 
 ## Detailed Documentation
 

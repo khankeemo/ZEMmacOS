@@ -101,7 +101,6 @@ class LicenseEngine:
                 return self._status
         try:
             hardware_id = self._hardware.get_fingerprint()
-            # Priority 1: Validate active paid license from server
             if self._license_key:
                 try:
                     result = self._client.validate_license(self._license_key, hardware_id)
@@ -125,8 +124,7 @@ class LicenseEngine:
                             self._cache.set_license_status(self._status.to_dict())
                         return self._status
                 except Exception:
-                    pass  # Server error — fall through to trial
-            # Priority 2: Check for active trial
+                    pass
             trial_response = self._client.get_trial_status(hardware_id)
             trial_data = trial_response.get('data', {})
             if trial_data.get('has_trial'):
@@ -155,7 +153,6 @@ class LicenseEngine:
                     message='License inactive. Please reactivate or renew.'
                 )
                 return self._status
-            # No license or trial found
             self._status = LicenseStatus(
                 valid=False, status='unlicensed',
                 hardware_id=hardware_id,
@@ -195,7 +192,6 @@ class LicenseEngine:
         if data.get('valid'):
             if data.get('license_key'):
                 self._license_key = data['license_key']
-            # Create LicenseStatus from validation response which has all customer fields
             self._status = LicenseStatus(
                 valid=data.get('valid', True),
                 status=data.get('status', 'active'),
@@ -401,16 +397,3 @@ class LicenseEngine:
 
     def get_available_plans(self, license_key: str) -> Dict[str, Any]:
         return self._client.get_available_plans(license_key)
-
-    def send_renewal_request(self, license_key: str, customer_name: str = '',
-                             customer_email: str = '', customer_mobile: str = '',
-                             message: str = '', request_type: str = 'renew',
-                             current_plan_id: str = '', current_plan_name: str = '',
-                             requested_plan_id: str = '', requested_plan_name: str = '') -> Dict[str, Any]:
-        return self._client.send_renewal_request(
-            license_key=license_key, customer_name=customer_name,
-            customer_email=customer_email, customer_mobile=customer_mobile,
-            message=message, request_type=request_type,
-            current_plan_id=current_plan_id, current_plan_name=current_plan_name,
-            requested_plan_id=requested_plan_id, requested_plan_name=requested_plan_name,
-        )
