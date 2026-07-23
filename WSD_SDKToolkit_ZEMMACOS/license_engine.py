@@ -147,6 +147,14 @@ class LicenseEngine:
                 if self._status.valid:
                     self._cache.set_license_status(self._status.to_dict())
                 return self._status
+            trial_msg = (trial_data.get('message', '') or '').lower()
+            if 'paid license' in trial_msg or 'paid' in trial_msg:
+                self._status = LicenseStatus(
+                    valid=False, status='force_reactivation',
+                    hardware_id=hardware_id,
+                    message='License inactive. Please reactivate or renew.'
+                )
+                return self._status
             # No license or trial found
             self._status = LicenseStatus(
                 valid=False, status='unlicensed',

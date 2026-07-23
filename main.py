@@ -239,6 +239,9 @@ class ZEMmacOSApp(ZEMmacOSUI):
         elif status and status.status == "trial":
             self.log_live("UI", "INFO", "Trial active — enabling UI")
             self._unlock_ui()
+        elif status and status.status == "force_reactivation":
+            self.log_live("WELCOME", "INFO", "Paid license detected — opening reactivation")
+            self.root.after(200, self._open_reactivation_web_dialog)
         elif status and status.status == "unlicensed":
             self.log_live("WELCOME", "INFO", "No license — opening welcome dialog")
             self.root.after(200, self._run_welcome_flow)
@@ -246,6 +249,18 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self.log_live("WELCOME", "INFO", f"Server returned {status.status if status else 'None'} — opening welcome dialog")
             self.root.after(200, self._run_welcome_flow)
         self.root.after(500, self._check_aws01_condition)
+
+    def _open_reactivation_web_dialog(self):
+        self.log_live("REACTIVATION", "INFO", "Opening reactivation web page")
+        import webbrowser
+        try:
+            base = self.license_engine.config.get('api', {}).get('base_url', 'https://websmithdigital.com')
+            url = f"{base}/internal/api/license/reactivation"
+            webbrowser.open(url)
+            self.log_live("REACTIVATION", "SUCCESS", f"Opened {url}")
+        except Exception as e:
+            self.log_live("REACTIVATION", "ERROR", f"Failed to open reactivation page: {e}")
+        self._unlock_ui()
 
     # -----------------------------------------------------------------
     # AWS-01: Inactive License + Unbound Hardware Detection
