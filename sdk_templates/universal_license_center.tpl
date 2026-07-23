@@ -1,4 +1,4 @@
-"""Universal License Center - unified customer interface for all license operations"""
+f'''"""Universal License Center - unified customer interface for all license operations"""
 import json
 import os
 import platform
@@ -14,8 +14,8 @@ from .hardware import HardwareDetector
 from .cache import CacheManager
 from .universal_email_dialog import UniversalEmailDialog
 
-SDK_VERSION = "1.0.0"
-RUNTIME_TYPE = "python"
+SDK_VERSION = "{context.kitVersion}"
+RUNTIME_TYPE = "{context.runtime}"
 SUPPORT_EMAIL = "support@websmithdigital.com"
 
 
@@ -30,7 +30,7 @@ def _load_api_config() -> Dict[str, Any]:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             continue
-    return {}
+    return {{}}
 
 
 class UniversalLicenseCenter:
@@ -44,7 +44,7 @@ class UniversalLicenseCenter:
         self._status: Optional[LicenseStatus] = None
         self._root: Optional[tk.Toplevel] = None
 
-        branding = self.config.get("branding", {})
+        branding = self.config.get("branding", {{}})
         self._primary = branding.get("primary_color", "#6366f1")
         self._bg = "#f0f2f5"
         self._card_bg = "#ffffff"
@@ -73,7 +73,7 @@ class UniversalLicenseCenter:
         self._refresh_display()
         self._center_window()
         self._root.wait_window()
-        return {"status": self._status.to_dict() if self._status else None}
+        return {{"status": self._status.to_dict() if self._status else None}}
 
     def _center_window(self):
         if not self._root:
@@ -83,7 +83,7 @@ class UniversalLicenseCenter:
         h = self._root.winfo_height()
         x = (self._root.winfo_screenwidth() // 2) - (w // 2)
         y = (self._root.winfo_screenheight() // 2) - (h // 2)
-        self._root.geometry(f"{w}x{h}+{x}+{y}")
+        self._root.geometry(f"{{w}}x{{h}}+{{x}}+{{y}}")
 
     def _build_ui(self):
         root = self._root
@@ -94,7 +94,7 @@ class UniversalLicenseCenter:
         tk.Label(header, text="Universal License Center",
                  font=("Segoe UI", 20, "bold"),
                  fg="white", bg=self._primary).pack(expand=True)
-        tk.Label(header, text=f"SDK v{SDK_VERSION} | Runtime: {RUNTIME_TYPE}",
+        tk.Label(header, text=f"SDK v{{SDK_VERSION}} | Runtime: {{RUNTIME_TYPE}}",
                  font=("Segoe UI", 8),
                  fg="#e0e7ff", bg=self._primary).pack()
 
@@ -158,7 +158,7 @@ class UniversalLicenseCenter:
         r = min(255, int(int(hex_color[0:2], 16) * factor))
         g = min(255, int(int(hex_color[2:4], 16) * factor))
         b = min(255, int(int(hex_color[4:6], 16) * factor))
-        return f"#{r:02x}{g:02x}{b:02x}"
+        return f"#{{r:02x}}{{g:02x}}{{b:02x}}"
 
     def _on_close(self):
         try:
@@ -171,19 +171,19 @@ class UniversalLicenseCenter:
             self._status_detail.config(text="Status: Unknown", fg=self._text_secondary)
             return
         lines = []
-        lines.append(f"Status: {self._status.status.upper()}")
+        lines.append(f"Status: {{self._status.status.upper()}}")
         if self._status.license_key:
-            lines.append(f"License: {self._status.license_key}")
+            lines.append(f"License: {{self._status.license_key}}")
         if self._status.plan:
-            lines.append(f"Plan: {self._status.plan}")
+            lines.append(f"Plan: {{self._status.plan}}")
         if self._status.expiry_date:
-            lines.append(f"Expires: {self._status.expiry_date}")
+            lines.append(f"Expires: {{self._status.expiry_date}}")
         if self._status.days_left > 0:
-            lines.append(f"Days Remaining: {self._status.days_left}")
+            lines.append(f"Days Remaining: {{self._status.days_left}}")
         if self._status.hardware_id:
-            lines.append(f"Hardware: {self._status.hardware_id[:48]}...")
+            lines.append(f"Hardware: {{self._status.hardware_id[:48]}}...")
         if self._status.message:
-            lines.append(f"Message: {self._status.message}")
+            lines.append(f"Message: {{self._status.message}}")
 
         if self._status.valid:
             fg = self._success
@@ -246,14 +246,14 @@ class UniversalLicenseCenter:
                     self._status = self.engine.get_status()
                     self._refresh_display()
                     messagebox.showinfo("Trial Started",
-                                        f"Trial started successfully!\nCheck {email} for details.",
+                                        f"Trial started successfully!\nCheck {{email}} for details.",
                                         parent=dialog)
                     dialog.destroy()
                 else:
                     err = result.get("message", result.get("error", "Unknown error"))
-                    status_lbl.config(text=f"Failed: {err}", fg=self._error)
+                    status_lbl.config(text=f"Failed: {{err}}", fg=self._error)
             except Exception as e:
-                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
+                status_lbl.config(text=f"Error: {{str(e)}}", fg=self._error)
 
         tk.Button(frame, text="Start Trial", command=do_start,
                   font=("Segoe UI", 11, "bold"),
@@ -303,9 +303,9 @@ class UniversalLicenseCenter:
                     dialog.destroy()
                 else:
                     err = result.get("message", result.get("error", "Unknown error"))
-                    status_lbl.config(text=f"Failed: {err}", fg=self._error)
+                    status_lbl.config(text=f"Failed: {{err}}", fg=self._error)
             except Exception as e:
-                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
+                status_lbl.config(text=f"Error: {{str(e)}}", fg=self._error)
 
         tk.Button(frame, text="Activate", command=do_activate,
                   font=("Segoe UI", 11, "bold"),
@@ -315,10 +315,10 @@ class UniversalLicenseCenter:
         dialog.wait_window()
 
     def _buy_license(self):
-        product_name = self.config.get("product", {}).get("name", "our product")
+        product_name = self.config.get("product", {{}}).get("name", "our product")
         result = messagebox.askyesno(
             "Buy License",
-            f"Interested in buying {product_name}?\n\n"
+            f"Interested in buying {{product_name}}?\n\n"
             "Submit your details and our sales team will contact you.\n\n"
             "Would you like to use the email form?",
             parent=self._root,
@@ -326,12 +326,12 @@ class UniversalLicenseCenter:
         if result:
             self.email_dialog.show(
                 request_type="BUY",
-                subject=f"Buy {product_name} License",
+                subject=f"Buy {{product_name}} License",
             )
         else:
             messagebox.showinfo(
                 "Contact Sales",
-                f"Please email us at {SUPPORT_EMAIL} to purchase a license.",
+                f"Please email us at {{SUPPORT_EMAIL}} to purchase a license.",
                 parent=self._root,
             )
 
@@ -408,7 +408,7 @@ class UniversalLicenseCenter:
                 rt = "BUY"
             self.email_dialog.show(
                 request_type=rt,
-                subject=f"{reason.capitalize()} Support Request",
+                subject=f"{{reason.capitalize()}} Support Request",
             )
             dialog.destroy()
 
@@ -457,7 +457,7 @@ class UniversalLicenseCenter:
             dialog.update()
             try:
                 data = self.client.get_request_history(email)
-                if data.get("success") and data.get("data", {}).get("requests"):
+                if data.get("success") and data.get("data", {{}}).get("requests"):
                     requests = data["data"]["requests"]
                     result_text.delete("1.0", "end")
                     for req in requests:
@@ -467,14 +467,14 @@ class UniversalLicenseCenter:
                         created = req.get("created_at", "")
                         subject = req.get("subject", "")
                         result_text.insert("end",
-                                           f"{rid} | {rtype} | {status} | {created}\n"
-                                           f"  Subject: {subject}\n\n")
+                                           f"{{rid}} | {{rtype}} | {{status}} | {{created}}\n"
+                                           f"  Subject: {{subject}}\n\n")
                 else:
                     result_text.delete("1.0", "end")
                     result_text.insert("1.0", "No requests found for this email.\n")
             except Exception as e:
                 result_text.delete("1.0", "end")
-                result_text.insert("1.0", f"Error fetching history: {str(e)}\n")
+                result_text.insert("1.0", f"Error fetching history: {{str(e)}}\n")
 
         tk.Button(frame, text="Fetch History", command=do_fetch,
                    font=("Segoe UI", 11, "bold"),
@@ -482,3 +482,4 @@ class UniversalLicenseCenter:
                    padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(0, 12))
 
         dialog.wait_window()
+'''
