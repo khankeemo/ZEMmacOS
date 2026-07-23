@@ -39,7 +39,7 @@ class UniversalEmailDialog:
         self._result: Optional[Dict[str, Any]] = None
         self._root: Optional[tk.Toplevel] = None
 
-        branding = config.get("branding", {})
+        branding = config.get("branding", {{}})
         self._primary = branding.get("primary_color", "#6366f1")
         self._bg = "#f0f2f5"
         self._card_bg = "#ffffff"
@@ -58,7 +58,7 @@ class UniversalEmailDialog:
         hardware_id: str = "",
         message_text: str = "",
     ) -> Dict[str, Any]:
-        product_name = self.config.get("product", {}).get("name", "")
+        product_name = self.config.get("product", {{}}).get("name", "")
 
         cached = self.cache.get_license_status()
         if not customer_name:
@@ -70,7 +70,7 @@ class UniversalEmailDialog:
 
         self._result = None
         self._root = tk.Toplevel()
-        self._root.title(f"{request_type.replace('_', ' ')} Request")
+        self._root.title(f"{{request_type.replace('_', ' ')}} Request")
         self._root.geometry("520x580")
         self._root.resizable(False, False)
         self._root.configure(bg=self._bg)
@@ -82,7 +82,7 @@ class UniversalEmailDialog:
                        license_key, plan_name, hardware_id, message_text)
         self._center_window()
         self._root.wait_window()
-        return self._result or {"sent": False, "error": "Dialog closed"}
+        return self._result or {{"sent": False, "error": "Dialog closed"}}
 
     def _center_window(self):
         if not self._root:
@@ -92,22 +92,22 @@ class UniversalEmailDialog:
         h = self._root.winfo_height()
         x = (self._root.winfo_screenwidth() // 2) - (w // 2)
         y = (self._root.winfo_screenheight() // 2) - (h // 2)
-        self._root.geometry(f"{w}x{h}+{x}+{y}")
+        self._root.geometry(f"{{w}}x{{h}}+{{x}}+{{y}}")
 
     def _build_ui(self, request_type, product_name, customer_name, customer_email,
                   license_key, plan_name, hardware_id, message_text):
         root = self._root
-        padding = {"padx": 20, "pady": 4}
+        padding = {{"padx": 20, "pady": 4}}
 
         header = tk.Label(root, text=f"Universal Email Form",
                           font=("Segoe UI", 18, "bold"),
                           bg=self._bg, fg=self._text_primary)
         header.pack(pady=(24, 2))
-        sub = tk.Label(root, text=f"Request: {request_type.replace('_', ' ')}",
+        sub = tk.Label(root, text=f"Request: {{request_type.replace('_', ' ')}}",
                        font=("Segoe UI", 10), bg=self._bg, fg=self._text_secondary)
         sub.pack(pady=(0, 16))
         if product_name:
-            prod_lbl = tk.Label(root, text=f"Product: {product_name}",
+            prod_lbl = tk.Label(root, text=f"Product: {{product_name}}",
                                 font=("Segoe UI", 9), bg=self._bg, fg=self._text_secondary)
             prod_lbl.pack(pady=(0, 8))
 
@@ -146,7 +146,7 @@ class UniversalEmailDialog:
         tk.Label(frame, text="Subject", font=("Segoe UI", 10, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", **padding)
         self._subject_var = tk.StringVar(
-            value=f"{request_type.replace('_', ' ')} Request")
+            value=f"{{request_type.replace('_', ' ')}} Request")
         self._subject_entry = tk.Entry(frame, textvariable=self._subject_var,
                                         font=("Segoe UI", 11), relief="solid", bd=1)
         self._subject_entry.pack(fill="x", padx=20, pady=(0, 8))
@@ -178,7 +178,7 @@ class UniversalEmailDialog:
         self._hardware_id = hardware_id
 
     def _on_close(self):
-        self._result = {"sent": False, "error": "Dialog closed"}
+        self._result = {{"sent": False, "error": "Dialog closed"}}
         try:
             self._root.destroy()
         except Exception:
@@ -216,23 +216,23 @@ class UniversalEmailDialog:
                 product_name=self._product_name,
             )
             if result.get("success"):
-                ref = result.get("data", {}).get("request_id", "")
+                ref = result.get("data", {{}}).get("request_id", "")
                 messagebox.showinfo(
                     "Request Submitted",
                     f"Your request has been submitted successfully!\n\n"
-                    f"Reference: {ref}\n"
-                    f"We will contact you at {email} shortly.",
+                    f"Reference: {{ref}}\n"
+                    f"We will contact you at {{email}} shortly.",
                     parent=self._root,
                 )
-                self._result = {"sent": True, "request_id": ref}
+                self._result = {{"sent": True, "request_id": ref}}
                 self._root.destroy()
             else:
-                err = result.get("error", {}).get("message", "Unknown error")
-                self._status_label.config(text=f"Failed: {err}", fg="#dc2626")
-            self._send_btn.config(state="normal", text="Send Request")
+                err = result.get("error", {{}}).get("message", "Unknown error")
+                self._status_label.config(text=f"Failed: {{err}}", fg="#dc2626")
+                self._send_btn.config(state="normal", text="Send Request")
         except Exception as e:
             self._status_label.config(
-                text=f"Error: {str(e)}. Email {SUPPORT_EMAIL} directly.",
+                text=f"Error: {{str(e)}}. Email {{SUPPORT_EMAIL}} directly.",
                 fg="#dc2626",
             )
             self._send_btn.config(state="normal", text="Send Request")
