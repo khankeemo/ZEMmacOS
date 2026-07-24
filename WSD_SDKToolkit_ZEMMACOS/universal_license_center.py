@@ -1,15 +1,15 @@
-"""Universal License Center - unified customer interface for all license operations"""
+"""Universal License Center - single customer experience for all license operations"""
 import json
 import os
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from .client import ApiClient
 from .license_engine import LicenseEngine, LicenseStatus
 from .hardware import HardwareDetector
 from .cache import CacheManager
-from .universal_email_dialog import UniversalEmailDialog
+from .welcome import WelcomeDialog
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -31,15 +31,17 @@ def _load_api_config() -> Dict[str, Any]:
 
 
 class UniversalLicenseCenter:
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None,
+                 on_license_ready: Optional[Callable[[bool], None]] = None):
         self.config = _load_api_config() if config_path is None else self._load_config(config_path)
         self.hardware = HardwareDetector()
         self.cache = CacheManager(self.config)
-        self.engine = LicenseEngine(config_path)
         self.client = ApiClient(self.config, self.hardware, self.cache)
-        self.email_dialog = UniversalEmailDialog(self.config, self.client, self.hardware, self.cache)
+        self.engine = LicenseEngine(config_path, on_license_ready=self._on_engine_ready)
+        self.on_license_ready = on_license_ready
         self._status: Optional[LicenseStatus] = None
         self._root: Optional[tk.Toplevel] = None
+        self._app_unlocked = False
 
         branding = self.config.get("branding", {})
         self._primary = branding.get("primary_color", "#6366f1")
@@ -51,13 +53,67 @@ class UniversalLicenseCenter:
         self._error = "#dc2626"
         self._warning = "#f59e0b"
         self._border = "#d1d5db"
+        self._product_name = self.config.get("product", {}).get("name", "")
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         with open(config_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def _on_engine_ready(self, valid: bool):
+        if valid:
+            self._app_unlocked = True
+        else:
+            self._app_unlocked = False
+        if self.on_license_ready:
+            self.on_license_ready(valid)
+
+    def _is_valid_for_unlock(self) -> bool:
+        if not self._status:
+            return False
+        return self._status.status in ('active', 'trial')
+
+    def _unlock_application(self):
+        self._app_unlocked = True
+        if self.on_license_ready:
+            self.on_license_ready(True)
+
+    def _lock_application(self):
+        self._app_unlocked = False
+        if self.on_license_ready:
+            self.on_license_ready(False)
+
     def show(self) -> Dict[str, Any]:
+        self._lock_application()
         self._status = self.engine.initialize()
+        status = self._status.status if self._status else 'unlicensed'
+
+        if self._is_valid_for_unlock():
+            self._unlock_application()
+
+        if status == 'unlicensed' or (not self._status):
+            if not self.cache.is_onboarding_complete():
+                result = self._show_welcome()
+                if result.get('trial_started') or result.get('onboarding_complete'):
+                    self._status = self.engine.initialize()
+                    if self._is_valid_for_unlock():
+                        self._unlock_application()
+                    return {'action': 'trial_started', 'status': self._status.to_dict() if self._status else None}
+                if result.get('skipped') and not result.get('closed'):
+                    return {'action': 'skipped', 'locked': True}
+                return {'action': 'closed', 'locked': True}
+
+        return self._show_license_center()
+
+    def _show_welcome(self) -> Dict[str, Any]:
+        welcome = WelcomeDialog(
+            client=self.client,
+            hardware=self.hardware,
+            cache=self.cache,
+            product_name=self._product_name
+        )
+        return welcome.show()
+
+    def _show_license_center(self) -> Dict[str, Any]:
         self._root = tk.Toplevel()
         self._root.title("Universal License Center")
         self._root.geometry("600x700")
@@ -70,7 +126,8 @@ class UniversalLicenseCenter:
         self._refresh_display()
         self._center_window()
         self._root.wait_window()
-        return {"status": self._status.to_dict() if self._status else None}
+        return {"status": self._status.to_dict() if self._status else None,
+                "unlocked": self._app_unlocked}
 
     def _center_window(self):
         if not self._root:
@@ -91,9 +148,6 @@ class UniversalLicenseCenter:
         tk.Label(header, text="Universal License Center",
                  font=("Segoe UI", 20, "bold"),
                  fg="white", bg=self._primary).pack(expand=True)
-        tk.Label(header, text=f"SDK v{SDK_VERSION} | Runtime: {RUNTIME_TYPE}",
-                 font=("Segoe UI", 8),
-                 fg="#e0e7ff", bg=self._primary).pack()
 
         main = tk.Frame(root, bg=self._bg, padx=20, pady=16)
         main.pack(fill="both", expand=True)
@@ -119,43 +173,57 @@ class UniversalLicenseCenter:
         btn_frame = tk.Frame(main, bg=self._bg)
         btn_frame.pack(fill="both", expand=True)
 
-        buttons = [
-            ("1. View License Status", self._view_status, self._primary),
-            ("2. Start Free Trial", self._start_trial, self._success),
-            ("3. Activate License", self._activate_license, self._primary),
-            ("4. Buy License", self._buy_license, self._warning),
-            ("5. Renew License", self._renew_license, self._primary),
-            ("6. Replace Device", self._replace_device, self._warning),
-            ("7. Hardware Issue", self._hardware_issue, self._text_secondary),
-            ("8. Contact Support", self._contact_support, self._text_secondary),
-            ("9. Request History", self._request_history, self._text_secondary),
-        ]
+        status = self._status.status if self._status else 'unlicensed'
+        is_valid = self._status.valid if self._status else False
+        is_expired = status in ('expired', 'force_reactivation')
+        is_trial = status == 'trial'
+        is_paid = status == 'active' and is_valid
+
+        if is_trial:
+            buttons = [
+                ("Activate License", self._activate_license, self._primary),
+                ("Contact Support", self._contact_support, self._text_secondary),
+                ("Close", self._on_close, "#e5e7eb"),
+            ]
+        elif is_paid:
+            buttons = [
+                ("Renew License", self._renew_license, self._primary),
+                ("Replace Device", self._replace_device, self._warning),
+                ("Contact Support", self._contact_support, self._text_secondary),
+                ("Close", self._on_close, "#e5e7eb"),
+            ]
+        elif is_expired:
+            buttons = [
+                ("Renew License", self._renew_license, self._primary),
+                ("Reactivate License", self._reactivate_license, self._warning),
+                ("Contact Support", self._contact_support, self._text_secondary),
+                ("Close", self._on_close, "#e5e7eb"),
+            ]
+        else:
+            buttons = [
+                ("Start Free Trial", self._start_trial, self._success),
+                ("Activate License", self._activate_license, self._primary),
+                ("Contact Support", self._contact_support, self._text_secondary),
+                ("Close", self._on_close, "#e5e7eb"),
+            ]
 
         for text, cmd, color in buttons:
-            btn = tk.Button(btn_frame, text=text, command=cmd,
-                            font=("Segoe UI", 11, "bold"),
-                            bg=color, fg="white", relief="flat",
-                            padx=12, pady=8, cursor="hand2", anchor="w")
+            if color == "#e5e7eb":
+                btn = tk.Button(btn_frame, text=text, command=cmd,
+                                font=("Segoe UI", 11),
+                                bg=color, fg=self._text_primary,
+                                relief="flat", padx=12, pady=8, cursor="hand2")
+            else:
+                btn = tk.Button(btn_frame, text=text, command=cmd,
+                                font=("Segoe UI", 11, "bold"),
+                                bg=color, fg="white", relief="flat",
+                                padx=12, pady=8, cursor="hand2")
             btn.pack(fill="x", pady=(0, 6))
-            btn.bind("<Enter>", lambda e, c=color: e.widget.config(bg=self._adjust_color(c, 0.85)))
-            btn.bind("<Leave>", lambda e, c=color: e.widget.config(bg=c))
-
-        tk.Button(btn_frame, text="0. Exit", command=self._on_close,
-                  font=("Segoe UI", 10), bg="#e5e7eb", fg=self._text_primary,
-                  relief="flat", padx=12, pady=6, cursor="hand2").pack(fill="x", pady=(6, 0))
 
         self._output_label = tk.Label(main, text="", font=("Segoe UI", 9),
                                        bg=self._bg, fg=self._text_secondary,
                                        wraplength=540, justify="left")
         self._output_label.pack(fill="x", pady=(8, 0))
-
-    @staticmethod
-    def _adjust_color(hex_color: str, factor: float) -> str:
-        hex_color = hex_color.lstrip("#")
-        r = min(255, int(int(hex_color[0:2], 16) * factor))
-        g = min(255, int(int(hex_color[2:4], 16) * factor))
-        b = min(255, int(int(hex_color[4:6], 16) * factor))
-        return f"#{r:02x}{g:02x}{b:02x}"
 
     def _on_close(self):
         try:
@@ -194,75 +262,23 @@ class UniversalLicenseCenter:
     def _set_output(self, text: str, color: str = "#6b7280"):
         self._output_label.config(text=text, fg=color)
 
-    def _view_status(self):
-        self._status = self.engine.initialize()
-        self._refresh_display()
-        self._set_output("Status refreshed.", self._success)
-
     def _start_trial(self):
-        dialog = tk.Toplevel(self._root)
-        dialog.title("Start Free Trial")
-        dialog.geometry("400x320")
-        dialog.configure(bg=self._bg)
-        dialog.transient(self._root)
-        dialog.grab_set()
-
-        frame = tk.Frame(dialog, bg=self._card_bg, bd=1, relief="solid",
-                         highlightbackground=self._border)
-        frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        tk.Label(frame, text="Start Free Trial", font=("Segoe UI", 16, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
-
-        tk.Label(frame, text="Name *", font=("Segoe UI", 10, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        name_var = tk.StringVar()
-        tk.Entry(frame, textvariable=name_var, font=("Segoe UI", 11),
-                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
-
-        tk.Label(frame, text="Email *", font=("Segoe UI", 10, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        email_var = tk.StringVar()
-        tk.Entry(frame, textvariable=email_var, font=("Segoe UI", 11),
-                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 12))
-
-        status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg)
-        status_lbl.pack(padx=16)
-
-        def do_start():
-            name = name_var.get().strip()
-            email = email_var.get().strip()
-            if not name or not email:
-                status_lbl.config(text="Name and email are required.", fg=self._error)
-                return
-            status_lbl.config(text="Starting trial...", fg=self._text_secondary)
-            dialog.update()
-            try:
-                result = self.engine.start_trial(email, customer_name=name)
-                if result.get("success"):
-                    self._status = self.engine.get_status()
-                    self._refresh_display()
-                    messagebox.showinfo("Trial Started",
-                                        f"Trial started successfully!\nCheck {email} for details.",
-                                        parent=dialog)
-                    dialog.destroy()
-                else:
-                    err = result.get("message", result.get("error", "Unknown error"))
-                    status_lbl.config(text=f"Failed: {err}", fg=self._error)
-            except Exception as e:
-                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
-
-        tk.Button(frame, text="Start Trial", command=do_start,
-                  font=("Segoe UI", 11, "bold"),
-                  bg=self._success, fg="white", relief="flat",
-                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
-
-        dialog.wait_window()
+        self._on_close()
+        result = self._show_welcome()
+        if result.get('trial_started'):
+            self._status = self.engine.initialize()
+            if self._status and self._status.valid:
+                self._unlock_application()
+                messagebox.showinfo("Trial Started",
+                                    "Your free trial has been activated!",
+                                    parent=self._root)
+        elif result.get('closed'):
+            self._show_license_center()
 
     def _activate_license(self):
         dialog = tk.Toplevel(self._root)
         dialog.title("Activate License")
-        dialog.geometry("420x240")
+        dialog.geometry("520x480")
         dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
@@ -274,11 +290,29 @@ class UniversalLicenseCenter:
         tk.Label(frame, text="Activate License", font=("Segoe UI", 16, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
 
+        tk.Label(frame, text="Hardware ID", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        hw_id = self.hardware.get_fingerprint()
+        tk.Label(frame, text=hw_id[:48], font=("Courier", 9),
+                 bg=self._card_bg, fg=self._text_secondary,
+                 wraplength=450).pack(anchor="w", padx=16, pady=(0, 8))
+
         tk.Label(frame, text="License Key *", font=("Segoe UI", 10, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
         key_var = tk.StringVar()
+        if self._status and self._status.license_key:
+            key_var.set(self._status.license_key)
         tk.Entry(frame, textvariable=key_var, font=("Courier", 11),
                  relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 12))
+
+        if self._status and self._status.customer_name:
+            tk.Label(frame, text="Customer", font=("Segoe UI", 10, "bold"),
+                     bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+            cust_info = self._status.customer_name
+            if self._status.customer_email:
+                cust_info += f" \u2022 {self._status.customer_email}"
+            tk.Label(frame, text=cust_info, font=("Segoe UI", 10),
+                     bg=self._card_bg, fg=self._text_secondary).pack(anchor="w", padx=16, pady=(0, 12))
 
         status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg)
         status_lbl.pack(padx=16)
@@ -295,6 +329,7 @@ class UniversalLicenseCenter:
                 if result.get("success"):
                     self._status = self.engine.get_status()
                     self._refresh_display()
+                    self._unlock_application()
                     messagebox.showinfo("Activated", "License activated successfully!",
                                         parent=dialog)
                     dialog.destroy()
@@ -311,69 +346,266 @@ class UniversalLicenseCenter:
 
         dialog.wait_window()
 
-    def _buy_license(self):
-        product_name = self.config.get("product", {}).get("name", "our product")
-        result = messagebox.askyesno(
-            "Buy License",
-            f"Interested in buying {product_name}?\n\n"
-            "Submit your details and our sales team will contact you.\n\n"
-            "Would you like to use the email form?",
-            parent=self._root,
-        )
-        if result:
-            self.email_dialog.show(
-                request_type="BUY",
-                subject=f"Buy {product_name} License",
-            )
-        else:
-            messagebox.showinfo(
-                "Contact Sales",
-                f"Please email us at {SUPPORT_EMAIL} to purchase a license.",
-                parent=self._root,
-            )
-
     def _renew_license(self):
-        if not self._status or not self._status.valid:
-            messagebox.showwarning("Not Licensed",
-                                    "No active license found. Please activate first.",
+        if not self._status:
+            messagebox.showwarning("Not Available", "No license information available.",
                                     parent=self._root)
             return
-        result = messagebox.askyesno(
-            "Renew License",
-            "Would you like to submit a renewal request?\n\n"
-            "Our team will contact you with renewal options.",
-            parent=self._root,
-        )
-        if result:
-            self.email_dialog.show(
-                request_type="RENEW",
-                subject="License Renewal Request",
-                license_key=self._status.license_key or "",
-                plan_name=self._status.plan or "",
-            )
+
+        dialog = tk.Toplevel(self._root)
+        dialog.title("Renew License")
+        dialog.geometry("560x580")
+        dialog.configure(bg=self._bg)
+        dialog.transient(self._root)
+        dialog.grab_set()
+
+        frame = tk.Frame(dialog, bg=self._card_bg, bd=1, relief="solid",
+                         highlightbackground=self._border)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        tk.Label(frame, text="Renew License", font=("Segoe UI", 16, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
+
+        tk.Label(frame, text="Current License", font=("Segoe UI", 11, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        current_info = f"Plan: {self._status.plan or 'N/A'}"
+        if self._status.expiry_date:
+            current_info += f" | Expires: {self._status.expiry_date}"
+        if self._status.license_key:
+            current_info += f"\nKey: {self._status.license_key}"
+        tk.Label(frame, text=current_info, font=("Segoe UI", 10),
+                 bg=self._card_bg, fg=self._text_secondary,
+                 wraplength=480, justify="left").pack(anchor="w", padx=16, pady=(0, 12))
+
+        ttk.Separator(frame, orient="horizontal").pack(fill="x", padx=16, pady=8)
+
+        tk.Label(frame, text="Request Renewal", font=("Segoe UI", 11, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        tk.Label(frame, text="Our team will contact you with renewal options.",
+                 font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
+            anchor="w", padx=16, pady=(0, 8))
+
+        tk.Label(frame, text="Your Name *", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        name_var = tk.StringVar(value=self._status.customer_name or "")
+        tk.Entry(frame, textvariable=name_var, font=("Segoe UI", 11),
+                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
+
+        tk.Label(frame, text="Your Email *", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        email_var = tk.StringVar(value=self._status.customer_email or "")
+        tk.Entry(frame, textvariable=email_var, font=("Segoe UI", 11),
+                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
+
+        tk.Label(frame, text="Your Mobile", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        mobile_var = tk.StringVar(value=self._status.customer_mobile or self._status.customer_phone or "")
+        tk.Entry(frame, textvariable=mobile_var, font=("Segoe UI", 11),
+                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 12))
+
+        status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg)
+        status_lbl.pack(padx=16)
+
+        def do_send():
+            name = name_var.get().strip()
+            email = email_var.get().strip()
+            if not name or not email:
+                status_lbl.config(text="Name and email are required.", fg=self._error)
+                return
+            status_lbl.config(text="Submitting renewal request...", fg=self._text_secondary)
+            dialog.update()
+            try:
+                result = self.engine.send_renewal_request(
+                    license_key=self._status.license_key or "",
+                    customer_name=name, customer_email=email,
+                    customer_mobile=mobile_var.get().strip(),
+                    request_type='renew',
+                    current_plan_id='', current_plan_name=self._status.plan or '',
+                )
+                if result.get("success"):
+                    messagebox.showinfo("Request Submitted",
+                                        "Your renewal request has been submitted.\n"
+                                        "Our team will contact you shortly.",
+                                        parent=dialog)
+                    dialog.destroy()
+                else:
+                    err = result.get("message", result.get("error", "Failed"))
+                    status_lbl.config(text=f"Failed: {err}", fg=self._error)
+            except Exception as e:
+                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
+
+        tk.Button(frame, text="Submit Renewal Request", command=do_send,
+                  font=("Segoe UI", 11, "bold"),
+                  bg=self._primary, fg="white", relief="flat",
+                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
+
+        dialog.wait_window()
+
+    def _reactivate_license(self):
+        if not self._status:
+            messagebox.showwarning("Not Available", "No license information available.",
+                                    parent=self._root)
+            return
+
+        dialog = tk.Toplevel(self._root)
+        dialog.title("Reactivate License")
+        dialog.geometry("520x500")
+        dialog.configure(bg=self._bg)
+        dialog.transient(self._root)
+        dialog.grab_set()
+
+        frame = tk.Frame(dialog, bg=self._card_bg, bd=1, relief="solid",
+                         highlightbackground=self._border)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        tk.Label(frame, text="Reactivate License", font=("Segoe UI", 16, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
+        tk.Label(frame, text="Submit a reactivation request to restore your license.",
+                 font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
+            anchor="w", padx=16, pady=(0, 12))
+
+        tk.Label(frame, text="License Key", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        key_var = tk.StringVar(value=self._status.license_key or "")
+        tk.Entry(frame, textvariable=key_var, font=("Courier", 11),
+                 relief="solid", bd=1, state="readonly").pack(fill="x", padx=16, pady=(0, 8))
+
+        tk.Label(frame, text="Customer Name *", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        name_var = tk.StringVar(value=self._status.customer_name or "")
+        tk.Entry(frame, textvariable=name_var, font=("Segoe UI", 11),
+                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
+
+        tk.Label(frame, text="Email *", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        email_var = tk.StringVar(value=self._status.customer_email or "")
+        tk.Entry(frame, textvariable=email_var, font=("Segoe UI", 11),
+                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
+
+        tk.Label(frame, text="Mobile", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        mobile_var = tk.StringVar(value=self._status.customer_mobile or self._status.customer_phone or "")
+        tk.Entry(frame, textvariable=mobile_var, font=("Segoe UI", 11),
+                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
+
+        tk.Label(frame, text="Hardware ID", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        hw_id = self.hardware.get_fingerprint()
+        tk.Label(frame, text=hw_id, font=("Courier", 9),
+                 bg=self._card_bg, fg=self._text_secondary,
+                 wraplength=450).pack(anchor="w", padx=16, pady=(0, 12))
+
+        status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg)
+        status_lbl.pack(padx=16)
+
+        def do_send():
+            name = name_var.get().strip()
+            email = email_var.get().strip()
+            if not name or not email:
+                status_lbl.config(text="Name and email are required.", fg=self._error)
+                return
+            status_lbl.config(text="Submitting reactivation request...", fg=self._text_secondary)
+            dialog.update()
+            try:
+                result = self.engine.send_reactivation_request(
+                    license_key=key_var.get().strip(),
+                    customer_name=name,
+                    customer_email=email,
+                    message='',
+                )
+                if result.get("success"):
+                    messagebox.showinfo("Request Submitted",
+                                        "Your reactivation request has been submitted.\n"
+                                        "Our team will contact you shortly.",
+                                        parent=dialog)
+                    dialog.destroy()
+                else:
+                    err = result.get("message", result.get("error", "Failed"))
+                    status_lbl.config(text=f"Failed: {err}", fg=self._error)
+            except Exception as e:
+                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
+
+        tk.Button(frame, text="Submit Reactivation Request", command=do_send,
+                  font=("Segoe UI", 11, "bold"),
+                  bg=self._warning, fg="white", relief="flat",
+                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
+
+        dialog.wait_window()
 
     def _replace_device(self):
         if not self._status or not self._status.valid:
             messagebox.showwarning("Not Licensed",
                                     "No active license found.", parent=self._root)
             return
-        self.email_dialog.show(
-            request_type="DEVICE_REPLACEMENT",
-            subject="Device Replacement Request",
-            license_key=self._status.license_key or "",
-            plan_name=self._status.plan or "",
-        )
+        dialog = tk.Toplevel(self._root)
+        dialog.title("Replace Device")
+        dialog.geometry("500x400")
+        dialog.configure(bg=self._bg)
+        dialog.transient(self._root)
+        dialog.grab_set()
 
-    def _hardware_issue(self):
-        self.email_dialog.show(
-            request_type="HARDWARE",
-            subject="Hardware Issue Report",
-        )
+        frame = tk.Frame(dialog, bg=self._card_bg, bd=1, relief="solid",
+                         highlightbackground=self._border)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        tk.Label(frame, text="Device Replacement", font=("Segoe UI", 16, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
+        tk.Label(frame, text="Submit a device replacement request.",
+                 font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
+            anchor="w", padx=16, pady=(0, 12))
+
+        tk.Label(frame, text="License Key", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        lk_lbl = tk.Label(frame, text=self._status.license_key or "N/A",
+                          font=("Courier", 10), bg=self._card_bg, fg=self._text_secondary)
+        lk_lbl.pack(anchor="w", padx=16, pady=(0, 8))
+
+        tk.Label(frame, text="Current Hardware", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        old_hw = self._status.hardware_id or "Unknown"
+        tk.Label(frame, text=old_hw, font=("Courier", 9),
+                 bg=self._card_bg, fg=self._text_secondary,
+                 wraplength=420).pack(anchor="w", padx=16, pady=(0, 8))
+
+        tk.Label(frame, text="New Hardware", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        new_hw = self.hardware.get_fingerprint()
+        tk.Label(frame, text=new_hw, font=("Courier", 9),
+                 bg=self._card_bg, fg=self._text_primary,
+                 wraplength=420).pack(anchor="w", padx=16, pady=(0, 12))
+
+        status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg)
+        status_lbl.pack(padx=16)
+
+        def do_replace():
+            status_lbl.config(text="Replacing device...", fg=self._text_secondary)
+            dialog.update()
+            try:
+                result = self.engine.replace_hardware()
+                if result.get("success"):
+                    self._status = self.engine.get_status()
+                    self._refresh_display()
+                    messagebox.showinfo("Device Replaced",
+                                        "Device has been replaced successfully!",
+                                        parent=dialog)
+                    dialog.destroy()
+                else:
+                    err = result.get("message", result.get("error", "Failed"))
+                    status_lbl.config(text=f"Failed: {err}", fg=self._error)
+            except Exception as e:
+                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
+
+        tk.Button(frame, text="Replace Device", command=do_replace,
+                  font=("Segoe UI", 11, "bold"),
+                  bg=self._warning, fg="white", relief="flat",
+                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
+
+        dialog.wait_window()
 
     def _contact_support(self):
         dialog = tk.Toplevel(self._root)
         dialog.title("Contact Support")
-        dialog.geometry("400x220")
+        dialog.geometry("500x440")
         dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
@@ -384,98 +616,69 @@ class UniversalLicenseCenter:
 
         tk.Label(frame, text="Contact Support", font=("Segoe UI", 16, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
+        tk.Label(frame, text="We already know who you are. Just tell us what you need.",
+                 font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
+            anchor="w", padx=16, pady=(0, 12))
 
-        tk.Label(frame, text="Reason:", font=("Segoe UI", 10, "bold"),
+        cached = self.cache.get_license_status() or {}
+
+        tk.Label(frame, text="Your Name *", font=("Segoe UI", 10, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        name_var = tk.StringVar(value=self._status.customer_name if self._status else cached.get('customer_name', ''))
+        tk.Entry(frame, textvariable=name_var, font=("Segoe UI", 11),
+                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
 
-        reason_var = tk.StringVar(value="support")
-        reason_combo = ttk.Combobox(frame, textvariable=reason_var,
-                                     values=["support", "activation", "trial", "billing", "other"],
-                                     state="readonly", font=("Segoe UI", 10))
-        reason_combo.pack(fill="x", padx=16, pady=(0, 12))
+        tk.Label(frame, text="Your Email *", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        email_var = tk.StringVar(value=self._status.customer_email if self._status else cached.get('customer_email', ''))
+        tk.Entry(frame, textvariable=email_var, font=("Segoe UI", 11),
+                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
 
-        def do_contact():
-            reason = reason_var.get()
-            rt = "SUPPORT"
-            if reason == "activation":
-                rt = "ACTIVATION"
-            elif reason == "trial":
-                rt = "ACTIVATION"
-            elif reason == "billing":
-                rt = "BUY"
-            self.email_dialog.show(
-                request_type=rt,
-                subject=f"{reason.capitalize()} Support Request",
-            )
-            dialog.destroy()
+        tk.Label(frame, text="Message *", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        msg_text = tk.Text(frame, font=("Segoe UI", 10), height=4,
+                           wrap="word", relief="solid", bd=1)
+        msg_text.pack(fill="x", padx=16, pady=(0, 12))
 
-        tk.Button(frame, text="Open Email Form", command=do_contact,
+        status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg)
+        status_lbl.pack(padx=16)
+
+        def do_send():
+            name = name_var.get().strip()
+            email = email_var.get().strip()
+            msg = msg_text.get("1.0", "end").strip()
+            if not name or not email:
+                status_lbl.config(text="Name and email are required.", fg=self._error)
+                return
+            if not msg:
+                status_lbl.config(text="Please describe your issue.", fg=self._error)
+                return
+            status_lbl.config(text="Sending your request...", fg=self._text_secondary)
+            dialog.update()
+            try:
+                license_key = self._status.license_key if self._status else cached.get('license_key', '')
+                result = self.engine.send_support_request(
+                    license_key=license_key or '',
+                    customer_name=name,
+                    customer_email=email,
+                    subject='Support Request',
+                    message=msg,
+                )
+                if result.get("success"):
+                    messagebox.showinfo("Request Submitted",
+                                        "Your support request has been sent.\n"
+                                        "We will contact you at " + email + ".",
+                                        parent=dialog)
+                    dialog.destroy()
+                else:
+                    err = result.get("message", result.get("error", "Failed"))
+                    status_lbl.config(text=f"Failed: {err}", fg=self._error)
+            except Exception as e:
+                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
+
+        tk.Button(frame, text="Send Request", command=do_send,
                   font=("Segoe UI", 11, "bold"),
                   bg=self._primary, fg="white", relief="flat",
                   padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
-
-        dialog.wait_window()
-
-    def _request_history(self):
-        dialog = tk.Toplevel(self._root)
-        dialog.title("Request History")
-        dialog.geometry("500x400")
-        dialog.configure(bg=self._bg)
-        dialog.transient(self._root)
-        dialog.grab_set()
-
-        frame = tk.Frame(dialog, bg=self._card_bg, bd=1, relief="solid",
-                         highlightbackground=self._border)
-        frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        tk.Label(frame, text="Request History", font=("Segoe UI", 16, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
-
-        tk.Label(frame, text="Enter your email to check request status:",
-                 font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
-            anchor="w", padx=16, pady=(0, 8))
-
-        email_var = tk.StringVar()
-        tk.Entry(frame, textvariable=email_var, font=("Segoe UI", 11),
-                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 12))
-
-        result_text = tk.Text(frame, font=("Segoe UI", 9), height=10,
-                               wrap="word", relief="solid", bd=1)
-        result_text.pack(fill="both", expand=True, padx=16, pady=(0, 12))
-
-        def do_fetch():
-            email = email_var.get().strip()
-            if not email:
-                messagebox.showwarning("Input Required", "Email is required.",
-                                       parent=dialog)
-                return
-            result_text.delete("1.0", "end")
-            result_text.insert("1.0", "Fetching request history...\n")
-            dialog.update()
-            try:
-                data = self.client.get_request_history(email)
-                if data.get("success") and data.get("data", {}).get("requests"):
-                    requests = data["data"]["requests"]
-                    result_text.delete("1.0", "end")
-                    for req in requests:
-                        rid = req.get("request_id", "")
-                        rtype = req.get("request_type", "")
-                        status = req.get("status", "")
-                        created = req.get("created_at", "")
-                        subject = req.get("subject", "")
-                        result_text.insert("end",
-                                           f"{rid} | {rtype} | {status} | {created}\n"
-                                           f"  Subject: {subject}\n\n")
-                else:
-                    result_text.delete("1.0", "end")
-                    result_text.insert("1.0", "No requests found for this email.\n")
-            except Exception as e:
-                result_text.delete("1.0", "end")
-                result_text.insert("1.0", f"Error fetching history: {str(e)}\n")
-
-        tk.Button(frame, text="Fetch History", command=do_fetch,
-                  font=("Segoe UI", 11, "bold"),
-                  bg=self._primary, fg="white", relief="flat",
-                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(0, 12))
 
         dialog.wait_window()

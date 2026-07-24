@@ -60,7 +60,6 @@ a = Analysis(
         'WSD_SDKToolkit_ZEMMACOS.cache',
         'WSD_SDKToolkit_ZEMMACOS.license_engine',
         'WSD_SDKToolkit_ZEMMACOS.universal_license_center',
-        'WSD_SDKToolkit_ZEMMACOS.universal_email_dialog',
         # Scripts subfolder modules
         'Scripts.run',
         'Scripts.utils',

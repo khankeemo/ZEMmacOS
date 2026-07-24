@@ -22,15 +22,15 @@ center = UniversalLicenseCenter(engine)
 center.show()
 ```
 
-## 4. Use Universal Email Dialog (any request type)
+## 4. Use Universal License Center (all-in-one)
 
 ```python
-from WSD_SDK_PROJECTNAME_PRODUCTID.universal_email_dialog import UniversalEmailDialog
+from WSD_SDK_PROJECTNAME_PRODUCTID import UniversalLicenseCenter
 
-dialog = UniversalEmailDialog(engine._client, engine._hardware, engine._cache)
-result = dialog.show("SUPPORT", customer_name="John", customer_email="john@example.com")
-if result.get("sent"):
-    print("Request sent to support@websmithdigital.com")
+center = UniversalLicenseCenter()
+result = center.show()
+if result.get("status"):
+    print("License status:", result["status"]["status"])
 ```
 
 ## 5. Run

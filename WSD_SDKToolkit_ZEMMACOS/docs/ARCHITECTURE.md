@@ -61,14 +61,13 @@
 | Cache Manager | `cache.py` | Local status cache |
 | Hardware Detector | `hardware.py` | Machine fingerprint |
 | Crypto Utils | `crypto.py` | HMAC signature generation |
-| Universal License Center | `universal_license_center.py` | Full Tkinter license GUI |
-| Universal Email Dialog | `universal_email_dialog.py` | Single email form for all requests |
+| Universal License Center | `universal_license_center.py` | Full Tkinter license GUI (single customer workflow) |
 
 ## Data Flows
 
 ### Email Request (all types)
 ```
-UniversalEmailDialog.show("SUPPORT", ...)
+UniversalLicenseCenter → Support / Renewal / Reactivation Form
         ↓
 POST /api/v1/request (BUY|RENEW|SUPPORT|ACTIVATION|DEVICE_REPLACEMENT|HARDWARE|GENERAL)
         ↓
@@ -81,11 +80,11 @@ Email Service sends to support@websmithdigital.com
 ```
 User clicks "Activate License" in UniversalLicenseCenter
         ↓
-UniversalEmailDialog opens (pre-filled with ACTIVATION type)
+Activation dialog opens (hardware ID auto-filled)
         ↓
-User submits form → POST /api/v1/request
+User enters license key → POST /api/v1/license (activate)
         ↓
-Support team processes and sends license key
+Cache refresh → Application unlocks
 ```
 
 ### Startup

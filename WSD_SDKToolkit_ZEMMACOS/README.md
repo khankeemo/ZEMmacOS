@@ -51,37 +51,21 @@ else:
 ### Launch Universal License Center
 
 ```python
-from WSD_SDKToolkit_ZEMMACOS import LicenseEngine
-from WSD_SDKToolkit_ZEMMACOS.universal_license_center import UniversalLicenseCenter
+from WSD_SDKToolkit_ZEMMACOS import UniversalLicenseCenter
 
-engine = LicenseEngine()
-status = engine.initialize()
-
-center = UniversalLicenseCenter(engine)
-center.show()
+center = UniversalLicenseCenter()
+result = center.show()
+if result.get("status"):
+    print("License status:", result["status"]["status"])
 ```
 
-### Send Request via Email Dialog
+### Send Support Request
 
 ```python
-from WSD_SDKToolkit_ZEMMACOS.license_engine import LicenseEngine
-from WSD_SDKToolkit_ZEMMACOS.universal_email_dialog import UniversalEmailDialog
+from WSD_SDKToolkit_ZEMMACOS import UniversalLicenseCenter
 
-engine = LicenseEngine()
-engine.initialize()
-
-dialog = UniversalEmailDialog(
-    engine._client.config, engine._client,
-    engine._hardware, engine._cache
-)
-result = dialog.show(
-    "SUPPORT",
-    customer_name="John Doe",
-    customer_email="john@example.com",
-    message_text="I need help with activation"
-)
-if result.get("sent"):
-    print("Request sent successfully")
+center = UniversalLicenseCenter()
+center.show()
 ```
 
 ### Start Trial
@@ -237,14 +221,14 @@ The SDK communicates with the following Neon PostgreSQL tables managed by Websmi
 
 ## Email Request Flow
 
-All customer communications flow through the Universal Email Dialog backed by `POST /api/v1/request`.
+All customer communications flow through the Universal License Center backed by `POST /api/v1/request`.
 
 ```
-User clicks action button (e.g. "Contact Support")
+User clicks action button (e.g. "Contact Support") in UniversalLicenseCenter
         ↓
-UniversalEmailDialog opens (pre-filled with context)
+Form opens (auto-filled with customer, hardware, license context)
         ↓
-User enters name, email, subject, message
+User enters message
         ↓
 POST /api/v1/request (type: SUPPORT, BUY, RENEW, etc.)
         ↓
@@ -264,19 +248,12 @@ Support team responds via email
 **Integration pattern:**
 
 ```python
-from WSD_SDKToolkit_ZEMMACOS.license_engine import LicenseEngine
-from WSD_SDKToolkit_ZEMMACOS.universal_email_dialog import UniversalEmailDialog
+from WSD_SDKToolkit_ZEMMACOS import UniversalLicenseCenter
 
-engine = LicenseEngine()
-engine.initialize()
-
-dialog = UniversalEmailDialog(
-    engine._client.config, engine._client,
-    engine._hardware, engine._cache
-)
-result = dialog.show("SUPPORT", customer_name="John", customer_email="john@example.com")
-if result.get("sent"):
-    print("Support request sent")
+center = UniversalLicenseCenter()
+result = center.show()
+if result.get("status"):
+    print("License status:", result["status"]["status"])
 ```
 
 ## SDK Architecture
@@ -287,8 +264,8 @@ The SDK follows this layered architecture:
 ┌────────────────────────────────────────────────────┐
 │               Your Application                      │
 ├────────────────────────────────────────────────────┤
-│  UniversalLicenseCenter  │  UniversalEmailDialog    │
-│  (full Tkinter GUI)      │  (single email form)    │
+│              UniversalLicenseCenter                  │
+│              (full Tkinter GUI)                      │
 ├────────────────────────────────────────────────────┤
 │  LicenseEngine  │  CacheManager  │  HardwareDetector │
 ├────────────────────────────────────────────────────┤

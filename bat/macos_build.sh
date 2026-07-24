@@ -80,7 +80,6 @@ a = Analysis(
         'WSD_SDKToolkit_ZEMMACOS.crypto', 'WSD_SDKToolkit_ZEMMACOS.hardware',
         'WSD_SDKToolkit_ZEMMACOS.cache', 'WSD_SDKToolkit_ZEMMACOS.license_engine',
         'WSD_SDKToolkit_ZEMMACOS.universal_license_center',
-        'WSD_SDKToolkit_ZEMMACOS.universal_email_dialog',
         'Scripts.run', 'Scripts.utils', 'Scripts.plist', 'Scripts.disk',
     ],
     excludes=['unittest', 'test', 'pdb', 'pytest', 'tkinter.test'],

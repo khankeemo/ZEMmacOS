@@ -2,7 +2,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from .client import ApiClient
 from .hardware import HardwareDetector
@@ -64,7 +64,8 @@ class LicenseStatus:
 
 
 class LicenseEngine:
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None,
+                 on_license_ready: Optional[Callable[[bool], None]] = None):
         self.config = self._load_config(config_path)
         self._hardware = HardwareDetector()
         self._cache = CacheManager(self.config)
@@ -75,8 +76,16 @@ class LicenseEngine:
         )
         self._status: Optional[LicenseStatus] = None
         self._license_key: Optional[str] = None
+        self.on_license_ready: Optional[Callable[[bool], None]] = on_license_ready
         if not self._license_key:
             self._license_key = self._cache.load_license_key()
+
+    def _notify_ready(self, valid: bool) -> None:
+        if self.on_license_ready:
+            try:
+                self.on_license_ready(valid)
+            except Exception:
+                pass
 
     def _load_config(self, config_path: Optional[str]) -> Dict[str, Any]:
         if config_path is None:
@@ -91,28 +100,48 @@ class LicenseEngine:
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
+    @staticmethod
+    def _is_valid_status(status: Optional[LicenseStatus]) -> bool:
+        if not status:
+            return False
+        return status.status in ('active', 'trial')
+
     def initialize(self) -> LicenseStatus:
+        hardware_id = self._hardware.get_fingerprint()
+        self._cache.invalidate_if_hardware_mismatch(hardware_id)
         if self._cache.is_valid():
             cached = self._cache.get_license_status()
             if cached:
                 self._status = LicenseStatus.from_dict(cached)
                 if not self._license_key and self._status.license_key:
                     self._license_key = self._status.license_key
+                self._notify_ready(self._is_valid_status(self._status))
                 return self._status
         try:
-            hardware_id = self._hardware.get_fingerprint()
+            # Priority 1: Validate active paid license from server
             if self._license_key:
                 try:
                     result = self._client.validate_license(self._license_key, hardware_id)
                     data = result.get('data', result)
                     if data.get('valid'):
+                        status_str = data.get('status', 'active')
+                        if status_str == 'expired':
+                            self._status = LicenseStatus(
+                                valid=False, status='expired',
+                                expiry_date=data.get('expiry_date'), days_left=0,
+                                plan=data.get('plan'), hardware_id=hardware_id,
+                                license_key=self._license_key,
+                                message='License has expired. Please renew.',
+                                customer_name=data.get('customer_name'),
+                                customer_email=data.get('customer_email'),
+                            )
+                            self._notify_ready(False)
+                            return self._status
                         self._status = LicenseStatus(
-                            valid=True,
-                            status=data.get('status', 'active'),
+                            valid=True, status=status_str,
                             expiry_date=data.get('expiry_date'),
                             days_left=data.get('days_left', 0),
-                            plan=data.get('plan'),
-                            hardware_id=hardware_id,
+                            plan=data.get('plan'), hardware_id=hardware_id,
                             license_key=self._license_key,
                             customer_name=data.get('customer_name'),
                             customer_email=data.get('customer_email'),
@@ -120,54 +149,121 @@ class LicenseEngine:
                             customer_mobile=data.get('customer_mobile'),
                             message='License active'
                         )
-                        if self._status.valid:
-                            self._cache.set_license_status(self._status.to_dict())
+                        self._cache.set_license_status(self._status.to_dict())
+                        self._cache.mark_has_ever_activated_paid_license()
+                        self._notify_ready(True)
+                        return self._status
+                    else:
+                        server_status = data.get('status', '')
+                        if server_status == 'expired':
+                            self._status = LicenseStatus(
+                                valid=False, status='expired',
+                                expiry_date=data.get('expiry_date'), days_left=0,
+                                plan=data.get('plan'), hardware_id=hardware_id,
+                                license_key=self._license_key,
+                                message='License has expired. Please renew.'
+                            )
+                            self._notify_ready(False)
+                            return self._status
+                        if self._cache.has_ever_activated_paid_license():
+                            self._status = LicenseStatus(
+                                valid=False, status='force_reactivation',
+                                hardware_id=hardware_id, license_key=self._license_key,
+                                message='License inactive. Please reactivate.'
+                            )
+                            self._notify_ready(False)
+                            return self._status
+                        self._status = LicenseStatus(
+                            valid=False, status='force_activation',
+                            hardware_id=hardware_id, license_key=self._license_key,
+                            message='License key invalid. Please activate.'
+                        )
+                        self._notify_ready(False)
                         return self._status
                 except Exception:
-                    pass
-            trial_response = self._client.get_trial_status(hardware_id)
-            trial_data = trial_response.get('data', {})
-            if trial_data.get('has_trial'):
-                status_str = trial_data.get('status', 'trial')
+                    if self._cache.has_ever_activated_paid_license():
+                        self._status = LicenseStatus(
+                            valid=False, status='force_reactivation',
+                            hardware_id=hardware_id, license_key=self._license_key,
+                            message='License validation failed. Please reactivate.'
+                        )
+                        self._notify_ready(False)
+                        return self._status
+                    self._status = LicenseStatus(
+                        valid=False, status='force_activation',
+                        hardware_id=hardware_id, license_key=self._license_key,
+                        message='License validation failed. Please activate.'
+                    )
+                    self._notify_ready(False)
+                    return self._status
+            else:
+                if self._cache.has_ever_activated_paid_license():
+                    self._status = LicenseStatus(
+                        valid=False, status='force_reactivation',
+                        hardware_id=hardware_id,
+                        message='License key missing. Please reactivate.'
+                    )
+                    self._notify_ready(False)
+                    return self._status
+            # Priority 2: Check for active trial (only if user never had a paid license)
+            if not self._cache.has_ever_activated_paid_license():
+                trial_response = self._client.get_trial_status(hardware_id)
+                trial_data = trial_response.get('data', {})
+                if trial_data.get('has_trial'):
+                    status_str = trial_data.get('status', 'trial')
+                    if status_str == 'expired':
+                        self._status = LicenseStatus(
+                            valid=False, status='expired',
+                            expiry_date=trial_data.get('expiry_date'), days_left=0,
+                            plan=trial_data.get('plan'), hardware_id=hardware_id,
+                            message='Trial has expired. Please renew.',
+                            customer_name=trial_data.get('customer_name'),
+                            customer_email=trial_data.get('customer_email'),
+                        )
+                        self._notify_ready(False)
+                        return self._status
+                    self._status = LicenseStatus(
+                        valid=status_str == 'active', status=status_str,
+                        expiry_date=trial_data.get('expiry_date'),
+                        days_left=trial_data.get('days_left', 0),
+                        plan=trial_data.get('plan'), hardware_id=hardware_id,
+                        message=f"Trial is {status_str}",
+                        customer_name=trial_data.get('customer_name'),
+                        customer_email=trial_data.get('customer_email'),
+                        customer_phone=trial_data.get('customer_phone'),
+                        customer_mobile=trial_data.get('customer_mobile')
+                    )
+                    if self._status.valid:
+                        self._cache.set_license_status(self._status.to_dict())
+                    self._notify_ready(self._is_valid_status(self._status))
+                    return self._status
+            # Priority 3: Determine if new customer or force activation
+            if self._cache.is_onboarding_complete():
                 self._status = LicenseStatus(
-                    valid=status_str == 'active',
-                    status=status_str,
-                    expiry_date=trial_data.get('expiry_date'),
-                    days_left=trial_data.get('days_left', 0),
-                    plan=trial_data.get('plan'),
+                    valid=False, status='force_activation',
                     hardware_id=hardware_id,
-                    message=f"Trial is {status_str}",
-                    customer_name=trial_data.get('customer_name'),
-                    customer_email=trial_data.get('customer_email'),
-                    customer_phone=trial_data.get('customer_phone'),
-                    customer_mobile=trial_data.get('customer_mobile')
+                    message='No active license found. Please activate.'
                 )
-                if self._status.valid:
-                    self._cache.set_license_status(self._status.to_dict())
-                return self._status
-            trial_msg = (trial_data.get('message', '') or '').lower()
-            if 'paid license' in trial_msg or 'paid' in trial_msg:
+            else:
                 self._status = LicenseStatus(
-                    valid=False, status='force_reactivation',
+                    valid=False, status='unlicensed',
                     hardware_id=hardware_id,
-                    message='License inactive. Please reactivate or renew.'
+                    message='No license or trial found'
                 )
-                return self._status
-            self._status = LicenseStatus(
-                valid=False, status='unlicensed',
-                hardware_id=hardware_id,
-                message='No license or trial found'
-            )
+            self._notify_ready(False)
             return self._status
         except Exception as e:
             logger.exception("Unexpected error during license initialization")
             cached = self._cache.get_license_status()
             if cached:
-                return LicenseStatus.from_dict(cached)
+                status = LicenseStatus.from_dict(cached)
+                self._notify_ready(self._is_valid_status(status))
+                return status
             self._status = LicenseStatus(
                 valid=False, status='error',
                 message=f"Unexpected error: {str(e)}"
             )
+            self._notify_ready(False)
             return self._status
 
     def get_hardware_id(self) -> str:
@@ -207,6 +303,8 @@ class LicenseEngine:
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
+                self._cache.mark_has_ever_activated_paid_license()
+            self._notify_ready(True)
         return result
 
     def activate(self, license_key: str) -> Dict[str, Any]:
@@ -230,6 +328,8 @@ class LicenseEngine:
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
+                self._cache.mark_has_ever_activated_paid_license()
+            self._notify_ready(True)
         return result
 
     def start_trial(self, email: str, customer_name: str = '',
@@ -251,6 +351,7 @@ class LicenseEngine:
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
+            self._notify_ready(self._is_valid_status(self._status))
         return result
 
     def convert_trial(self, plan: Optional[str] = None, customer_name: str = '', customer_email: str = '') -> Dict[str, Any]:
@@ -278,6 +379,8 @@ class LicenseEngine:
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
+                self._cache.mark_has_ever_activated_paid_license()
+            self._notify_ready(self._is_valid_status(self._status))
         return result
 
     def get_plans(self) -> Dict[str, Any]:
@@ -305,6 +408,8 @@ class LicenseEngine:
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
+            self._cache.mark_has_ever_activated_paid_license()
+            self._notify_ready(self._is_valid_status(self._status))
         return result
 
     def deactivate(self, license_key: Optional[str] = None) -> Dict[str, Any]:
@@ -360,6 +465,8 @@ class LicenseEngine:
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
+                self._cache.mark_has_ever_activated_paid_license()
+            self._notify_ready(self._is_valid_status(self._status))
         return result
 
     def bind_device(self, license_key: Optional[str] = None, device_name: Optional[str] = None) -> Dict[str, Any]:
@@ -387,6 +494,8 @@ class LicenseEngine:
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
+                self._cache.mark_has_ever_activated_paid_license()
+            self._notify_ready(self._is_valid_status(self._status))
         return result
 
     def verify_license_for_renewal(self, license_key: str) -> Dict[str, Any]:
@@ -397,3 +506,31 @@ class LicenseEngine:
 
     def get_available_plans(self, license_key: str) -> Dict[str, Any]:
         return self._client.get_available_plans(license_key)
+
+    def send_renewal_request(self, license_key: str, customer_name: str = '',
+                             customer_email: str = '', customer_mobile: str = '',
+                             message: str = '', request_type: str = 'renew',
+                             current_plan_id: str = '', current_plan_name: str = '',
+                             requested_plan_id: str = '', requested_plan_name: str = '') -> Dict[str, Any]:
+        return self._client.send_request(
+            request_type=request_type, customer_name=customer_name,
+            customer_email=customer_email, customer_mobile=customer_mobile,
+            message=message, license_key=license_key,
+            current_plan_id=current_plan_id, current_plan_name=current_plan_name,
+            requested_plan_id=requested_plan_id, requested_plan_name=requested_plan_name,
+        )
+
+    def send_reactivation_request(self, license_key: str, customer_name: str = '',
+                                  customer_email: str = '', message: str = '') -> Dict[str, Any]:
+        return self._client.send_reactivation_request(
+            license_key=license_key, customer_name=customer_name,
+            customer_email=customer_email, message=message,
+        )
+
+    def send_support_request(self, license_key: str = '', customer_name: str = '',
+                             customer_email: str = '', subject: str = '',
+                             message: str = '') -> Dict[str, Any]:
+        return self._client.send_support_request(
+            license_key=license_key, customer_name=customer_name,
+            customer_email=customer_email, subject=subject, message=message,
+        )

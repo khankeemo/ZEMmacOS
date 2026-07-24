@@ -86,6 +86,10 @@ class CacheManager:
             del cache[key]
             self._save_cache()
 
+    def clear(self) -> None:
+        self._cache = {}
+        self._save_cache()
+
     def is_expired(self, entry: Dict[str, Any]) -> bool:
         cached_at = entry.get('cached_at', 0)
         ttl_seconds = self._ttl_days * 24 * 60 * 60
@@ -100,6 +104,19 @@ class CacheManager:
 
     def get_license_status(self) -> Optional[Dict[str, Any]]:
         return self.get('license_status')
+
+    def is_hardware_consistent(self, current_hardware_id: str) -> bool:
+        status = self.get_license_status()
+        if not status:
+            return True
+        hardware_id = status.get('hardware_id')
+        if not hardware_id:
+            return True
+        return hardware_id == current_hardware_id
+
+    def invalidate_if_hardware_mismatch(self, current_hardware_id: str) -> None:
+        if not self.is_hardware_consistent(current_hardware_id):
+            self.invalidate_license_status()
 
     def set_license_status(self, status: Dict[str, Any]) -> None:
         self.set('license_status', status)
@@ -130,3 +147,19 @@ class CacheManager:
                 key_path.unlink()
             except Exception:
                 pass
+
+    def set_onboarding_complete(self) -> None:
+        cache = self._load_cache()
+        cache['onboarding_complete'] = {'value': True, 'cached_at': time.time()}
+        self._save_cache()
+
+    def is_onboarding_complete(self) -> bool:
+        return self.get('onboarding_complete') is True
+
+    def mark_has_ever_activated_paid_license(self) -> None:
+        cache = self._load_cache()
+        cache['has_ever_activated_paid_license'] = {'value': True, 'cached_at': time.time()}
+        self._save_cache()
+
+    def has_ever_activated_paid_license(self) -> bool:
+        return self.get('has_ever_activated_paid_license') is True

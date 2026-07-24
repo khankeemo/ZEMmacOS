@@ -4,7 +4,7 @@
 
 The SDK is a complete plug-and-play license system. The host application must never implement OTP UI, activation forms, trial logic, hardware binding, renewal, device replacement, database access, or license validation.
 
-The SDK owns everything. All user-facing requests (activation, renewal, device replacement, support, hardware issues, purchases) are routed through a single `UniversalEmailDialog` backed by `POST /api/v1/request`.
+The SDK owns everything. All user-facing requests (activation, renewal, device replacement, support, hardware issues, purchases) are routed through the `UniversalLicenseCenter` backed by `POST /api/v1/request`.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ Application
         ▼
 WSD_SDK_PROJECTNAME_PRODUCTID/
 ├── universal_license_center.py   ← Full-featured license GUI
-├── universal_email_dialog.py     ← Single email form for all requests
+├── universal_email_dialog.py     ← Internal email form (used by ULC)
 ├── license_engine.py             ← Orchestrates license ops
 ├── client.py                     ← HMAC-signed HTTP client
 ├── hardware.py                   ← Machine fingerprint
@@ -81,30 +81,21 @@ If any step fails, the application blocks.
 
 **Behavior:**
 - Status display at the top (plan, expiry, days remaining, hardware ID)
-- Each button opens the `UniversalEmailDialog` pre-configured with the correct request type
+- Each button opens the appropriate dialog within the Universal License Center
 - All requests are sent via `POST /api/v1/request` to the Websmith Internal API
 - The Internal API forwards to `support@websmithdigital.com`
 
-## Universal Email Dialog
+## License Center Workflow
 
-**File:** `universal_email_dialog.py`
+The Universal License Center handles all customer workflows through a single interface:
+- Welcome / Trial onboarding (new customers)
+- License activation
+- License renewal
+- License reactivation
+- Support requests
+- Request history
 
-**Purpose:** Single reusable email form for all request types.
-
-**Supported Request Types:**
-| Type | Description |
-|------|-------------|
-| `BUY` | Purchase request |
-| `RENEW` | License renewal request |
-| `SUPPORT` | General support request |
-| `ACTIVATION` | License activation assistance |
-| `DEVICE_REPLACEMENT` | Device transfer request |
-| `HARDWARE` | Hardware-related issue |
-| `GENERAL` | Other inquiries |
-
-**Fields:** Full Name, Email, Subject, Message (auto-populated from context)
-
-**API:** All types use `POST /api/v1/request` — SDK never sends email directly.
+All requests are sent via `POST /api/v1/request` — SDK never sends email directly.
 
 ## Backend APIs
 
@@ -132,7 +123,7 @@ If any step fails, the application blocks.
 All SDK email requests follow this path:
 
 ```
-UniversalEmailDialog.show("SUPPORT", ...)
+UniversalLicenseCenter → Support Form
         ↓
 POST /api/v1/request    ← SDK calls API
         ↓

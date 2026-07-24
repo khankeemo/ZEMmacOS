@@ -37,6 +37,7 @@ class ApiClient:
         self.timeout = float(self.api_config.get('timeout', 30000)) / 1000
         self.retry_count = self.api_config.get('retry_count', 3)
         self.product_id = config.get('product', {}).get('id', '')
+        self.product_name = config.get('product', {}).get('name', '')
         self._hardware = hardware or HardwareDetector()
         self._cache = cache
 
@@ -122,12 +123,16 @@ class ApiClient:
     def send_request(self, request_type: str, customer_name: str, customer_email: str,
                      subject: str = '', message: str = '',
                      license_key: str = '', hardware_id: str = '',
-                     plan_name: str = '', product_name: str = '') -> Dict[str, Any]:
+                     plan_name: str = '', product_name: str = '',
+                     customer_mobile: str = '', current_plan_id: str = '',
+                     current_plan_name: str = '', requested_plan_id: str = '',
+                     requested_plan_name: str = '') -> Dict[str, Any]:
         payload = {
             'request_type': request_type,
             'customer_name': customer_name,
             'customer_email': customer_email,
-            'product_name': product_name or self.config.get('product', {}).get('name', ''),
+            'customer_mobile': customer_mobile,
+            'product_name': product_name or self.product_name,
             'plan_name': plan_name,
             'license_key': license_key,
             'hardware_id': hardware_id or self._get_hardware_id(),
@@ -135,8 +140,38 @@ class ApiClient:
             'runtime_type': RUNTIME_TYPE,
             'subject': subject or f'{request_type} Request',
             'message': message or f'{request_type} request from SDK',
+            'current_plan_id': current_plan_id,
+            'current_plan_name': current_plan_name,
+            'requested_plan_id': requested_plan_id,
+            'requested_plan_name': requested_plan_name,
         }
         return self._request('request', payload)
+
+    def send_otp(self, email: str) -> Dict[str, Any]:
+        endpoint = 'auth/otp/send'
+        payload = {'email': email, 'product_id': self.product_id}
+        return self._request(endpoint, payload)
+
+    def verify_otp(self, email: str, otp: str) -> Dict[str, Any]:
+        endpoint = 'auth/otp/verify'
+        payload = {'email': email, 'otp': otp, 'product_id': self.product_id}
+        return self._request(endpoint, payload)
+
+    def register_customer(self, name: str, email: str, mobile: str,
+                           country_code: str, hardware_id: str,
+                           company_name: str = '') -> Dict[str, Any]:
+        endpoint = 'customer/register'
+        payload = {
+            'name': name, 'email': email, 'mobile': mobile,
+            'country_code': country_code, 'hardware_id': hardware_id,
+            'company_name': company_name, 'product_id': self.product_id,
+        }
+        return self._request(endpoint, payload)
+
+    def get_countries(self) -> Dict[str, Any]:
+        endpoint = 'countries'
+        payload = {'action': 'list'}
+        return self._request(endpoint, payload)
 
     def validate_license(self, license_key: str, hardware_id: Optional[str] = None) -> Dict[str, Any]:
         if hardware_id is None:
@@ -154,7 +189,8 @@ class ApiClient:
     def activate_license(self, license_key: str, hardware_id: Optional[str] = None) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
-        payload = {'action': 'activate', 'license_key': license_key, 'hardware_id': hardware_id}
+        payload = {'action': 'activate', 'license_key': license_key, 'hardware_id': hardware_id,
+                   'product_id': self.product_id}
         response = self._request('license', payload)
         if self._cache:
             self._cache.invalidate_license_status()
@@ -290,3 +326,28 @@ class ApiClient:
             return {'success': False, 'requests': []}
         except Exception:
             return {'success': False, 'requests': []}
+
+    def send_reactivation_request(self, license_key: str, customer_name: str = '',
+                                  customer_email: str = '', message: str = '') -> Dict[str, Any]:
+        payload = {
+            'license_key': license_key,
+            'customer_name': customer_name or 'SDK User',
+            'customer_email': customer_email or '',
+            'hardware_id': self._get_hardware_id(),
+            'message': message or 'Reactivation request from SDK',
+        }
+        return self._request('reactivations', payload)
+
+    def send_support_request(self, license_key: str = '', customer_name: str = '',
+                             customer_email: str = '', subject: str = '',
+                             message: str = '') -> Dict[str, Any]:
+        payload = {
+            'request_type': 'SUPPORT',
+            'license_key': license_key or '',
+            'customer_name': customer_name or 'SDK User',
+            'customer_email': customer_email or '',
+            'hardware_id': self._get_hardware_id(),
+            'subject': subject or 'Support Request',
+            'message': message or 'Support request from SDK',
+        }
+        return self._request('support', payload)

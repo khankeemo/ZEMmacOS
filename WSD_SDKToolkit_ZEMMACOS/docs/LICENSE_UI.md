@@ -27,19 +27,9 @@
 | Contact Support | Email dialog | SUPPORT |
 | Request History | History view | — |
 
-## Universal Email Dialog
+## Request Types (via Universal License Center)
 
-**File:** `universal_email_dialog.py`
-
-**Purpose:** Single reusable email form for all request types.
-
-**Fields:**
-- Your Name (required)
-- Your Email (required)
-- License Key (auto-populated if available)
-- Plan (auto-populated if available)
-- Subject (auto-generated from request type)
-- Message (required)
+All requests use the `UniversalLicenseCenter` interface, which internally uses the email dialog.
 
 **Request Types:**
 `BUY`, `RENEW`, `SUPPORT`, `ACTIVATION`, `DEVICE_REPLACEMENT`, `HARDWARE`, `GENERAL`
@@ -49,19 +39,15 @@
 ## Import Pattern
 
 ```python
-from WSD_SDK_PROJECTNAME_PRODUCTID import UniversalLicenseCenter, UniversalEmailDialog
+from WSD_SDK_PROJECTNAME_PRODUCTID import UniversalLicenseCenter
 from WSD_SDK_PROJECTNAME_PRODUCTID.license_engine import LicenseEngine
 
 engine = LicenseEngine()
 status = engine.initialize()
 
-# Full GUI
-center = UniversalLicenseCenter(engine)
-center.show()
-
-# Direct email dialog
-dialog = UniversalEmailDialog(engine._config, engine._client, engine._hardware, engine._cache)
-result = dialog.show("SUPPORT", customer_name="User")
+# Full license center GUI
+center = UniversalLicenseCenter()
+result = center.show()
 ```
 
 ## Recommended UI Structure
