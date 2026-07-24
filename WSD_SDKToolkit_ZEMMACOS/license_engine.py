@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .client import ApiClient, ApiError
+from .client import ApiClient
 from .hardware import HardwareDetector
 from .cache import CacheManager
 

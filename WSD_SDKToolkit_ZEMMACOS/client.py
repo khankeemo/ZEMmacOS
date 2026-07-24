@@ -1,5 +1,4 @@
 """API Client for ZEM MAC OS License API"""
-import json
 import time
 from typing import Any, Dict, Optional
 
@@ -239,13 +238,12 @@ class ApiClient:
         return self._request('license/verify-renewal', payload)
 
     def get_license_details(self, license_key: str) -> Dict[str, Any]:
-        import requests as _requests
         url = f"{self.base_url}/api/{self.api_version}/license/details/{license_key}"
         api_path = f"/api/{self.api_version}/license/details/{license_key}"
         headers = self._sign_request({}, method='GET', path=api_path)
         headers['Content-Type'] = 'application/json'
         try:
-            resp = _requests.get(url, headers=headers, timeout=self.timeout)
+            resp = requests.get(url, headers=headers, timeout=self.timeout)
             if resp.status_code == 200:
                 return resp.json()
             return {'success': False, 'error': resp.json().get('message', f'HTTP {resp.status_code}')}
@@ -253,14 +251,13 @@ class ApiClient:
             return {'success': False, 'error': str(e)}
 
     def get_available_plans(self, license_key: str) -> Dict[str, Any]:
-        import requests as _requests
         payload: Dict[str, Any] = {'license_key': license_key}
         api_path = f"/api/{self.api_version}/license/verify-renewal"
         headers = self._sign_request(payload, method='POST', path=api_path, query='')
         headers['Content-Type'] = 'application/json'
         url = f"{self.base_url}{api_path}"
         try:
-            resp = _requests.post(url, json=payload, headers=headers, timeout=self.timeout)
+            resp = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
             if resp.status_code == 200:
                 data = resp.json()
                 plans = data.get('available_plans', [])
@@ -275,10 +272,9 @@ class ApiClient:
             return {'success': False, 'plans': []}
 
     def get_products(self) -> Dict[str, Any]:
-        import requests as _requests
         url = f"{self.base_url}/api/{self.api_version}/store/products"
         try:
-            resp = _requests.get(url, timeout=self.timeout)
+            resp = requests.get(url, timeout=self.timeout)
             if resp.status_code == 200:
                 return resp.json()
             return {'success': False, 'products': []}
@@ -286,10 +282,9 @@ class ApiClient:
             return {'success': False, 'products': []}
 
     def get_request_history(self, email: str) -> Dict[str, Any]:
-        import requests as _requests
         url = f"{self.base_url}/api/{self.api_version}/request?email={email}"
         try:
-            resp = _requests.get(url, timeout=self.timeout)
+            resp = requests.get(url, timeout=self.timeout)
             if resp.status_code == 200:
                 return resp.json()
             return {'success': False, 'requests': []}

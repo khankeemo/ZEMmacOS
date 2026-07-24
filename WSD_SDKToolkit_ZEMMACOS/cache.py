@@ -86,10 +86,6 @@ class CacheManager:
             del cache[key]
             self._save_cache()
 
-    def clear(self) -> None:
-        self._cache = {}
-        self._save_cache()
-
     def is_expired(self, entry: Dict[str, Any]) -> bool:
         cached_at = entry.get('cached_at', 0)
         ttl_seconds = self._ttl_days * 24 * 60 * 60
@@ -102,9 +98,6 @@ class CacheManager:
             return False
         return not self.is_expired(entry)
 
-    def exists(self) -> bool:
-        return self._cache_file.exists()
-
     def get_license_status(self) -> Optional[Dict[str, Any]]:
         return self.get('license_status')
 
@@ -113,14 +106,6 @@ class CacheManager:
 
     def invalidate_license_status(self) -> None:
         self.delete('license_status')
-
-    def set_onboarding_complete(self) -> None:
-        cache = self._load_cache()
-        cache['onboarding_complete'] = {'value': True, 'cached_at': time.time()}
-        self._save_cache()
-
-    def is_onboarding_complete(self) -> bool:
-        return self.get('onboarding_complete') is True
 
     def save_license_key(self, license_key: str) -> None:
         key_path = self._cache_dir / 'license.key'
