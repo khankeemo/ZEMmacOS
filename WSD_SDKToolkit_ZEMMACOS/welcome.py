@@ -1,9 +1,10 @@
 """Welcome Dialog - Customer onboarding with OTP verification and trial generation"""
 import json
 import os
+import traceback
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from .client import ApiClient
 from .hardware import HardwareDetector
@@ -18,11 +19,13 @@ _COUNTRIES_CACHE: list = []
 
 class WelcomeDialog:
     def __init__(self, client: ApiClient, hardware: HardwareDetector,
-                 cache: CacheManager, product_name: str = ''):
+                 cache: CacheManager, product_name: str = '',
+                 log_fn: Optional[Callable[[str, str, str, Optional[str]], None]] = None):
         self.client = client
         self.hardware = hardware
         self.cache = cache
         self.product_name = product_name
+        self._log_fn = log_fn
         self._result: Optional[Dict[str, Any]] = None
         self._root: Optional[tk.Toplevel] = None
         self._countries = []
@@ -58,6 +61,13 @@ class WelcomeDialog:
         self._load_countries()
         self._root.wait_window()
         return self._result or {'skipped': True}
+
+    def _log(self, category: str, level: str, message: str, detail: Optional[str] = None):
+        if self._log_fn:
+            try:
+                self._log_fn(category, level, message, detail)
+            except Exception:
+                pass
 
     def _center_window(self):
         if not self._root:
@@ -191,20 +201,25 @@ class WelcomeDialog:
         if not self._selected_country:
             self._show_error('Please select a country code')
             return
+        self._log("OTP", "INFO", "Sending welcome OTP", f"email={email}")
         self._send_btn.config(state='disabled', text='Sending...')
         self._clear_error()
         try:
             result = self.client.send_otp(email)
             if result.get('success'):
                 self._otp_sent = True
+                self._log("OTP", "SUCCESS", "Welcome OTP sent successfully", f"email={email}")
                 self._status_label.config(text='OTP sent to your email', fg=self._success)
                 self._otp_entry.config(state='normal')
                 self._verify_btn.config(state='normal')
                 self._send_btn.config(text='Resend OTP', state='normal')
             else:
-                self._show_error(result.get('error', result.get('message', 'Failed to send OTP')))
+                err_msg = result.get('error', result.get('message', 'Failed to send OTP'))
+                self._log("OTP", "ERROR", "Welcome OTP send failed", str(err_msg))
+                self._show_error(err_msg)
                 self._send_btn.config(state='normal', text='Send OTP')
         except Exception as e:
+            self._log("OTP", "ERROR", "Welcome OTP send exception", str(e))
             self._show_error(str(e))
             self._send_btn.config(state='normal', text='Send OTP')
 
@@ -214,19 +229,24 @@ class WelcomeDialog:
         if not otp or len(otp) < 4:
             self._show_error('Enter the OTP code')
             return
+        self._log("OTP", "INFO", "OTP verification started", f"email={email}")
         self._verify_btn.config(state='disabled', text='Verifying...')
         self._clear_error()
         try:
             result = self.client.verify_otp(email, otp)
             if result.get('success'):
+                self._log("OTP", "SUCCESS", "OTP verified successfully", f"email={email}")
                 if result.get('customer_exists'):
                     self._handle_existing_customer()
                 else:
                     self._complete_onboarding()
             else:
-                self._show_error(result.get('error', result.get('message', 'Invalid OTP')))
+                err_msg = result.get('error', result.get('message', 'Invalid OTP'))
+                self._log("OTP", "ERROR", "OTP verification failed", str(err_msg))
+                self._show_error(err_msg)
                 self._verify_btn.config(state='normal', text='Verify')
         except Exception as e:
+            self._log("OTP", "ERROR", "OTP verification exception", str(e))
             self._show_error(str(e))
             self._verify_btn.config(state='normal', text='Verify')
 
@@ -298,6 +318,10 @@ class WelcomeDialog:
                     self._show_error(err)
                     self._verify_btn.config(state='normal', text='Verify')
         except Exception as e:
+            tb = traceback.format_exc()
+            self._log("WELCOME", "ERROR", "Onboarding exception", str(e))
+            for tb_line in tb.strip().split("\n"):
+                self._log("WELCOME", "ERROR", f"  {tb_line}")
             self._show_error(str(e))
             self._verify_btn.config(state='normal', text='Verify')
 

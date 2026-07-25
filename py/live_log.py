@@ -14,6 +14,9 @@ CATEGORIES = {
     "DEVICE": 5,
     "UI": 6,
     "AWS01": 7,
+    "VALIDATION": 8,
+    "OTP": 9,
+    "APP": 10,
 }
 
 LEVELS = {"DEBUG": 0, "INFO": 1, "SUCCESS": 2, "WARNING": 3, "ERROR": 4}
@@ -35,6 +38,9 @@ CATEGORY_COLORS = {
     "DEVICE": "#ff6482",
     "UI": "#86868b",
     "AWS01": "#ff3b30",
+    "VALIDATION": "#a855f7",
+    "OTP": "#f97316",
+    "APP": "#06b6d4",
 }
 
 

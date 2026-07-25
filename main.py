@@ -307,6 +307,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._enable_nav()
         self._update_all_license_ui()
         self.log_live("UI", "SUCCESS", "UI unlocked")
+        self.log_live("APP", "SUCCESS", "Application unlocked")
 
     def _disable_nav(self):
         for btn in self._nav_buttons.values():
@@ -356,7 +357,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def _run_welcome_flow(self):
         self.log_live("WELCOME", "INFO", "Opening Universal License Center")
         config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        center = UniversalLicenseCenter(config_path=str(config_path))
+        center = UniversalLicenseCenter(config_path=str(config_path), log_fn=self.log_live)
         result = center.show()
         self.log_live("WELCOME", "INFO", "License center closed")
 
@@ -377,7 +378,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             return
         self.log_live("ACTIVATION", "INFO", "Opening Universal License Center for activation")
         config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        center = UniversalLicenseCenter(config_path=str(config_path))
+        center = UniversalLicenseCenter(config_path=str(config_path), log_fn=self.log_live)
         result = center.show()
         self.log_live("ACTIVATION", "INFO", f"License center closed")
 
@@ -402,11 +403,15 @@ class ZEMmacOSApp(ZEMmacOSUI):
                         "License refresh completed after activation"
                     )
                 except Exception as e:
+                    import traceback as _tb
+                    _tb_detail = _tb.format_exc()
                     self.log_live(
                         "ACTIVATION",
                         "ERROR",
                         f"License refresh error after activation: {e}"
                     )
+                    for _tb_line in _tb_detail.strip().split("\n"):
+                        self.log_live("ACTIVATION", "ERROR", _tb_line)
                     self.root.after(0, self._show_stylish_activation_success)
 
             threading.Thread(target=_refresh, daemon=True).start()
@@ -422,7 +427,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             return
         self.log_live("RENEWAL", "INFO", "Opening Universal License Center for renewal")
         config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        center = UniversalLicenseCenter(config_path=str(config_path))
+        center = UniversalLicenseCenter(config_path=str(config_path), log_fn=self.log_live)
         result = center.show()
         self.log_live("RENEWAL", "INFO", "Renewal dialog closed")
 
@@ -437,10 +442,15 @@ class ZEMmacOSApp(ZEMmacOSUI):
                     self.root.after(0, self._update_all_license_ui)
                     self.log_live("RENEWAL", "SUCCESS", "License refreshed after renew")
                 except Exception as e:
+                    import traceback as _tb
+                    _tb_detail = _tb.format_exc()
                     self.log_live("RENEWAL", "ERROR", f"License refresh error after renew: {e}")
+                    for _tb_line in _tb_detail.strip().split("\n"):
+                        self.log_live("RENEWAL", "ERROR", _tb_line)
             threading.Thread(target=_refresh_renew, daemon=True).start()
 
     def _show_stylish_activation_success(self):
+        self.log_live("UI", "INFO", "Creating Activation Success dialog")
         status = self.license_status
         plan_name = (status.plan or '') if status else ''
         lic_key = (status.license_key or '') if status else ''
@@ -464,6 +474,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
         W, H = 400, 300
 
         def on_restart():
+            self.log_live("UI", "INFO", "Restart button clicked")
+            self.log_live("APP", "INFO", "Restart requested")
             try:
                 d.destroy()
             except Exception:
@@ -471,11 +483,14 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self._restart_app()
 
         def on_later():
+            self.log_live("UI", "INFO", "Restart later clicked")
             try:
                 d.destroy()
             except Exception:
                 pass
 
+        self.log_live("UI", "INFO", "Showing Activation Success dialog")
+        self.log_live("UI", "INFO", "Waiting for Restart confirmation")
         d, canvas = self._make_modal_dialog(W, H, close_cb=on_later)
         cx = W // 2
 
@@ -519,9 +534,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def _restart_app(self):
         self.log_live("ACTIVATION", "INFO", "Inside _restart_app")
+        self.log_live("APP", "INFO", "Restart requested")
+        self.log_live("APP", "INFO", "Reloading license cache")
         # Stop the validity countdown BEFORE destroying anything
         self._countdown_running = False
-        self.log_live("ACTIVATION", "INFO", "Restarting application to load new license")
+        self.log_live("APP", "INFO", "Closing application")
         self._stop_network_monitor()
         if hasattr(self, 'live_log'):
             self.live_log.write("STARTUP", "INFO", "Application restarting for new license")
@@ -531,6 +548,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self.root.destroy()
         except Exception:
             pass
+        self.log_live("APP", "INFO", "Restarting application")
         python = sys.executable
         import subprocess as _subprocess
         script = os.path.abspath(sys.argv[0]) if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
@@ -575,7 +593,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 else:
                     self.log_live("ACTIVATION", "WARNING", "License refresh returned None - keeping previous data")
             except Exception as e:
+                import traceback as _tb
+                _tb_detail = _tb.format_exc()
                 self.log_live("ACTIVATION", "ERROR", f"License refresh error: {e}")
+                for _tb_line in _tb_detail.strip().split("\n"):
+                    self.log_live("ACTIVATION", "ERROR", _tb_line)
         threading.Thread(target=do, daemon=True).start()
 
     def _update_all_license_ui(self):
