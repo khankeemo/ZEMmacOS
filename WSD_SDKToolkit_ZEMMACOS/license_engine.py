@@ -160,6 +160,10 @@ class LicenseEngine:
                 return self._status
         print(f"{time.strftime('%H:%M:%S')} Cache miss or invalid — checking server")
         try:
+            # Load persisted license key if not already in memory
+            if not self._license_key:
+                self._license_key = self._cache.load_license_key()
+
             # Priority 1: Validate active paid license from server
             if self._license_key:
                 print(f"{time.strftime('%H:%M:%S')} License validation started — key: {self._license_key[:8]}...")
@@ -196,6 +200,7 @@ class LicenseEngine:
                         )
                         self._cache.set_license_status(self._status.to_dict())
                         self._cache.mark_has_ever_activated_paid_license()
+                        self._cache.set_onboarding_complete()
                         self._notify_ready(True)
                         return self._status
                     else:
@@ -378,6 +383,7 @@ class LicenseEngine:
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
                 self._cache.mark_has_ever_activated_paid_license()
+                self._cache.set_onboarding_complete()
             self._notify_ready(True)
         return result
 

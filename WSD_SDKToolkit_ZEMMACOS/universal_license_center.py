@@ -579,7 +579,27 @@ class UniversalLicenseCenter:
                         status_lbl.config(
                             text="License already activated on this device. You can continue using the application.",
                             fg=self._success)
-                        dialog.after(3000, dialog.destroy)
+                        self.cache.set_onboarding_complete()
+                        self.cache.save_license_key(key)
+                        self.engine._license_key = key
+                        self.engine._status = LicenseStatus(
+                            valid=True, status='active',
+                            expiry_date=data.get('expiry_date'),
+                            days_left=data.get('days_left', 0),
+                            plan=data.get('plan'), hardware_id=self.hardware.get_fingerprint(),
+                            license_key=key,
+                            customer_name=data.get('customer_name'),
+                            customer_email=data.get('customer_email'),
+                            customer_phone=data.get('customer_phone'),
+                            customer_mobile=data.get('customer_mobile'),
+                            message='License active'
+                        )
+                        self.engine._cache.set_license_status(self.engine._status.to_dict())
+                        self.engine._cache.mark_has_ever_activated_paid_license()
+                        self._unlock_application()
+                        self._status = self.engine.get_status()
+                        self._refresh_display()
+                        dialog.after(2000, dialog.destroy)
                         return
 
                     # Check device limit
@@ -902,6 +922,7 @@ class UniversalLicenseCenter:
                     tk.Label(plan_frame, text="Available Paid Plans", font=("Segoe UI", 11, "bold"),
                              bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 6))
 
+                    plan_buttons = []
                     for plan in plans:
                         rb = tk.Radiobutton(plan_frame, text=f"{plan.get('name', 'N/A')} - {plan.get('description', plan.get('duration', ''))}",
                                             variable=selected_plan, value=plan.get('name', ''),
