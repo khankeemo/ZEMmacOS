@@ -220,6 +220,7 @@ class UniversalLicenseCenter:
         if is_trial:
             buttons = [
                 ("Activate License", self._activate_license, self._primary),
+                ("Renew License", self._renew_license_flow, self._primary),
                 ("Contact Support", self._contact_support, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
                 ("View Notifications", self._view_notifications, self._text_secondary),
@@ -227,18 +228,19 @@ class UniversalLicenseCenter:
             ]
         elif is_paid:
             buttons = [
-                ("Renew License", self._renew_license, self._primary),
+                ("Renew License", self._renew_license_flow, self._primary),
                 ("View Hardware Status", self._view_hardware_status, self._text_secondary),
                 ("Contact Support", self._contact_support, self._text_secondary),
-                ("Sales Enquiry", self._contact_sales, self._text_secondary),
+                ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
                 ("View Notifications", self._view_notifications, self._text_secondary),
                 ("Close", self._on_close, "#e5e7eb"),
             ]
         elif is_expired:
             buttons = [
-                ("Renew License", self._renew_license, self._primary),
-                ("Reactivate License", self._reactivate_license, self._warning),
+                ("Activate License", self._activate_license, self._primary),
+                ("Renew License", self._renew_license_flow, self._primary),
+                ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                 ("Contact Support", self._contact_support, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
                 ("View Notifications", self._view_notifications, self._text_secondary),
@@ -248,8 +250,9 @@ class UniversalLicenseCenter:
             if self._trial_consumed:
                 buttons = [
                     ("Activate License", self._activate_license, self._primary),
+                    ("Renew License", self._renew_license_flow, self._primary),
+                    ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                     ("Contact Support", self._contact_support, self._text_secondary),
-                    ("Sales Enquiry", self._contact_sales, self._text_secondary),
                     ("Exit", self._on_close, "#e5e7eb"),
                 ]
                 self._status_detail.config(
@@ -260,8 +263,9 @@ class UniversalLicenseCenter:
                 buttons = [
                     ("Start Free Trial", self._start_trial, self._success),
                     ("Activate License", self._activate_license, self._primary),
+                    ("Renew License", self._renew_license_flow, self._primary),
+                    ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                     ("Contact Support", self._contact_support, self._text_secondary),
-                    ("Sales Enquiry", self._contact_sales, self._text_secondary),
                     ("Close", self._on_close, "#e5e7eb"),
                 ]
 
@@ -700,16 +704,11 @@ class UniversalLicenseCenter:
         except Exception as e:
             status_lbl.config(text=f"OTP error: {str(e)}", fg=self._error)
 
-    def _renew_license(self):
+    def _renew_license_flow(self):
         LiveLog.log("Opening Renewal", "Dialog displayed")
-        if not self._status:
-            messagebox.showwarning("Not Available", "No license information available.",
-                                    parent=self._root)
-            return
-
         dialog = tk.Toplevel(self._root)
         dialog.title("Renew License")
-        dialog.geometry("560x580")
+        dialog.geometry("620x700")
         dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
@@ -721,78 +720,159 @@ class UniversalLicenseCenter:
         tk.Label(frame, text="Renew License", font=("Segoe UI", 16, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
 
-        tk.Label(frame, text="Current License", font=("Segoe UI", 11, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        current_info = f"Plan: {self._status.plan or 'N/A'}"
-        if self._status.expiry_date:
-            current_info += f" | Expires: {self._status.expiry_date}"
-        if self._status.license_key:
-            current_info += f"\nKey: {self._status.license_key}"
-        tk.Label(frame, text=current_info, font=("Segoe UI", 10),
-                 bg=self._card_bg, fg=self._text_secondary,
-                 wraplength=480, justify="left").pack(anchor="w", padx=16, pady=(0, 12))
+        # Phase 1: Enter License Key
+        phase1 = tk.Frame(frame, bg=self._card_bg)
+        phase1.pack(fill="x", padx=0, pady=0)
 
-        ttk.Separator(frame, orient="horizontal").pack(fill="x", padx=16, pady=8)
-
-        tk.Label(frame, text="Request Renewal", font=("Segoe UI", 11, "bold"),
+        tk.Label(phase1, text="Enter Last License Key *", font=("Segoe UI", 10, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        tk.Label(frame, text="Our team will contact you with renewal options.",
-                 font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
-            anchor="w", padx=16, pady=(0, 8))
-
-        tk.Label(frame, text="Your Name *", font=("Segoe UI", 10, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        name_var = tk.StringVar(value=self._status.customer_name or "")
-        tk.Entry(frame, textvariable=name_var, font=("Segoe UI", 11),
+        key_var = tk.StringVar()
+        tk.Entry(phase1, textvariable=key_var, font=("Courier", 11),
                  relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
 
-        tk.Label(frame, text="Your Email *", font=("Segoe UI", 10, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        email_var = tk.StringVar(value=self._status.customer_email or "")
-        tk.Entry(frame, textvariable=email_var, font=("Segoe UI", 11),
-                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
+        status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg, wraplength=540)
+        status_lbl.pack(padx=16, pady=(4, 0))
 
-        tk.Label(frame, text="Your Mobile", font=("Segoe UI", 10, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        mobile_var = tk.StringVar(value=self._status.customer_mobile or self._status.customer_phone or "")
-        tk.Entry(frame, textvariable=mobile_var, font=("Segoe UI", 11),
-                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 12))
+        # Phase 2: Customer Info (hidden until validated)
+        info_frame = tk.Frame(frame, bg=self._card_bg)
 
-        status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg)
-        status_lbl.pack(padx=16)
+        # Phase 3: Plan Selection (hidden until validated)
+        plan_frame = tk.Frame(frame, bg=self._card_bg)
+        selected_plan = tk.StringVar()
+        validated_data: Dict[str, Any] = {}
 
-        def do_send():
-            name = name_var.get().strip()
-            email = email_var.get().strip()
-            if not name or not email:
-                status_lbl.config(text="Name and email are required.", fg=self._error)
+        def do_validate():
+            key = key_var.get().strip()
+            if not key:
+                status_lbl.config(text="License key is required.", fg=self._error)
                 return
-            status_lbl.config(text="Submitting renewal request...", fg=self._text_secondary)
+            status_lbl.config(text="Validating license...", fg=self._text_secondary)
             dialog.update()
             try:
-                result = self.engine.send_renewal_request(
-                    license_key=self._status.license_key or "",
-                    customer_name=name, customer_email=email,
-                    customer_mobile=mobile_var.get().strip(),
-                    request_type='renew',
-                    current_plan_id='', current_plan_name=self._status.plan or '',
+                validate_result = self.engine.validate(key)
+                if not validate_result.get('success') and validate_result.get('valid') is not True:
+                    data = validate_result.get('data', validate_result)
+                    err_code = validate_result.get('error', {}).get('code', '') or data.get('error', {}).get('code', '')
+                    err_msg = validate_result.get('error', {}).get('message', '') or validate_result.get('message', '')
+                    if err_code in ('LICENSE_REVOKED', 'LICENSE_INACTIVE', 'LICENSE_DELETED'):
+                        status_lbl.config(text=f"License {err_code.replace('LICENSE_', '').lower()}. Contact support.", fg=self._error)
+                        return
+                    if err_code != 'LICENSE_EXPIRED':
+                        status_lbl.config(text=f"Validation failed: {err_msg}", fg=self._error)
+                        return
+                    status_lbl.config(text="License expired. Proceeding with renewal...", fg=self._warning)
+                else:
+                    status_lbl.config(text="License valid. Loading information...", fg=self._success)
+                dialog.update()
+
+                validated_data.clear()
+                validated_data.update(validate_result.get('data', validate_result))
+
+                # Show customer/license info
+                phase1.pack_forget()
+                info_frame.pack(fill="x", padx=0, pady=8)
+
+                info_fields = [
+                    ("Customer Name", data.get('customer_name', 'N/A')),
+                    ("Email", data.get('customer_email', 'N/A')),
+                    ("Product", data.get('product_name', 'N/A')),
+                    ("Current Plan", data.get('plan', 'N/A')),
+                    ("Current Expiry", data.get('expiry_date', 'N/A')),
+                    ("License Status", data.get('status', 'N/A')),
+                    ("Days Remaining", str(data.get('days_left', 0))),
+                ]
+                for label, value in info_fields:
+                    row = tk.Frame(info_frame, bg=self._card_bg)
+                    row.pack(fill="x", padx=16, pady=(1, 1))
+                    tk.Label(row, text=label + ":", font=("Segoe UI", 10, "bold"),
+                             bg=self._card_bg, fg=self._text_primary, width=18, anchor="w").pack(side="left")
+                    tk.Label(row, text=value, font=("Segoe UI", 10),
+                             bg=self._card_bg, fg=self._text_secondary, anchor="w").pack(side="left", fill="x")
+
+                # Load plans
+                status_lbl.config(text="Loading available plans...", fg=self._text_secondary)
+                dialog.update()
+                try:
+                    plans_result = self.client.get_available_plans(key)
+                    plans = []
+                    if plans_result.get('success') and plans_result.get('plans'):
+                        plans = plans_result['plans']
+                except Exception:
+                    plans = []
+
+                if plans:
+                    plan_frame.pack(fill="x", padx=0, pady=8)
+                    for widget in plan_frame.winfo_children():
+                        widget.destroy()
+
+                    tk.Label(plan_frame, text="Available Paid Plans", font=("Segoe UI", 11, "bold"),
+                             bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 6))
+
+                    for plan in plans:
+                        rb = tk.Radiobutton(plan_frame, text=f"{plan.get('name', 'N/A')} - {plan.get('description', plan.get('duration', ''))}",
+                                            variable=selected_plan, value=plan.get('name', ''),
+                                            font=("Segoe UI", 10), bg=self._card_bg,
+                                            anchor="w", wraplength=480)
+                        rb.pack(fill="x", padx=32, pady=(2, 2))
+                        plan_buttons.append(rb)
+
+                    keep_rb = tk.Radiobutton(plan_frame, text="Keep current plan",
+                                             variable=selected_plan, value=data.get('plan', ''),
+                                             font=("Segoe UI", 10), bg=self._card_bg,
+                                             anchor="w", wraplength=480)
+                    keep_rb.pack(fill="x", padx=32, pady=(2, 6))
+                    plan_buttons.append(keep_rb)
+                else:
+                    tk.Label(plan_frame, text="No alternative plans available. Current plan will be renewed.",
+                             font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
+                        anchor="w", padx=16, pady=(4, 8))
+
+                # Show Send button
+                send_btn.pack(fill="x", padx=16, pady=(8, 12))
+
+            except Exception as e:
+                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
+
+        def do_send():
+            key = key_var.get().strip()
+            status_lbl.config(text="Sending renewal request...", fg=self._text_secondary)
+            dialog.update()
+            try:
+                result = self.engine.create_communication(
+                    category='renewal',
+                    customer_email=validated_data.get('customer_email', ''),
+                    customer_name=validated_data.get('customer_name', ''),
+                    subject=f"License Renewal Request - {key}",
+                    message=f"Renewal requested for license {key}.",
+                    license_key=key,
+                    hardware_id=self.hardware.get_fingerprint(),
                 )
-                if result.get("success"):
+                if result.get('success'):
                     messagebox.showinfo("Request Submitted",
-                                        "Your renewal request has been submitted.\n"
-                                        "Our team will contact you shortly.",
+                                        "Your renewal request has been submitted.\nOur team will contact you.",
+                                        parent=dialog)
+                    dialog.destroy()
+                elif result.get('queued'):
+                    messagebox.showinfo("Request Queued",
+                                        "Your renewal request has been queued.\nIt will be sent when connection is restored.",
                                         parent=dialog)
                     dialog.destroy()
                 else:
-                    err = result.get("message", result.get("error", "Failed"))
+                    err = result.get('message', result.get('error', 'Failed'))
                     status_lbl.config(text=f"Failed: {err}", fg=self._error)
             except Exception as e:
                 status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
 
-        tk.Button(frame, text="Submit Renewal Request", command=do_send,
-                  font=("Segoe UI", 11, "bold"),
-                  bg=self._primary, fg="white", relief="flat",
-                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
+        validate_btn = tk.Button(frame, text="Validate License", command=do_validate,
+                                 font=("Segoe UI", 11, "bold"),
+                                 bg=self._primary, fg="white", relief="flat",
+                                 padx=12, pady=6, cursor="hand2")
+        validate_btn.pack(fill="x", padx=16, pady=(8, 4))
+
+        send_btn = tk.Button(frame, text="Submit Renewal Request", command=do_send,
+                             font=("Segoe UI", 11, "bold"),
+                             bg=self._success, fg="white", relief="flat",
+                             padx=12, pady=6, cursor="hand2")
 
         dialog.wait_window()
 
@@ -938,7 +1018,7 @@ class UniversalLicenseCenter:
     def _contact_support(self):
         self._show_communication_dialog('support', 'Contact Support')
 
-    def _contact_sales(self):
+    def _sales_enquiry(self):
         self._show_communication_dialog('sales', 'Sales Enquiry')
 
     def _show_communication_dialog(self, category: str, title: str):
