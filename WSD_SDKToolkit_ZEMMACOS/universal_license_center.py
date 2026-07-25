@@ -13,7 +13,6 @@ from .welcome import WelcomeDialog
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
-SUPPORT_EMAIL = "support@websmithdigital.com"
 
 
 def _load_api_config() -> Dict[str, Any]:
@@ -54,6 +53,9 @@ class UniversalLicenseCenter:
         self._warning = "#f59e0b"
         self._border = "#d1d5db"
         self._product_name = self.config.get("product", {}).get("name", "")
+        self._company_name = branding.get("company_name", "Your Company")
+        self._support_email = branding.get("support_email", "")
+        self._sales_email = branding.get("sales_email", "")
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         with open(config_path, "r", encoding="utf-8") as f:
@@ -183,6 +185,8 @@ class UniversalLicenseCenter:
             buttons = [
                 ("Activate License", self._activate_license, self._primary),
                 ("Contact Support", self._contact_support, self._text_secondary),
+                ("View Conversations", self._view_conversations, self._text_secondary),
+                ("View Notifications", self._view_notifications, self._text_secondary),
                 ("Close", self._on_close, "#e5e7eb"),
             ]
         elif is_paid:
@@ -190,6 +194,9 @@ class UniversalLicenseCenter:
                 ("Renew License", self._renew_license, self._primary),
                 ("Replace Device", self._replace_device, self._warning),
                 ("Contact Support", self._contact_support, self._text_secondary),
+                ("Sales Enquiry", self._contact_sales, self._text_secondary),
+                ("View Conversations", self._view_conversations, self._text_secondary),
+                ("View Notifications", self._view_notifications, self._text_secondary),
                 ("Close", self._on_close, "#e5e7eb"),
             ]
         elif is_expired:
@@ -197,6 +204,8 @@ class UniversalLicenseCenter:
                 ("Renew License", self._renew_license, self._primary),
                 ("Reactivate License", self._reactivate_license, self._warning),
                 ("Contact Support", self._contact_support, self._text_secondary),
+                ("View Conversations", self._view_conversations, self._text_secondary),
+                ("View Notifications", self._view_notifications, self._text_secondary),
                 ("Close", self._on_close, "#e5e7eb"),
             ]
         else:
@@ -204,6 +213,7 @@ class UniversalLicenseCenter:
                 ("Start Free Trial", self._start_trial, self._success),
                 ("Activate License", self._activate_license, self._primary),
                 ("Contact Support", self._contact_support, self._text_secondary),
+                ("Sales Enquiry", self._contact_sales, self._text_secondary),
                 ("Close", self._on_close, "#e5e7eb"),
             ]
 
@@ -603,9 +613,15 @@ class UniversalLicenseCenter:
         dialog.wait_window()
 
     def _contact_support(self):
+        self._show_communication_dialog('support', 'Contact Support')
+
+    def _contact_sales(self):
+        self._show_communication_dialog('sales', 'Sales Enquiry')
+
+    def _show_communication_dialog(self, category: str, title: str):
         dialog = tk.Toplevel(self._root)
-        dialog.title("Contact Support")
-        dialog.geometry("500x440")
+        dialog.title(title)
+        dialog.geometry("520x480")
         dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
@@ -614,7 +630,7 @@ class UniversalLicenseCenter:
                          highlightbackground=self._border)
         frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        tk.Label(frame, text="Contact Support", font=("Segoe UI", 16, "bold"),
+        tk.Label(frame, text=title, font=("Segoe UI", 16, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
         tk.Label(frame, text="We already know who you are. Just tell us what you need.",
                  font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
@@ -634,6 +650,12 @@ class UniversalLicenseCenter:
         tk.Entry(frame, textvariable=email_var, font=("Segoe UI", 11),
                  relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
 
+        tk.Label(frame, text="Subject", font=("Segoe UI", 10, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+        subject_var = tk.StringVar(value=title)
+        tk.Entry(frame, textvariable=subject_var, font=("Segoe UI", 11),
+                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 8))
+
         tk.Label(frame, text="Message *", font=("Segoe UI", 10, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
         msg_text = tk.Text(frame, font=("Segoe UI", 10), height=4,
@@ -646,6 +668,7 @@ class UniversalLicenseCenter:
         def do_send():
             name = name_var.get().strip()
             email = email_var.get().strip()
+            subject = subject_var.get().strip()
             msg = msg_text.get("1.0", "end").strip()
             if not name or not email:
                 status_lbl.config(text="Name and email are required.", fg=self._error)
@@ -657,16 +680,20 @@ class UniversalLicenseCenter:
             dialog.update()
             try:
                 license_key = self._status.license_key if self._status else cached.get('license_key', '')
-                result = self.engine.send_support_request(
-                    license_key=license_key or '',
-                    customer_name=name,
+                result = self.engine.create_communication(
+                    category=category,
                     customer_email=email,
-                    subject='Support Request',
+                    customer_name=name,
+                    subject=subject,
                     message=msg,
+                    license_key=license_key or '',
+                    hardware_id=self.hardware.get_fingerprint(),
+                    sdk_version=SDK_VERSION,
+                    runtime_type=RUNTIME_TYPE,
                 )
-                if result.get("success"):
+                if result.get("success") or result.get("queued"):
                     messagebox.showinfo("Request Submitted",
-                                        "Your support request has been sent.\n"
+                                        "Your request has been sent.\n"
                                         "We will contact you at " + email + ".",
                                         parent=dialog)
                     dialog.destroy()
@@ -682,3 +709,166 @@ class UniversalLicenseCenter:
                   padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
 
         dialog.wait_window()
+
+    def _view_conversations(self):
+        if not self._status:
+            return
+        email = self._status.customer_email or ''
+        if not email:
+            cached = self.cache.get_license_status() or {}
+            email = cached.get('customer_email', '')
+        if not email:
+            messagebox.showwarning("No Email", "No customer email found.",
+                                    parent=self._root)
+            return
+        try:
+            result = self.engine.list_conversations(email)
+            if result.get("success"):
+                conversations = result.get("data", {}).get("conversations", [])
+                if not conversations:
+                    messagebox.showinfo("Conversations",
+                                        "No conversations found.",
+                                        parent=self._root)
+                    return
+                dialog = tk.Toplevel(self._root)
+                dialog.title("Your Conversations")
+                dialog.geometry("600x500")
+                dialog.configure(bg=self._bg)
+                dialog.transient(self._root)
+                dialog.grab_set()
+
+                frame = tk.Frame(dialog, bg=self._card_bg, bd=1, relief="solid",
+                                 highlightbackground=self._border)
+                frame.pack(fill="both", expand=True, padx=16, pady=16)
+
+                tk.Label(frame, text="Your Conversations",
+                         font=("Segoe UI", 14, "bold"),
+                         bg=self._card_bg, fg=self._text_primary).pack(
+                    anchor="w", padx=12, pady=(8, 12))
+
+                list_frame = tk.Frame(frame, bg=self._card_bg)
+                list_frame.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+                canvas = tk.Canvas(list_frame, bg=self._card_bg,
+                                   highlightthickness=0)
+                scrollbar = tk.Scrollbar(list_frame, orient="vertical",
+                                          command=canvas.yview)
+                scrollable = tk.Frame(canvas, bg=self._card_bg)
+
+                scrollable.bind(
+                    "<Configure>",
+                    lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+                )
+                canvas.create_window((0, 0), window=scrollable, anchor="nw")
+                canvas.configure(yscrollcommand=scrollbar.set)
+                canvas.pack(side="left", fill="both", expand=True)
+                scrollbar.pack(side="right", fill="y")
+
+                for conv in conversations:
+                    conv_frame = tk.Frame(scrollable, bg=self._card_bg,
+                                          bd=1, relief="solid",
+                                          highlightbackground=self._border)
+                    conv_frame.pack(fill="x", pady=(0, 6), padx=4)
+
+                    tk.Label(conv_frame,
+                             text=f"{conv.get('category', '').upper()} - {conv.get('subject', 'No Subject')}",
+                             font=("Segoe UI", 11, "bold"),
+                             bg=self._card_bg, fg=self._text_primary).pack(
+                        anchor="w", padx=10, pady=(6, 2))
+                    tk.Label(conv_frame,
+                             text=f"Status: {conv.get('status', 'N/A')}  |  "
+                                  f"{conv.get('created_at', '')[:10]}",
+                             font=("Segoe UI", 9),
+                             bg=self._card_bg, fg=self._text_secondary).pack(
+                        anchor="w", padx=10, pady=(0, 6))
+
+                tk.Button(frame, text="Close", command=dialog.destroy,
+                          font=("Segoe UI", 11, "bold"),
+                          bg=self._primary, fg="white", relief="flat",
+                          padx=12, pady=6, cursor="hand2").pack(
+                    padx=12, pady=(0, 12))
+            else:
+                messagebox.showerror("Error",
+                                     "Failed to load conversations.",
+                                     parent=self._root)
+        except Exception as e:
+            messagebox.showerror("Error",
+                                 f"Failed to load conversations: {str(e)}",
+                                 parent=self._root)
+
+    def _view_notifications(self):
+        if not self._status:
+            return
+        email = self._status.customer_email or ''
+        if not email:
+            cached = self.cache.get_license_status() or {}
+            email = cached.get('customer_email', '')
+        if not email:
+            return
+        try:
+            result = self.engine.get_notifications(email)
+            if result.get("success"):
+                notifications = result.get("data", {}).get("notifications", [])
+                if not notifications:
+                    messagebox.showinfo("Notifications",
+                                        "No notifications found.",
+                                        parent=self._root)
+                    return
+                dialog = tk.Toplevel(self._root)
+                dialog.title("Notifications")
+                dialog.geometry("550x450")
+                dialog.configure(bg=self._bg)
+                dialog.transient(self._root)
+                dialog.grab_set()
+
+                frame = tk.Frame(dialog, bg=self._card_bg, bd=1, relief="solid",
+                                 highlightbackground=self._border)
+                frame.pack(fill="both", expand=True, padx=16, pady=16)
+
+                tk.Label(frame, text="Notifications",
+                         font=("Segoe UI", 14, "bold"),
+                         bg=self._card_bg, fg=self._text_primary).pack(
+                    anchor="w", padx=12, pady=(8, 12))
+
+                list_frame = tk.Frame(frame, bg=self._card_bg)
+                list_frame.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+                canvas = tk.Canvas(list_frame, bg=self._card_bg,
+                                   highlightthickness=0)
+                scrollbar = tk.Scrollbar(list_frame, orient="vertical",
+                                          command=canvas.yview)
+                scrollable = tk.Frame(canvas, bg=self._card_bg)
+
+                scrollable.bind(
+                    "<Configure>",
+                    lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+                )
+                canvas.create_window((0, 0), window=scrollable, anchor="nw")
+                canvas.configure(yscrollcommand=scrollbar.set)
+                canvas.pack(side="left", fill="both", expand=True)
+                scrollbar.pack(side="right", fill="y")
+
+                for notif in notifications:
+                    nf = tk.Frame(scrollable, bg=self._card_bg,
+                                  bd=1, relief="solid",
+                                  highlightbackground=self._border)
+                    nf.pack(fill="x", pady=(0, 6), padx=4)
+                    read_status = "" if notif.get("is_read") else " (NEW)"
+                    tk.Label(nf,
+                             text=f"{notif.get('category', '').upper()}{read_status}",
+                             font=("Segoe UI", 10, "bold"),
+                             bg=self._card_bg, fg=self._text_primary).pack(
+                        anchor="w", padx=10, pady=(4, 0))
+                    tk.Label(nf,
+                             text=notif.get('title', ''),
+                             font=("Segoe UI", 10),
+                             bg=self._card_bg, fg=self._text_secondary).pack(
+                        anchor="w", padx=10, pady=(0, 4))
+
+                tk.Button(frame, text="Close", command=dialog.destroy,
+                          font=("Segoe UI", 11, "bold"),
+                          bg=self._primary, fg="white", relief="flat",
+                          padx=12, pady=6, cursor="hand2").pack(
+                    padx=12, pady=(0, 12))
+        except Exception:
+            pass

@@ -163,3 +163,31 @@ class CacheManager:
 
     def has_ever_activated_paid_license(self) -> bool:
         return self.get('has_ever_activated_paid_license') is True
+
+    # ====================================================================
+    # Message Queue (Offline Retry)
+    # ====================================================================
+
+    def queue_message(self, msg: Dict[str, Any]) -> None:
+        queue = self.get_message_queue()
+        msg['id'] = msg.get('id', f"q_{int(time.time())}_{os.urandom(4).hex()}")
+        msg['status'] = msg.get('status', 'pending')
+        msg['retry_count'] = msg.get('retry_count', 0)
+        msg['max_retries'] = msg.get('max_retries', 5)
+        msg['created_at'] = msg.get('created_at', int(time.time()))
+        msg['next_retry_at'] = msg.get('next_retry_at', int(time.time()) + 60)
+        queue.append(msg)
+        self.set('message_queue', queue)
+
+    def get_message_queue(self) -> list:
+        return self.get('message_queue') or []
+
+    def save_message_queue(self, queue: list) -> None:
+        self.set('message_queue', queue)
+
+    def cleanup_sent_messages(self) -> None:
+        queue = [m for m in self.get_message_queue() if m.get('status') != 'sent']
+        self.save_message_queue(queue)
+
+    def get_pending_count(self) -> int:
+        return len([m for m in self.get_message_queue() if m.get('status') in ('pending', 'failed')])

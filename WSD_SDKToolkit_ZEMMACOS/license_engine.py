@@ -1,8 +1,10 @@
 """License validation and management engine"""
 import json
 import logging
+import os
+import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .client import ApiClient
 from .hardware import HardwareDetector
@@ -87,6 +89,44 @@ class LicenseEngine:
             except Exception:
                 pass
 
+    def _process_message_queue(self) -> None:
+        queue = self._cache.get_message_queue()
+        changed = False
+        for msg in queue:
+            if msg.get('status') == 'sent':
+                continue
+            now_ts = int(time.time())
+            if now_ts < msg.get('next_retry_at', 0):
+                continue
+            if msg.get('retry_count', 0) >= msg.get('max_retries', 5):
+                continue
+            msg['status'] = 'sending'
+            try:
+                self._client.create_communication(
+                    category=msg.get('category', 'general'),
+                    customer_email=msg.get('customer_email', ''),
+                    customer_name=msg.get('customer_name', ''),
+                    subject=msg.get('subject', ''),
+                    message=msg.get('message', ''),
+                    product_id=msg.get('product_id', ''),
+                    license_key=msg.get('license_key', ''),
+                    hardware_id=msg.get('hardware_id', self._hardware.get_fingerprint()),
+                    sdk_version=msg.get('sdk_version', ''),
+                    runtime_type=msg.get('runtime_type', ''),
+                )
+                msg['status'] = 'sent'
+                changed = True
+            except Exception as e:
+                msg['retry_count'] = msg.get('retry_count', 0) + 1
+                msg['last_error'] = str(e)
+                exp_backoff = pow(2, msg['retry_count']) * 60
+                msg['next_retry_at'] = now_ts + exp_backoff
+                msg['status'] = 'failed'
+                changed = True
+        if changed:
+            self._cache.save_message_queue(queue)
+            self._cache.cleanup_sent_messages()
+
     def _load_config(self, config_path: Optional[str]) -> Dict[str, Any]:
         if config_path is None:
             base_dir = Path(__file__).parent.parent
@@ -109,6 +149,7 @@ class LicenseEngine:
     def initialize(self) -> LicenseStatus:
         hardware_id = self._hardware.get_fingerprint()
         self._cache.invalidate_if_hardware_mismatch(hardware_id)
+        self._process_message_queue()
         if self._cache.is_valid():
             cached = self._cache.get_license_status()
             if cached:
@@ -527,10 +568,74 @@ class LicenseEngine:
             customer_email=customer_email, message=message,
         )
 
-    def send_support_request(self, license_key: str = '', customer_name: str = '',
+    def send_support_request(self, license_key: str = '',
+                             customer_name: str = '',
                              customer_email: str = '', subject: str = '',
                              message: str = '') -> Dict[str, Any]:
         return self._client.send_support_request(
             license_key=license_key, customer_name=customer_name,
             customer_email=customer_email, subject=subject, message=message,
         )
+
+    # ====================================================================
+    # Universal Communication Engine
+    # ====================================================================
+
+    def create_communication(self, category: str = 'general',
+                             customer_email: str = '',
+                             customer_name: str = '',
+                             subject: str = '', message: str = '',
+                             product_id: str = '', license_key: str = '',
+                             hardware_id: str = '', sdk_version: str = '',
+                             runtime_type: str = '') -> Dict[str, Any]:
+        try:
+            return self._client.create_communication(
+                category=category, customer_email=customer_email,
+                customer_name=customer_name, subject=subject,
+                message=message, product_id=product_id,
+                license_key=license_key,
+                hardware_id=hardware_id or self._hardware.get_fingerprint(),
+                sdk_version=sdk_version, runtime_type=runtime_type,
+            )
+        except Exception as e:
+            self._cache.queue_message({
+                'category': category, 'customer_email': customer_email,
+                'customer_name': customer_name, 'subject': subject,
+                'message': message, 'product_id': product_id,
+                'license_key': license_key,
+                'hardware_id': hardware_id or self._hardware.get_fingerprint(),
+                'sdk_version': sdk_version, 'runtime_type': runtime_type,
+            })
+            return {'success': False, 'message': 'Message queued for delivery when online.', 'queued': True}
+
+    def get_conversation(self, conversation_id: str) -> Dict[str, Any]:
+        return self._client.get_conversation(conversation_id)
+
+    def reply_to_conversation(self, conversation_id: str, message: str,
+                              customer_name: str = '',
+                              customer_email: str = '') -> Dict[str, Any]:
+        try:
+            return self._client.reply_to_conversation(
+                conversation_id, message, customer_name, customer_email)
+        except Exception:
+            cached = self._cache.get_license_status() or {}
+            self._cache.queue_message({
+                'category': 'general',
+                'customer_email': customer_email or cached.get('customer_email', ''),
+                'customer_name': customer_name or cached.get('customer_name', ''),
+                'subject': f'Reply to conversation {conversation_id}',
+                'message': message,
+            })
+            return {'success': False, 'message': 'Reply queued for delivery when online.', 'queued': True}
+
+    def list_conversations(self, email: str) -> Dict[str, Any]:
+        return self._client.list_conversations(email)
+
+    def get_notifications(self, email: str) -> Dict[str, Any]:
+        return self._client.get_notifications(email)
+
+    def mark_notification_read(self, notification_id: str) -> Dict[str, Any]:
+        return self._client.mark_notification_read(notification_id)
+
+    def get_unread_notification_count(self, email: str) -> Dict[str, Any]:
+        return self._client.get_unread_notification_count(email)
