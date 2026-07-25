@@ -381,6 +381,43 @@ class LicenseEngine:
             self._notify_ready(True)
         return result
 
+    def validate_hardware(self) -> Dict[str, Any]:
+        hardware_id = self._hardware.get_fingerprint()
+        result = self._client.validate_license('', hardware_id)
+        if result.get('success'):
+            data = result.get('data', result)
+            if data.get('valid'):
+                self._status = LicenseStatus(
+                    valid=True,
+                    status=data.get('status', 'active'),
+                    expiry_date=data.get('expiry_date'),
+                    days_left=data.get('days_left', 0),
+                    plan=data.get('plan'),
+                    hardware_id=hardware_id,
+                    license_key=data.get('license_key'),
+                    customer_name=data.get('customer_name'),
+                    customer_email=data.get('customer_email'),
+                    customer_phone=data.get('customer_phone'),
+                    customer_mobile=data.get('customer_mobile')
+                )
+                if self._status.valid:
+                    self._cache.set_license_status(self._status.to_dict())
+                    self._cache.mark_has_ever_activated_paid_license()
+                self._notify_ready(True)
+                return {'success': True, 'data': self._status.to_dict()}
+            else:
+                server_status = data.get('status', '')
+                err_code = data.get('error', {}).get('code', '')
+                err_msg = data.get('error', {}).get('message', '') or data.get('message', '')
+                if err_code:
+                    return {'success': False, 'valid': False, 'error': {'code': err_code, 'message': err_msg}, 'status': server_status}
+                return {'success': False, 'valid': False, 'message': err_msg or 'License validation failed'}
+        else:
+            err_code = result.get('error', {}).get('code', '')
+            if err_code == 'NO_LICENSE_FOUND':
+                return {'success': False, 'error': {'code': 'NO_LICENSE_FOUND', 'message': 'No license found for this hardware'}}
+            return {'success': False, 'error': result.get('error', {'code': '', 'message': result.get('message', 'Unknown error')})}
+
     def start_trial(self, email: str, customer_name: str = '',
                     customer_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         result = self._client.start_trial(email, customer_name=customer_name, customer_data=customer_data)

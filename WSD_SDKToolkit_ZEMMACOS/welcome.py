@@ -219,13 +219,32 @@ class WelcomeDialog:
         try:
             result = self.client.verify_otp(email, otp)
             if result.get('success'):
-                self._complete_onboarding()
+                if result.get('customer_exists'):
+                    self._handle_existing_customer()
+                else:
+                    self._complete_onboarding()
             else:
                 self._show_error(result.get('error', result.get('message', 'Invalid OTP')))
                 self._verify_btn.config(state='normal', text='Verify')
         except Exception as e:
             self._show_error(str(e))
             self._verify_btn.config(state='normal', text='Verify')
+
+    def _handle_existing_customer(self):
+        name = self._name_entry.get().strip()
+        email = self._email_entry.get().strip()
+        self.cache.set_onboarding_complete()
+        self.cache.set('customer_email', email)
+        self._status_label.config(text='Customer already exists — opening License Center...', fg=self._primary)
+        self._root.update()
+        import time as _time
+        _time.sleep(1)
+        self._result = {
+            'name': name, 'email': email,
+            'onboarding_complete': True, 'trial_consumed': True,
+            'customer_exists': True
+        }
+        self._root.destroy()
 
     def _complete_onboarding(self):
         name = self._name_entry.get().strip()
@@ -259,7 +278,10 @@ class WelcomeDialog:
                 self._root.after(2000, self._root.destroy)
             else:
                 err = trial_result.get('message', trial_result.get('error', ''))
-                if 'TRIAL_ALREADY_CONSUMED' in err or 'already used' in err.lower():
+                err_code = trial_result.get('error', {})
+                if isinstance(err_code, dict):
+                    err_code = err_code.get('code', '')
+                if 'TRIAL_ALREADY_CONSUMED' in err or 'already used' in err.lower() or 'PAID_LICENSE_EXISTS' in err or err_code == 'PAID_LICENSE_EXISTS':
                     self.cache.set_onboarding_complete()
                     self.cache.set('customer_email', email)
                     self._status_label.config(text='Customer already exists — continuing...', fg=self._primary)
@@ -268,7 +290,8 @@ class WelcomeDialog:
                     _time.sleep(1)
                     self._result = {
                         'name': name, 'email': email, 'hardware_id': hardware_id,
-                        'onboarding_complete': True, 'trial_consumed': True
+                        'onboarding_complete': True, 'trial_consumed': True,
+                        'customer_exists': True
                     }
                     self._root.destroy()
                 else:
