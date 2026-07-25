@@ -122,18 +122,17 @@ except ValueError as e:
     print(f"Activation required: {e}")
 ```
 
-### Replace Hardware
+### View Hardware Status
 
 ```python
 engine = LicenseEngine()
 status = engine.initialize()
-
-try:
-    result = engine.replace_hardware()
-    if result.get("success"):
-        print("Hardware replaced")
-except ValueError as e:
-    print(f"Error: {e}")
+result = engine.view_hardware_status()
+print(f"Current Hardware: {result.get('current_hardware_id')}")
+if result.get('registered_hardware_id'):
+    print(f"Registered Hardware: {result.get('registered_hardware_id')}")
+    print(f"Match: {result.get('matched')}")
+print(result.get('message'))
 ```
 
 ### Deactivate License

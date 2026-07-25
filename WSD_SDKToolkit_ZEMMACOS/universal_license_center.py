@@ -192,7 +192,7 @@ class UniversalLicenseCenter:
         elif is_paid:
             buttons = [
                 ("Renew License", self._renew_license, self._primary),
-                ("Replace Device", self._replace_device, self._warning),
+                ("View Hardware Status", self._view_hardware_status, self._text_secondary),
                 ("Contact Support", self._contact_support, self._text_secondary),
                 ("Sales Enquiry", self._contact_sales, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
@@ -285,10 +285,94 @@ class UniversalLicenseCenter:
         elif result.get('closed'):
             self._show_license_center()
 
+    def _show_restart_prompt(self, parent):
+        restart_win = tk.Toplevel(parent)
+        restart_win.title("Restart Required")
+        restart_win.geometry("420x200")
+        restart_win.configure(bg=self._bg)
+        restart_win.transient(parent)
+        restart_win.grab_set()
+
+        frame = tk.Frame(restart_win, bg=self._card_bg, bd=1, relief="solid",
+                         highlightbackground=self._border)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        tk.Label(frame, text="Activation completed successfully.",
+                 font=("Segoe UI", 12, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
+
+        tk.Label(frame, text="The application must now restart to apply your license.",
+                 font=("Segoe UI", 10),
+                 bg=self._card_bg, fg=self._text_secondary,
+                 wraplength=360).pack(anchor="w", padx=16, pady=(0, 16))
+
+        btn_frame = tk.Frame(frame, bg=self._card_bg)
+        btn_frame.pack(fill="x", padx=16, pady=(0, 12))
+
+        def restart_now():
+            restart_win.destroy()
+            parent.destroy()
+            import sys
+            sys.exit(0)
+
+        tk.Button(btn_frame, text="Restart Now", command=restart_now,
+                  font=("Segoe UI", 11, "bold"),
+                  bg=self._primary, fg="white", relief="flat",
+                  padx=16, pady=6, cursor="hand2").pack(side="left", padx=(0, 8))
+
+        tk.Button(btn_frame, text="Restart Later", command=restart_win.destroy,
+                  font=("Segoe UI", 11),
+                  bg=self._text_secondary, fg="white", relief="flat",
+                  padx=16, pady=6, cursor="hand2").pack(side="left")
+
+        restart_win.wait_window()
+
+    def _show_activation_confirmation(self, parent, data, license_key):
+        confirm = tk.Toplevel(parent)
+        confirm.title("Activation Successful")
+        confirm.geometry("500x480")
+        confirm.configure(bg=self._bg)
+        confirm.transient(parent)
+        confirm.grab_set()
+
+        frame = tk.Frame(confirm, bg=self._card_bg, bd=1, relief="solid",
+                         highlightbackground=self._border)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        tk.Label(frame, text="Activation Successful", font=("Segoe UI", 16, "bold"),
+                 bg=self._card_bg, fg=self._success).pack(anchor="w", padx=16, pady=(12, 8))
+
+        info_items = [
+            ("Customer", data.get('customer_name', 'N/A')),
+            ("Email", data.get('customer_email', 'N/A')),
+            ("License Key", (license_key[:4] + "-****-" + license_key[-4:]) if len(license_key) > 8 else "****"),
+            ("Plan", data.get('plan', 'N/A')),
+            ("Status", data.get('status', 'active')),
+            ("Activation Date", data.get('activation_date', 'N/A')),
+            ("Expiry Date", data.get('expiry_date', 'N/A')),
+            ("Remaining Validity", f"{data.get('days_left', 0)} days"),
+            ("Device", data.get('hardware_id', self.hardware.get_fingerprint())[:32]),
+        ]
+
+        for label, value in info_items:
+            row = tk.Frame(frame, bg=self._card_bg)
+            row.pack(fill="x", padx=16, pady=(2, 2))
+            tk.Label(row, text=label + ":", font=("Segoe UI", 10, "bold"),
+                     bg=self._card_bg, fg=self._text_primary, width=18, anchor="w").pack(side="left")
+            tk.Label(row, text=value, font=("Segoe UI", 10),
+                     bg=self._card_bg, fg=self._text_secondary, anchor="w").pack(side="left", fill="x")
+
+        tk.Button(frame, text="Continue", command=lambda: [confirm.destroy(), self._show_restart_prompt(parent)],
+                  font=("Segoe UI", 11, "bold"),
+                  bg=self._primary, fg="white", relief="flat",
+                  padx=16, pady=6, cursor="hand2").pack(padx=16, pady=(16, 12))
+
+        confirm.wait_window()
+
     def _activate_license(self):
         dialog = tk.Toplevel(self._root)
         dialog.title("Activate License")
-        dialog.geometry("520x480")
+        dialog.geometry("560x620")
         dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
@@ -300,61 +384,217 @@ class UniversalLicenseCenter:
         tk.Label(frame, text="Activate License", font=("Segoe UI", 16, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
 
-        tk.Label(frame, text="Hardware ID", font=("Segoe UI", 10, "bold"),
+        # === PHASE 1: Hardware + License Key + Validate ===
+        phase1 = tk.Frame(frame, bg=self._card_bg)
+        phase1.pack(fill="x", padx=0, pady=0)
+
+        tk.Label(phase1, text="Hardware ID", font=("Segoe UI", 10, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
         hw_id = self.hardware.get_fingerprint()
-        tk.Label(frame, text=hw_id[:48], font=("Courier", 9),
+        tk.Label(phase1, text=hw_id[:48], font=("Courier", 9),
                  bg=self._card_bg, fg=self._text_secondary,
-                 wraplength=450).pack(anchor="w", padx=16, pady=(0, 8))
+                 wraplength=480).pack(anchor="w", padx=16, pady=(0, 8))
 
-        tk.Label(frame, text="License Key *", font=("Segoe UI", 10, "bold"),
+        tk.Label(phase1, text="License Key *", font=("Segoe UI", 10, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
         key_var = tk.StringVar()
-        if self._status and self._status.license_key:
-            key_var.set(self._status.license_key)
-        tk.Entry(frame, textvariable=key_var, font=("Courier", 11),
-                 relief="solid", bd=1).pack(fill="x", padx=16, pady=(0, 12))
+        key_entry = tk.Entry(phase1, textvariable=key_var, font=("Courier", 11),
+                             relief="solid", bd=1)
+        key_entry.pack(fill="x", padx=16, pady=(0, 8))
 
-        if self._status and self._status.customer_name:
-            tk.Label(frame, text="Customer", font=("Segoe UI", 10, "bold"),
-                     bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-            cust_info = self._status.customer_name
-            if self._status.customer_email:
-                cust_info += f" \u2022 {self._status.customer_email}"
-            tk.Label(frame, text=cust_info, font=("Segoe UI", 10),
-                     bg=self._card_bg, fg=self._text_secondary).pack(anchor="w", padx=16, pady=(0, 12))
+        # === PHASE 2: Customer Info (hidden until validated) ===
+        phase2 = tk.Frame(frame, bg=self._card_bg)
+        cust_name_lbl = tk.Label(phase2, text="", font=("Segoe UI", 10, "bold"),
+                                 bg=self._card_bg, fg=self._text_primary)
+        cust_email_lbl = tk.Label(phase2, text="", font=("Segoe UI", 10),
+                                  bg=self._card_bg, fg=self._text_secondary)
+        cust_plan_lbl = tk.Label(phase2, text="", font=("Segoe UI", 10),
+                                 bg=self._card_bg, fg=self._text_secondary)
+
+        # === OTP Section (hidden until validated) ===
+        otp_frame = tk.Frame(frame, bg=self._card_bg)
+        otp_var = tk.StringVar()
+
+        # === PHASE 3: Activate button ===
+        activate_frame = tk.Frame(frame, bg=self._card_bg)
 
         status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg)
         status_lbl.pack(padx=16)
 
-        def do_activate():
+        validated = {"key": "", "data": {}, "done": False}
+        otp_verified = {"done": False}
+
+        def do_validate():
+            if validated["done"]:
+                return
             key = key_var.get().strip()
             if not key:
                 status_lbl.config(text="License key is required.", fg=self._error)
                 return
-            status_lbl.config(text="Activating...", fg=self._text_secondary)
+            status_lbl.config(text="Validating license...", fg=self._text_secondary)
+            dialog.update()
+            try:
+                result = self.engine.validate(key)
+                if result.get("success"):
+                    data = result.get("data", result)
+                    validated["key"] = key
+                    validated["data"] = data
+                    validated["done"] = True
+
+                    # Lock key entry
+                    key_entry.config(state="disabled")
+
+                    # Show customer info
+                    tk.Label(phase2, text="Customer", font=("Segoe UI", 10, "bold"),
+                             bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+                    cust_name_lbl.config(text=data.get('customer_name', 'N/A'))
+                    cust_name_lbl.pack(anchor="w", padx=16, pady=(0, 2))
+                    cust_email_lbl.config(text=data.get('customer_email', 'N/A'))
+                    cust_email_lbl.pack(anchor="w", padx=16, pady=(0, 2))
+                    plan_info = f"Plan: {data.get('plan', 'N/A')} | Expires: {data.get('expiry_date', 'N/A')} | Days Left: {data.get('days_left', 0)}"
+                    cust_plan_lbl.config(text=plan_info)
+                    cust_plan_lbl.pack(anchor="w", padx=16, pady=(0, 8))
+
+                    sep_valid = tk.Frame(phase2, bg=self._border, height=1)
+                    sep_valid.pack(fill="x", padx=16, pady=(4, 8))
+
+                    phase2.pack(fill="x", padx=0, pady=0)
+                    validate_btn.pack_forget()
+                    dialog.geometry("560x620")
+
+                    # Show OTP section
+                    tk.Label(otp_frame, text="OTP Verification", font=("Segoe UI", 11, "bold"),
+                             bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(8, 4))
+                    email = data.get('customer_email', '')
+                    tk.Label(otp_frame, text=f"OTP sent to: {email}",
+                             font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
+                        anchor="w", padx=16, pady=(0, 8))
+                    tk.Label(otp_frame, text="OTP Code", font=("Segoe UI", 10, "bold"),
+                             bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+                    tk.Entry(otp_frame, textvariable=otp_var, font=("Courier", 11),
+                             relief="solid", bd=1, width=16).pack(anchor="w", padx=16, pady=(0, 8))
+
+                    sep_otp = tk.Frame(otp_frame, bg=self._border, height=1)
+                    sep_otp.pack(fill="x", padx=16, pady=(4, 8))
+
+                    otp_frame.pack(fill="x", padx=0, pady=0)
+                    otp_btn_frame.pack(fill="x", padx=16, pady=(4, 8))
+
+                    self._on_send_otp_inline(email, status_lbl)
+                else:
+                    err_msg = "Validation failed"
+                    err_data = result.get('error', result)
+                    if isinstance(err_data, dict):
+                        err_msg = err_data.get('message', err_msg)
+                    elif isinstance(err_data, str):
+                        err_msg = err_data
+                    status_lbl.config(text=f"Validation failed: {err_msg}", fg=self._error)
+            except Exception as e:
+                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
+
+        validate_btn = tk.Button(phase1, text="Validate License", command=do_validate,
+                                 font=("Segoe UI", 11, "bold"),
+                                 bg=self._primary, fg="white", relief="flat",
+                                 padx=12, pady=6, cursor="hand2")
+        validate_btn.pack(fill="x", padx=16, pady=(8, 12))
+
+        def do_send_otp():
+            email = validated["data"].get('customer_email', '')
+            self._on_send_otp_inline(email, status_lbl)
+
+        def do_verify_otp():
+            if otp_verified["done"]:
+                return
+            otp = otp_var.get().strip()
+            if not otp:
+                status_lbl.config(text="OTP code is required.", fg=self._error)
+                return
+            email = validated["data"].get('customer_email', '')
+            if not email:
+                status_lbl.config(text="No customer email available.", fg=self._error)
+                return
+            status_lbl.config(text="Verifying OTP...", fg=self._text_secondary)
+            dialog.update()
+            try:
+                result = self.client.verify_otp(email, otp)
+                if result.get("success"):
+                    otp_verified["done"] = True
+                    status_lbl.config(text="OTP verified. You may now activate.", fg=self._success)
+                    send_otp_btn.config(state="disabled")
+                    verify_otp_btn.config(state="disabled")
+
+                    # Show activate button
+                    activate_frame.pack(fill="x", padx=0, pady=0)
+                    activate_btn.pack(fill="x", padx=16, pady=(8, 12))
+                else:
+                    err = result.get('error', result.get('message', 'Verification failed'))
+                    if isinstance(err, dict):
+                        err = err.get('message', str(err))
+                    status_lbl.config(text=f"OTP verification failed: {err}", fg=self._error)
+            except Exception as e:
+                status_lbl.config(text=f"OTP error: {str(e)}", fg=self._error)
+
+        otp_btn_frame = tk.Frame(otp_frame, bg=self._card_bg)
+        send_otp_btn = tk.Button(otp_btn_frame, text="Send OTP", command=do_send_otp,
+                                 font=("Segoe UI", 10, "bold"),
+                                 bg=self._primary, fg="white", relief="flat",
+                                 padx=10, pady=4, cursor="hand2")
+        send_otp_btn.pack(side="left", padx=(0, 8))
+        verify_otp_btn = tk.Button(otp_btn_frame, text="Verify OTP", command=do_verify_otp,
+                                   font=("Segoe UI", 10, "bold"),
+                                   bg=self._primary, fg="white", relief="flat",
+                                   padx=10, pady=4, cursor="hand2")
+        verify_otp_btn.pack(side="left")
+
+        def do_activate():
+            if not otp_verified["done"]:
+                status_lbl.config(text="Please verify OTP before activating.", fg=self._error)
+                return
+            key = validated["key"]
+            status_lbl.config(text="Activating license...", fg=self._text_secondary)
             dialog.update()
             try:
                 result = self.engine.activate(key)
                 if result.get("success"):
+                    data = result.get("data", result)
+                    data["customer_name"] = validated["data"].get("customer_name", "")
+                    data["customer_email"] = validated["data"].get("customer_email", "")
                     self._status = self.engine.get_status()
                     self._refresh_display()
                     self._unlock_application()
-                    messagebox.showinfo("Activated", "License activated successfully!",
-                                        parent=dialog)
+                    dialog.withdraw()
+                    self._show_activation_confirmation(dialog, data, key)
                     dialog.destroy()
                 else:
                     err = result.get("message", result.get("error", "Unknown error"))
-                    status_lbl.config(text=f"Failed: {err}", fg=self._error)
+                    status_lbl.config(text=f"Activation failed: {err}", fg=self._error)
             except Exception as e:
-                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
+                status_lbl.config(text=f"Activation error: {str(e)}", fg=self._error)
 
-        tk.Button(frame, text="Activate", command=do_activate,
-                  font=("Segoe UI", 11, "bold"),
-                  bg=self._primary, fg="white", relief="flat",
-                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
+        activate_btn = tk.Button(activate_frame, text="Activate License", command=do_activate,
+                                 font=("Segoe UI", 11, "bold"),
+                                 bg=self._success, fg="white", relief="flat",
+                                 padx=12, pady=6, cursor="hand2")
 
         dialog.wait_window()
+
+    def _on_send_otp_inline(self, email, status_lbl):
+        if not email:
+            status_lbl.config(text="No customer email available for OTP.", fg=self._error)
+            return
+        status_lbl.config(text="Sending OTP...", fg=self._text_secondary)
+        status_lbl.update()
+        try:
+            result = self.client.send_otp(email)
+            if result.get("success"):
+                status_lbl.config(text=f"OTP sent to {email}. Enter code below.", fg=self._success)
+            else:
+                err = result.get('error', result.get('message', 'Failed to send OTP'))
+                if isinstance(err, dict):
+                    err = err.get('message', str(err))
+                status_lbl.config(text=f"OTP send failed: {err}", fg=self._error)
+        except Exception as e:
+            status_lbl.config(text=f"OTP error: {str(e)}", fg=self._error)
 
     def _renew_license(self):
         if not self._status:
@@ -542,74 +782,51 @@ class UniversalLicenseCenter:
 
         dialog.wait_window()
 
-    def _replace_device(self):
-        if not self._status or not self._status.valid:
-            messagebox.showwarning("Not Licensed",
-                                    "No active license found.", parent=self._root)
+    def _view_hardware_status(self):
+        if not self._status:
+            messagebox.showwarning("No Status", "No license status available.", parent=self._root)
             return
+        hw_id = self.hardware.get_fingerprint()
         dialog = tk.Toplevel(self._root)
-        dialog.title("Replace Device")
-        dialog.geometry("500x400")
+        dialog.title("Hardware Status")
+        dialog.geometry("500x350")
         dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
-
         frame = tk.Frame(dialog, bg=self._card_bg, bd=1, relief="solid",
                          highlightbackground=self._border)
         frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        tk.Label(frame, text="Device Replacement", font=("Segoe UI", 16, "bold"),
+        tk.Label(frame, text="Hardware Status", font=("Segoe UI", 16, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
-        tk.Label(frame, text="Submit a device replacement request.",
-                 font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary).pack(
-            anchor="w", padx=16, pady=(0, 12))
-
-        tk.Label(frame, text="License Key", font=("Segoe UI", 10, "bold"),
+        tk.Label(frame, text=f"Current Hardware ID:", font=("Segoe UI", 10, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        lk_lbl = tk.Label(frame, text=self._status.license_key or "N/A",
-                          font=("Courier", 10), bg=self._card_bg, fg=self._text_secondary)
-        lk_lbl.pack(anchor="w", padx=16, pady=(0, 8))
-
-        tk.Label(frame, text="Current Hardware", font=("Segoe UI", 10, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        old_hw = self._status.hardware_id or "Unknown"
-        tk.Label(frame, text=old_hw, font=("Courier", 9),
+        tk.Label(frame, text=hw_id, font=("Courier", 9),
                  bg=self._card_bg, fg=self._text_secondary,
-                 wraplength=420).pack(anchor="w", padx=16, pady=(0, 8))
-
-        tk.Label(frame, text="New Hardware", font=("Segoe UI", 10, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
-        new_hw = self.hardware.get_fingerprint()
-        tk.Label(frame, text=new_hw, font=("Courier", 9),
-                 bg=self._card_bg, fg=self._text_primary,
+                 wraplength=420).pack(anchor="w", padx=16, pady=(0, 4))
+        cached_hw = None
+        if self._status and self._status.hardware_id:
+            cached_hw = self._status.hardware_id
+        if cached_hw:
+            match = hw_id == cached_hw
+            tk.Label(frame, text=f"Registered Hardware ID:", font=("Segoe UI", 10, "bold"),
+                     bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
+            tk.Label(frame, text=cached_hw, font=("Courier", 9),
+                     bg=self._card_bg, fg=self._text_secondary,
+                     wraplength=420).pack(anchor="w", padx=16, pady=(0, 4))
+            status_color = self._success if match else self._warning
+            status_text = "Matched" if match else "Mismatched"
+            tk.Label(frame, text=f"Status: {status_text}", font=("Segoe UI", 10, "bold"),
+                     bg=self._card_bg, fg=status_color).pack(anchor="w", padx=16, pady=(4, 8))
+        tk.Label(frame, text="Hardware replacement requires administrator approval.",
+                 font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary,
+                 wraplength=420).pack(anchor="w", padx=16, pady=(8, 4))
+        tk.Label(frame, text="Please use Contact Support to request a hardware change.",
+                 font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary,
                  wraplength=420).pack(anchor="w", padx=16, pady=(0, 12))
-
-        status_lbl = tk.Label(frame, text="", font=("Segoe UI", 9), bg=self._card_bg)
-        status_lbl.pack(padx=16)
-
-        def do_replace():
-            status_lbl.config(text="Replacing device...", fg=self._text_secondary)
-            dialog.update()
-            try:
-                result = self.engine.replace_hardware()
-                if result.get("success"):
-                    self._status = self.engine.get_status()
-                    self._refresh_display()
-                    messagebox.showinfo("Device Replaced",
-                                        "Device has been replaced successfully!",
-                                        parent=dialog)
-                    dialog.destroy()
-                else:
-                    err = result.get("message", result.get("error", "Failed"))
-                    status_lbl.config(text=f"Failed: {err}", fg=self._error)
-            except Exception as e:
-                status_lbl.config(text=f"Error: {str(e)}", fg=self._error)
-
-        tk.Button(frame, text="Replace Device", command=do_replace,
+        tk.Button(frame, text="Close", command=dialog.destroy,
                   font=("Segoe UI", 11, "bold"),
-                  bg=self._warning, fg="white", relief="flat",
-                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
-
+                  bg=self._text_secondary, fg="white", relief="flat",
+                  padx=12, pady=6, cursor="hand2").pack(padx=16, pady=(8, 12))
         dialog.wait_window()
 
     def _contact_support(self):

@@ -79,8 +79,6 @@ class LicenseEngine:
         self._status: Optional[LicenseStatus] = None
         self._license_key: Optional[str] = None
         self.on_license_ready: Optional[Callable[[bool], None]] = on_license_ready
-        if not self._license_key:
-            self._license_key = self._cache.load_license_key()
 
     def _notify_ready(self, valid: bool) -> None:
         if self.on_license_ready:
@@ -322,7 +320,7 @@ class LicenseEngine:
     def validate(self, license_key: Optional[str] = None) -> Dict[str, Any]:
         key = license_key or self._license_key
         if not key:
-            raise ValueError("License key unavailable. Please activate first.")
+            raise ValueError("License key unavailable.")
         hardware_id = self._hardware.get_fingerprint()
         result = self._client.validate_license(key, hardware_id)
         data = result.get('data', result)
@@ -344,8 +342,6 @@ class LicenseEngine:
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
-                self._cache.mark_has_ever_activated_paid_license()
-            self._notify_ready(True)
         return result
 
     def activate(self, license_key: str) -> Dict[str, Any]:
@@ -466,49 +462,14 @@ class LicenseEngine:
                 self._cache.clear_license_key()
         return result
 
-    def replace_hardware(self, device_name: Optional[str] = None) -> Dict[str, Any]:
-        if not self._license_key:
-            raise ValueError("License key unavailable. Please activate first.")
-        new_hardware_id = self._hardware.get_fingerprint()
-        old_hardware_id = None
-        if self._status and self._status.hardware_id:
-            old_hardware_id = self._status.hardware_id
-        if not old_hardware_id:
-            cached = self._cache.get_license_status()
-            if cached and cached.get('hardware_id'):
-                old_hardware_id = cached.get('hardware_id')
-        if not old_hardware_id:
-            raise RuntimeError("Current hardware_id unavailable. Cannot replace device.")
-        if old_hardware_id == new_hardware_id:
-            return {'success': False, 'message': 'Old and new hardware IDs are identical.'}
-        result = self._client.replace_device(
-            license_key=self._license_key,
-            new_hardware_id=new_hardware_id,
-            old_hardware_id=old_hardware_id,
-            device_name=device_name
-        )
-        if result.get('success'):
-            self._cache.invalidate_license_status()
-            data = result.get('data', result)
-            self._status = LicenseStatus(
-                valid=True,
-                status=data.get('status', 'active'),
-                expiry_date=data.get('expiry_date'),
-                days_left=data.get('days_left', 0),
-                plan=data.get('plan'),
-                hardware_id=new_hardware_id,
-                license_key=self._license_key,
-                customer_name=data.get('customer_name'),
-                customer_email=data.get('customer_email'),
-                customer_phone=data.get('customer_phone'),
-                customer_mobile=data.get('customer_mobile'),
-                message='Hardware replaced'
-            )
-            if self._status.valid:
-                self._cache.set_license_status(self._status.to_dict())
-                self._cache.mark_has_ever_activated_paid_license()
-            self._notify_ready(self._is_valid_status(self._status))
-        return result
+    def view_hardware_status(self) -> Dict[str, Any]:
+        status = {"current_hardware_id": self._hardware.get_fingerprint()}
+        cached = self._cache.get_license_status()
+        if cached and cached.get('hardware_id'):
+            status["registered_hardware_id"] = cached.get('hardware_id')
+            status["matched"] = status["current_hardware_id"] == cached.get('hardware_id')
+        status["message"] = "Hardware replacement requires administrator approval. Please contact support."
+        return status        return result
 
     def bind_device(self, license_key: Optional[str] = None, device_name: Optional[str] = None) -> Dict[str, Any]:
         key = license_key or self._license_key

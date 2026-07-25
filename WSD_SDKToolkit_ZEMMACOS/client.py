@@ -177,13 +177,7 @@ class ApiClient:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
         payload = {'action': 'validate', 'license_key': license_key, 'hardware_id': hardware_id}
-        if self._cache and self._cache.is_valid():
-            cached = self._cache.get_license_status()
-            if cached:
-                return cached
         response = self._request('license', payload)
-        if self._cache and response.get('success') and response.get('data', {}).get('valid', False):
-            self._cache.set_license_status(response)
         return response
 
     def activate_license(self, license_key: str, hardware_id: Optional[str] = None) -> Dict[str, Any]:
@@ -252,22 +246,6 @@ class ApiClient:
         if device_name:
             payload['device_name'] = device_name
         return self._request('device', payload)
-
-    def replace_device(self, license_key: str, new_hardware_id: Optional[str] = None, old_hardware_id: Optional[str] = None, device_name: Optional[str] = None) -> Dict[str, Any]:
-        if new_hardware_id is None:
-            new_hardware_id = self._get_hardware_id()
-        if old_hardware_id is None:
-            raise ValueError("old_hardware_id is required for device replacement")
-        payload = {
-            'action': 'replace', 'license_key': license_key,
-            'old_hardware_id': old_hardware_id, 'new_hardware_id': new_hardware_id
-        }
-        if device_name:
-            payload['device_name'] = device_name
-        response = self._request('device', payload)
-        if self._cache:
-            self._cache.invalidate_license_status()
-        return response
 
     def verify_license_for_renewal(self, license_key: str) -> Dict[str, Any]:
         payload: Dict[str, Any] = {'license_key': license_key}

@@ -74,7 +74,7 @@ If any step fails, the application blocks.
 - Activate License
 - Buy License
 - Renew License
-- Replace Device
+- View Hardware Status
 - Hardware Issue
 - Contact Support
 - Request History

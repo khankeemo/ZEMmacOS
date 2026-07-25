@@ -22,7 +22,7 @@ Every request requires API Key + HMAC-SHA256 signature. The `ApiClient` handles 
 | `get_license_details()` | POST | `/api/v1/license/details` | Get license info |
 | `get_license_history()` | POST | `/api/v1/license/history` | Get license timeline |
 | `renew_license()` | POST | `/api/v1/license/renew` | Renew license |
-| `replace_device()` | POST | `/api/v1/device` | Replace device (action: replace) |
+| `view_hardware_status()` | — | — | View current vs registered hardware |
 | `bind_device()` | POST | `/api/v1/device` | Bind device |
 | `reset_device()` | POST | `/api/v1/device` | Reset device |
 | `get_plans()` | GET | `/api/v1/plans` | List plans |
@@ -47,7 +47,7 @@ Every request requires API Key + HMAC-SHA256 signature. The `ApiClient` handles 
 | `get_license_details(key)` | Fetch license details |
 | `get_license_history(key)` | Fetch license audit timeline |
 | `renew(plan_id)` | Renew license |
-| `replace_hardware()` | Move license to current (new) hardware |
+| `view_hardware_status()` | View current vs registered hardware IDs |
 | `bind_device(key)` | Bind license to current device |
 | `get_plans()` | Get available plans for product |
 | `get_countries()` | Get country list |

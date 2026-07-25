@@ -22,7 +22,7 @@
 | Activate License | Email dialog | ACTIVATION |
 | Buy License | Email dialog | BUY |
 | Renew License | Email dialog | RENEW |
-| Replace Device | Email dialog | DEVICE_REPLACEMENT |
+| View Hardware Status | Status panel | — |
 | Hardware Issue | Email dialog | HARDWARE |
 | Contact Support | Email dialog | SUPPORT |
 | Request History | History view | — |
