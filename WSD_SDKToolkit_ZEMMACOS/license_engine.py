@@ -148,23 +148,28 @@ class LicenseEngine:
         hardware_id = self._hardware.get_fingerprint()
         self._cache.invalidate_if_hardware_mismatch(hardware_id)
         self._process_message_queue()
+        print(f"[{time.strftime('%H:%M:%S')}] License Engine initialize — hardware: {hardware_id[:16]}...")
         if self._cache.is_valid():
             cached = self._cache.get_license_status()
             if cached:
                 self._status = LicenseStatus.from_dict(cached)
                 if not self._license_key and self._status.license_key:
                     self._license_key = self._status.license_key
+                print(f"{time.strftime('%H:%M:%S')} Customer found (cache hit) — status: {self._status.status}")
                 self._notify_ready(self._is_valid_status(self._status))
                 return self._status
+        print(f"{time.strftime('%H:%M:%S')} Cache miss or invalid — checking server")
         try:
             # Priority 1: Validate active paid license from server
             if self._license_key:
+                print(f"{time.strftime('%H:%M:%S')} License validation started — key: {self._license_key[:8]}...")
                 try:
                     result = self._client.validate_license(self._license_key, hardware_id)
                     data = result.get('data', result)
                     if data.get('valid'):
                         status_str = data.get('status', 'active')
                         if status_str == 'expired':
+                            print(f"{time.strftime('%H:%M:%S')} License status: expired — key: {self._license_key[:8]}...")
                             self._status = LicenseStatus(
                                 valid=False, status='expired',
                                 expiry_date=data.get('expiry_date'), days_left=0,
@@ -176,6 +181,7 @@ class LicenseEngine:
                             )
                             self._notify_ready(False)
                             return self._status
+                        print(f"{time.strftime('%H:%M:%S')} License status: {status_str} — key: {self._license_key[:8]}...")
                         self._status = LicenseStatus(
                             valid=True, status=status_str,
                             expiry_date=data.get('expiry_date'),
@@ -205,6 +211,7 @@ class LicenseEngine:
                             self._notify_ready(False)
                             return self._status
                         if self._cache.has_ever_activated_paid_license():
+                            print(f"{time.strftime('%H:%M:%S')} License status: force_reactivation — key: {self._license_key[:8]}...")
                             self._status = LicenseStatus(
                                 valid=False, status='force_reactivation',
                                 hardware_id=hardware_id, license_key=self._license_key,
@@ -212,6 +219,7 @@ class LicenseEngine:
                             )
                             self._notify_ready(False)
                             return self._status
+                        print(f"{time.strftime('%H:%M:%S')} License status: force_activation — key invalid")
                         self._status = LicenseStatus(
                             valid=False, status='force_activation',
                             hardware_id=hardware_id, license_key=self._license_key,
@@ -246,10 +254,12 @@ class LicenseEngine:
                     return self._status
             # Priority 2: Check for active trial (only if user never had a paid license)
             if not self._cache.has_ever_activated_paid_license():
+                print(f"{time.strftime('%H:%M:%S')} Trial check started — hardware: {hardware_id[:16]}...")
                 trial_response = self._client.get_trial_status(hardware_id)
                 trial_data = trial_response.get('data', {})
                 if trial_data.get('has_trial'):
                     status_str = trial_data.get('status', 'trial')
+                    print(f"{time.strftime('%H:%M:%S')} Trial status: {status_str}")
                     if status_str == 'expired':
                         self._status = LicenseStatus(
                             valid=False, status='expired',
@@ -278,12 +288,14 @@ class LicenseEngine:
                     return self._status
             # Priority 3: Determine if new customer or force activation
             if self._cache.is_onboarding_complete():
+                print(f"{time.strftime('%H:%M:%S')} Decision: force_activation (onboarding complete, no active license)")
                 self._status = LicenseStatus(
                     valid=False, status='force_activation',
                     hardware_id=hardware_id,
                     message='No active license found. Please activate.'
                 )
             else:
+                print(f"{time.strftime('%H:%M:%S')} Decision: unlicensed (new customer)")
                 self._status = LicenseStatus(
                     valid=False, status='unlicensed',
                     hardware_id=hardware_id,
@@ -469,7 +481,7 @@ class LicenseEngine:
             status["registered_hardware_id"] = cached.get('hardware_id')
             status["matched"] = status["current_hardware_id"] == cached.get('hardware_id')
         status["message"] = "Hardware replacement requires administrator approval. Please contact support."
-        return status        return result
+        return status
 
     def bind_device(self, license_key: Optional[str] = None, device_name: Optional[str] = None) -> Dict[str, Any]:
         key = license_key or self._license_key

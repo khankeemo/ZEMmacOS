@@ -250,6 +250,7 @@ class WelcomeDialog:
             })
             if trial_result.get('success'):
                 self.cache.set_onboarding_complete()
+                self.cache.set('customer_email', email)
                 self._result = {
                     'name': name, 'email': email, 'hardware_id': hardware_id,
                     'onboarding_complete': True, 'trial_started': True
@@ -257,9 +258,22 @@ class WelcomeDialog:
                 self._status_label.config(text='Trial activated! You can now use the software.', fg=self._success)
                 self._root.after(2000, self._root.destroy)
             else:
-                err = trial_result.get('message', trial_result.get('error', 'Failed to start trial'))
-                self._show_error(err)
-                self._verify_btn.config(state='normal', text='Verify')
+                err = trial_result.get('message', trial_result.get('error', ''))
+                if 'TRIAL_ALREADY_CONSUMED' in err or 'already used' in err.lower():
+                    self.cache.set_onboarding_complete()
+                    self.cache.set('customer_email', email)
+                    self._status_label.config(text='Customer already exists — continuing...', fg=self._primary)
+                    self._root.update()
+                    import time as _time
+                    _time.sleep(1)
+                    self._result = {
+                        'name': name, 'email': email, 'hardware_id': hardware_id,
+                        'onboarding_complete': True, 'trial_consumed': True
+                    }
+                    self._root.destroy()
+                else:
+                    self._show_error(err)
+                    self._verify_btn.config(state='normal', text='Verify')
         except Exception as e:
             self._show_error(str(e))
             self._verify_btn.config(state='normal', text='Verify')
