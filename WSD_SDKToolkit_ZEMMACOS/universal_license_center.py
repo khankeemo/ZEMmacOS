@@ -221,6 +221,7 @@ class UniversalLicenseCenter:
         self._root.grab_set()
         self._build_ui()
         self._refresh_display()
+        self._refresh_hardware_display()
         self._center_window()
         self._root.wait_window()
         return {"status": self._status.to_dict() if self._status else None,
@@ -264,6 +265,18 @@ class UniversalLicenseCenter:
                                         bg=self._card_bg, fg=self._text_secondary,
                                         justify="left", wraplength=540)
         self._status_detail.pack(anchor="w", padx=16, pady=(0, 12))
+
+        hw_frame = tk.Frame(main, bg=self._card_bg, bd=1, relief="solid",
+                             highlightbackground=self._border)
+        hw_frame.pack(fill="x", pady=(0, 16))
+        tk.Label(hw_frame, text="Hardware Status",
+                 font=("Segoe UI", 13, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 4))
+        self._hw_detail = tk.Label(hw_frame, text="Detecting...",
+                                    font=("Segoe UI", 10),
+                                    bg=self._card_bg, fg=self._text_secondary,
+                                    justify="left", wraplength=540)
+        self._hw_detail.pack(anchor="w", padx=16, pady=(0, 12))
 
         sep = tk.Frame(main, bg=self._border, height=1)
         sep.pack(fill="x", pady=(0, 12))
@@ -371,34 +384,71 @@ class UniversalLicenseCenter:
             return
         lines = []
 
-        if self._status.status == 'deactivated':
+        if self._status.status in ('force_activation', 'unlicensed'):
+            if self._trial_consumed:
+                lines.append("This email has already used its free trial.")
+                lines.append("Please Activate a License or Contact Sales.")
+            else:
+                lines.append("Status: NO LICENSE FOUND")
+                lines.append("No active license or trial was found.")
+                lines.append("Start a Free Trial or activate your license.")
+            fg = self._warning
+        elif self._status.status == 'deactivated':
             lines.append("Your license has been deactivated.")
             lines.append("Please contact your administrator.")
+            fg = self._warning
         elif self._status.status == 'force_reactivation':
             lines.append("Unable to verify your license.")
             lines.append("Please contact support.")
+            fg = self._error
         else:
-            lines.append(f"Status: {self._status.status.upper()}")
+            if self._status.customer_name:
+                lines.append(f"Customer Name: {self._status.customer_name}")
+            if self._status.customer_email:
+                lines.append(f"Customer Email: {self._status.customer_email}")
+            if self._product_name:
+                lines.append(f"Product: {self._product_name}")
             if self._status.plan:
                 lines.append(f"Plan: {self._status.plan}")
+            status_display = self._status.status.upper()
+            lines.append(f"License Status: {status_display}")
             if self._status.expiry_date:
-                lines.append(f"Expires: {self._status.expiry_date}")
+                lines.append(f"Expiry Date: {self._status.expiry_date}")
             if self._status.days_left > 0:
-                lines.append(f"Days Remaining: {self._status.days_left}")
-
-        if self._status.valid:
-            fg = self._success
-        elif self._status.status == "trial":
-            fg = self._warning
-        elif self._status.status == "deactivated":
-            fg = self._warning
-        else:
-            fg = self._error
+                lines.append(f"Remaining Days: {self._status.days_left}")
+            if self._status.valid:
+                fg = self._success
+            elif self._status.status == "trial":
+                fg = self._warning
+            elif self._status.status == "expired":
+                fg = self._error
+            else:
+                fg = self._error
 
         self._status_detail.config(text="\n".join(lines), fg=fg)
 
     def _set_output(self, text: str, color: str = "#6b7280"):
         self._output_label.config(text=text, fg=color)
+
+    def _refresh_hardware_display(self):
+        hw_id = self.hardware.get_fingerprint()
+        try:
+            import socket
+            device_name = socket.gethostname()
+        except Exception:
+            device_name = 'N/A'
+        system_name = platform.node() or 'N/A'
+        os_name = f"{platform.system()} {platform.release()}"
+        cached = self.cache.get_license_status() or {}
+        cached_hw = cached.get('hardware_id', '')
+        binding_status = "Bound" if cached_hw and cached_hw == hw_id else "Not Bound"
+        lines = []
+        lines.append(f"Hardware Status: {binding_status}")
+        lines.append(f"Hardware ID: {hw_id}")
+        lines.append(f"Device Name: {device_name}")
+        lines.append(f"Computer Name: {system_name}")
+        lines.append(f"Operating System: {os_name}")
+        self._hw_detail.config(text="\n".join(lines))
 
     def _start_trial(self):
         self._log("WELCOME", "INFO", "Opening Welcome (from Start Free Trial button)")
@@ -619,6 +669,7 @@ class UniversalLicenseCenter:
                         self._unlock_application()
                         self._status = self.engine.get_status()
                         self._refresh_display()
+                        self._refresh_hardware_display()
                         dialog.after(2000, dialog.destroy)
                         return
 
@@ -781,6 +832,7 @@ class UniversalLicenseCenter:
                     data["customer_email"] = validated["data"].get("customer_email", "")
                     self._status = self.engine.get_status()
                     self._refresh_display()
+                    self._refresh_hardware_display()
                     self._unlock_application()
                     dialog.destroy()
                     self._log("UI", "INFO", "Creating Activation Success dialog")
