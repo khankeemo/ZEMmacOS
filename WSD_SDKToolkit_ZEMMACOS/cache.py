@@ -191,3 +191,7 @@ class CacheManager:
 
     def get_pending_count(self) -> int:
         return len([m for m in self.get_message_queue() if m.get('status') in ('pending', 'failed')])
+
+    def reset_all(self) -> None:
+        self.clear()
+        self.clear_license_key()

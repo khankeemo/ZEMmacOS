@@ -438,12 +438,12 @@ class UniversalLicenseCenter:
         tk.Button(btn_frame, text="Restart Now", command=restart_now,
                   font=("Segoe UI", 11, "bold"),
                   bg=self._primary, fg="white", relief="flat",
-                  padx=16, pady=6, cursor="hand2").pack(side="left", padx=(0, 8))
+                  padx=16, pady=10, cursor="hand2").pack(side="left", padx=(0, 8))
 
         tk.Button(btn_frame, text="Restart Later", command=restart_win.destroy,
                   font=("Segoe UI", 11),
                   bg=self._text_secondary, fg="white", relief="flat",
-                  padx=16, pady=6, cursor="hand2").pack(side="left")
+                  padx=16, pady=10, cursor="hand2").pack(side="left")
 
         restart_win.wait_window()
 
@@ -451,7 +451,7 @@ class UniversalLicenseCenter:
         self._log("UI", "INFO", "Creating Activation Success dialog")
         confirm = tk.Toplevel(parent)
         confirm.title("Activation Successful")
-        confirm.geometry("500x480")
+        confirm.geometry("500x400")
         confirm.configure(bg=self._bg)
         confirm.transient(parent)
         confirm.grab_set()
@@ -464,15 +464,13 @@ class UniversalLicenseCenter:
                  bg=self._card_bg, fg=self._success).pack(anchor="w", padx=16, pady=(12, 8))
 
         info_items = [
-            ("Customer", data.get('customer_name', 'N/A')),
-            ("Email", data.get('customer_email', 'N/A')),
-            ("License Key", (license_key[:4] + "-****-" + license_key[-4:]) if len(license_key) > 8 else "****"),
+            ("Customer Name", data.get('customer_name', 'N/A')),
+            ("Product", self._product_name or data.get('product_name', 'N/A')),
             ("Plan", data.get('plan', 'N/A')),
-            ("Status", data.get('status', 'active')),
+            ("License Status", "Active"),
             ("Activation Date", data.get('activation_date', 'N/A')),
             ("Expiry Date", data.get('expiry_date', 'N/A')),
             ("Remaining Validity", f"{data.get('days_left', 0)} days"),
-            ("Device", data.get('hardware_id', self.hardware.get_fingerprint())[:32]),
         ]
 
         for label, value in info_items:
@@ -486,7 +484,7 @@ class UniversalLicenseCenter:
         tk.Button(frame, text="Continue", command=lambda: [confirm.destroy(), self._show_restart_prompt(parent)],
                   font=("Segoe UI", 11, "bold"),
                   bg=self._primary, fg="white", relief="flat",
-                  padx=16, pady=6, cursor="hand2").pack(padx=16, pady=(16, 12))
+                  padx=16, pady=10, cursor="hand2").pack(padx=16, pady=(16, 12))
 
         confirm.wait_window()
 
@@ -675,7 +673,7 @@ class UniversalLicenseCenter:
         validate_btn = tk.Button(phase1, text="Validate License", command=do_validate,
                                  font=("Segoe UI", 11, "bold"),
                                  bg=self._primary, fg="white", relief="flat",
-                                 padx=12, pady=6, cursor="hand2")
+                                 padx=16, pady=10, cursor="hand2")
         validate_btn.pack(fill="x", padx=16, pady=(8, 12))
 
         def do_send_otp():
@@ -723,14 +721,14 @@ class UniversalLicenseCenter:
 
         otp_btn_frame = tk.Frame(otp_frame, bg=self._card_bg)
         send_otp_btn = tk.Button(otp_btn_frame, text="Send OTP", command=do_send_otp,
-                                 font=("Segoe UI", 10, "bold"),
+                                 font=("Segoe UI", 11, "bold"),
                                  bg=self._primary, fg="white", relief="flat",
-                                 padx=10, pady=4, cursor="hand2")
+                                 padx=16, pady=10, cursor="hand2")
         send_otp_btn.pack(side="left", padx=(0, 8))
         verify_otp_btn = tk.Button(otp_btn_frame, text="Verify OTP", command=do_verify_otp,
-                                   font=("Segoe UI", 10, "bold"),
+                                   font=("Segoe UI", 11, "bold"),
                                    bg=self._primary, fg="white", relief="flat",
-                                   padx=10, pady=4, cursor="hand2")
+                                   padx=16, pady=10, cursor="hand2")
         verify_otp_btn.pack(side="left")
 
         def do_activate():
@@ -790,7 +788,7 @@ class UniversalLicenseCenter:
         activate_btn = tk.Button(activate_frame, text="Activate License", command=do_activate,
                                  font=("Segoe UI", 11, "bold"),
                                  bg=self._success, fg="white", relief="flat",
-                                 padx=12, pady=6, cursor="hand2")
+                                 padx=16, pady=10, cursor="hand2")
 
         dialog.wait_window()
 
@@ -983,13 +981,13 @@ class UniversalLicenseCenter:
         validate_btn = tk.Button(frame, text="Validate License", command=do_validate,
                                  font=("Segoe UI", 11, "bold"),
                                  bg=self._primary, fg="white", relief="flat",
-                                 padx=12, pady=6, cursor="hand2")
+                                 padx=16, pady=10, cursor="hand2")
         validate_btn.pack(fill="x", padx=16, pady=(8, 4))
 
         send_btn = tk.Button(frame, text="Submit Renewal Request", command=do_send,
                              font=("Segoe UI", 11, "bold"),
                              bg=self._success, fg="white", relief="flat",
-                             padx=12, pady=6, cursor="hand2")
+                             padx=16, pady=10, cursor="hand2")
 
         dialog.wait_window()
 
@@ -1083,14 +1081,11 @@ class UniversalLicenseCenter:
         tk.Button(frame, text="Submit Reactivation Request", command=do_send,
                   font=("Segoe UI", 11, "bold"),
                   bg=self._warning, fg="white", relief="flat",
-                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
+                  padx=16, pady=10, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
 
         dialog.wait_window()
 
     def _view_hardware_status(self):
-        if not self._status:
-            messagebox.showwarning("No Status", "No license status available.", parent=self._root)
-            return
         hw_id = self.hardware.get_fingerprint()
         dialog = tk.Toplevel(self._root)
         dialog.title("Hardware Status")
@@ -1103,17 +1098,18 @@ class UniversalLicenseCenter:
         frame.pack(fill="both", expand=True, padx=20, pady=20)
         tk.Label(frame, text="Hardware Status", font=("Segoe UI", 16, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(12, 8))
-        tk.Label(frame, text=f"Current Hardware ID:", font=("Segoe UI", 10, "bold"),
+        tk.Label(frame, text="Current Hardware ID:", font=("Segoe UI", 10, "bold"),
                  bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
         tk.Label(frame, text=hw_id, font=("Courier", 9),
                  bg=self._card_bg, fg=self._text_secondary,
                  wraplength=420).pack(anchor="w", padx=16, pady=(0, 4))
         cached_hw = None
-        if self._status and self._status.hardware_id:
-            cached_hw = self._status.hardware_id
+        cached = self.cache.get_license_status()
+        if cached and cached.get('hardware_id'):
+            cached_hw = cached.get('hardware_id')
         if cached_hw:
             match = hw_id == cached_hw
-            tk.Label(frame, text=f"Registered Hardware ID:", font=("Segoe UI", 10, "bold"),
+            tk.Label(frame, text="Registered Hardware ID:", font=("Segoe UI", 10, "bold"),
                      bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=16, pady=(4, 2))
             tk.Label(frame, text=cached_hw, font=("Courier", 9),
                      bg=self._card_bg, fg=self._text_secondary,
@@ -1122,6 +1118,10 @@ class UniversalLicenseCenter:
             status_text = "Matched" if match else "Mismatched"
             tk.Label(frame, text=f"Status: {status_text}", font=("Segoe UI", 10, "bold"),
                      bg=self._card_bg, fg=status_color).pack(anchor="w", padx=16, pady=(4, 8))
+        else:
+            tk.Label(frame, text="No registered hardware found.",
+                     font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary,
+                     wraplength=420).pack(anchor="w", padx=16, pady=(4, 8))
         tk.Label(frame, text="Hardware replacement requires administrator approval.",
                  font=("Segoe UI", 10), bg=self._card_bg, fg=self._text_secondary,
                  wraplength=420).pack(anchor="w", padx=16, pady=(8, 4))
@@ -1131,7 +1131,7 @@ class UniversalLicenseCenter:
         tk.Button(frame, text="Close", command=dialog.destroy,
                   font=("Segoe UI", 11, "bold"),
                   bg=self._text_secondary, fg="white", relief="flat",
-                  padx=12, pady=6, cursor="hand2").pack(padx=16, pady=(8, 12))
+                  padx=16, pady=8, cursor="hand2").pack(padx=16, pady=(8, 12))
         dialog.wait_window()
 
     def _contact_support(self):
@@ -1228,7 +1228,7 @@ class UniversalLicenseCenter:
         tk.Button(frame, text="Send Request", command=do_send,
                   font=("Segoe UI", 11, "bold"),
                   bg=self._primary, fg="white", relief="flat",
-                  padx=12, pady=6, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
+                  padx=16, pady=10, cursor="hand2").pack(fill="x", padx=16, pady=(8, 12))
 
         dialog.wait_window()
 
@@ -1307,7 +1307,7 @@ class UniversalLicenseCenter:
                 tk.Button(frame, text="Close", command=dialog.destroy,
                           font=("Segoe UI", 11, "bold"),
                           bg=self._primary, fg="white", relief="flat",
-                          padx=12, pady=6, cursor="hand2").pack(
+                          padx=16, pady=10, cursor="hand2").pack(
                     padx=12, pady=(0, 12))
             else:
                 messagebox.showerror("Error",
@@ -1390,7 +1390,7 @@ class UniversalLicenseCenter:
                 tk.Button(frame, text="Close", command=dialog.destroy,
                           font=("Segoe UI", 11, "bold"),
                           bg=self._primary, fg="white", relief="flat",
-                          padx=12, pady=6, cursor="hand2").pack(
+                          padx=16, pady=10, cursor="hand2").pack(
                     padx=12, pady=(0, 12))
         except Exception:
             pass

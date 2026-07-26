@@ -510,11 +510,9 @@ class LicenseEngine:
             raise ValueError("License key unavailable. Please provide a key.")
         result = self._client.deactivate_license(key)
         if result.get('success'):
-            self._cache.invalidate_license_status()
+            self._cache.reset_all()
             self._status = None
-            if license_key is None:
-                self._license_key = None
-                self._cache.clear_license_key()
+            self._license_key = None
         return result
 
     def view_hardware_status(self) -> Dict[str, Any]:
