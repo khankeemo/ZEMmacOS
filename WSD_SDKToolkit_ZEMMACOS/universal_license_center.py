@@ -184,7 +184,7 @@ class UniversalLicenseCenter:
         )
         return welcome.show()
 
-def _show_license_center(self, trial_consumed: bool = False) -> Dict[str, Any]:
+    def _show_license_center(self, trial_consumed: bool = False) -> Dict[str, Any]:
         LiveLog.log("Opening Universal License Center",
                      f"Status: {self._status.status if self._status else 'no_license'}, "
                      f"trial_consumed={trial_consumed}")

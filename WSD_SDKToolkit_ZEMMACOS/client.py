@@ -224,7 +224,13 @@ class ApiClient:
             hardware_id = self._get_hardware_id()
         return self._request('trial', {'action': 'status', 'hardware_id': hardware_id})
 
-    def convert_trial(self, hardware_id: Optional[str] = None, plan: Optional[str] = None, customer_name: str = '', customer_email: str = '') -> Dict[str, Any]:
+    def convert_trial(
+        self,
+        hardware_id: Optional[str] = None,
+        plan: Optional[str] = None,
+        customer_name: str = '',
+        customer_email: str = '',
+    ) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
         payload: Dict[str, Any] = {
@@ -239,7 +245,12 @@ class ApiClient:
             self._cache.invalidate_license_status()
         return response
 
-    def bind_device(self, license_key: str, hardware_id: Optional[str] = None, device_name: Optional[str] = None) -> Dict[str, Any]:
+    def bind_device(
+        self,
+        license_key: str,
+        hardware_id: Optional[str] = None,
+        device_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
         payload: Dict[str, Any] = {'action': 'bind', 'license_key': license_key, 'hardware_id': hardware_id}
