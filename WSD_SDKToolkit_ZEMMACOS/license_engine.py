@@ -28,6 +28,8 @@ class LicenseStatus:
         self.customer_email = kwargs.get('customer_email')
         self.customer_phone = kwargs.get('customer_phone')
         self.customer_mobile = kwargs.get('customer_mobile')
+        self.max_devices = kwargs.get('max_devices', 999)
+        self.device_count = kwargs.get('device_count', 0)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -43,14 +45,16 @@ class LicenseStatus:
             'customer_name': self.customer_name,
             'customer_email': self.customer_email,
             'customer_phone': self.customer_phone,
-            'customer_mobile': self.customer_mobile
+            'customer_mobile': self.customer_mobile,
+            'max_devices': self.max_devices,
+            'device_count': self.device_count,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'LicenseStatus':
         return cls(
             valid=data.get('valid', False),
-            status=data.get('status', 'unlicensed'),
+            status=data.get('status', 'no_license'),
             expiry_date=data.get('expiry_date'),
             days_left=data.get('days_left', 0),
             plan=data.get('plan'),
@@ -61,7 +65,9 @@ class LicenseStatus:
             customer_name=data.get('customer_name'),
             customer_email=data.get('customer_email'),
             customer_phone=data.get('customer_phone'),
-            customer_mobile=data.get('customer_mobile')
+            customer_mobile=data.get('customer_mobile'),
+            max_devices=data.get('max_devices', 999),
+            device_count=data.get('device_count', 0),
         )
 
 
@@ -182,6 +188,8 @@ class LicenseEngine:
                                 message='License has expired. Please renew.',
                                 customer_name=data.get('customer_name'),
                                 customer_email=data.get('customer_email'),
+                                max_devices=data.get('max_devices', 0),
+                                device_count=data.get('device_count', 0),
                             )
                             self._notify_ready(False)
                             return self._status
@@ -196,7 +204,9 @@ class LicenseEngine:
                             customer_email=data.get('customer_email'),
                             customer_phone=data.get('customer_phone'),
                             customer_mobile=data.get('customer_mobile'),
-                            message='License active'
+                            message='License active',
+                            max_devices=data.get('max_devices', 999),
+                            device_count=data.get('device_count', 0),
                         )
                         self._cache.set_license_status(self._status.to_dict())
                         self._cache.mark_has_ever_activated_paid_license()
@@ -211,7 +221,9 @@ class LicenseEngine:
                                 expiry_date=data.get('expiry_date'), days_left=0,
                                 plan=data.get('plan'), hardware_id=hardware_id,
                                 license_key=self._license_key,
-                                message='License has expired. Please renew.'
+                                message='License has expired. Please renew.',
+                                max_devices=data.get('max_devices', 0),
+                                device_count=data.get('device_count', 0),
                             )
                             self._notify_ready(False)
                             return self._status
@@ -224,11 +236,11 @@ class LicenseEngine:
                             )
                             self._notify_ready(False)
                             return self._status
-                        print(f"{time.strftime('%H:%M:%S')} License status: force_activation — key invalid")
+                        print(f"{time.strftime('%H:%M:%S')} Business: No License Found — key invalid")
                         self._status = LicenseStatus(
-                            valid=False, status='force_activation',
+                            valid=False, status='no_license',
                             hardware_id=hardware_id, license_key=self._license_key,
-                            message='License key invalid. Please activate.'
+                            message='License key not recognized. Start a Free Trial or activate your license.'
                         )
                         self._notify_ready(False)
                         return self._status
@@ -253,6 +265,15 @@ class LicenseEngine:
                         )
                         self._notify_ready(False)
                         return self._status
+                    if err_code == 'LICENSE_NOT_FOUND':
+                        print(f"{time.strftime('%H:%M:%S')} Business: No License Found — key not recognized")
+                        self._status = LicenseStatus(
+                            valid=False, status='no_license',
+                            hardware_id=hardware_id,
+                            message='No license or trial was found. Start a Free Trial or activate your license.'
+                        )
+                        self._notify_ready(False)
+                        return self._status
                     if self._cache.has_ever_activated_paid_license():
                         self._status = LicenseStatus(
                             valid=False, status='force_reactivation',
@@ -261,10 +282,11 @@ class LicenseEngine:
                         )
                         self._notify_ready(False)
                         return self._status
+                    print(f"{time.strftime('%H:%M:%S')} Business: No License Found — validation error, no paid history")
                     self._status = LicenseStatus(
-                        valid=False, status='force_activation',
+                        valid=False, status='no_license',
                         hardware_id=hardware_id,
-                        message='License validation failed. Please activate.'
+                        message='No license or trial was found. Start a Free Trial or activate your license.'
                     )
                     self._notify_ready(False)
                     return self._status
@@ -277,10 +299,11 @@ class LicenseEngine:
                         )
                         self._notify_ready(False)
                         return self._status
+                    print(f"{time.strftime('%H:%M:%S')} Business: No License Found — network error, no paid history")
                     self._status = LicenseStatus(
-                        valid=False, status='force_activation',
+                        valid=False, status='no_license',
                         hardware_id=hardware_id,
-                        message='Unable to verify license. Please try again later.'
+                        message='No license or trial was found. Start a Free Trial or activate your license.'
                     )
                     self._notify_ready(False)
                     return self._status
@@ -327,20 +350,20 @@ class LicenseEngine:
                         self._cache.set_license_status(self._status.to_dict())
                     self._notify_ready(self._is_valid_status(self._status))
                     return self._status
-            # Priority 3: Determine if new customer or force activation
+            # Priority 3: Determine if new customer or no license
             if self._cache.is_onboarding_complete():
-                print(f"{time.strftime('%H:%M:%S')} Decision: force_activation (onboarding complete, no active license)")
+                print(f"{time.strftime('%H:%M:%S')} Business: No License Found (onboarding complete, no active license)")
                 self._status = LicenseStatus(
-                    valid=False, status='force_activation',
+                    valid=False, status='no_license',
                     hardware_id=hardware_id,
-                    message='No active license found. Please activate.'
+                    message='No active license or trial was found. Start a Free Trial or activate your license.'
                 )
             else:
-                print(f"{time.strftime('%H:%M:%S')} Decision: unlicensed (new customer)")
+                print(f"{time.strftime('%H:%M:%S')} Business: No License Found (new customer)")
                 self._status = LicenseStatus(
-                    valid=False, status='unlicensed',
+                    valid=False, status='no_license',
                     hardware_id=hardware_id,
-                    message='No license or trial found'
+                    message='No license or trial was found. Start a Free Trial or activate your license.'
                 )
             self._notify_ready(False)
             return self._status
@@ -440,7 +463,9 @@ class LicenseEngine:
                     customer_name=data.get('customer_name'),
                     customer_email=data.get('customer_email'),
                     customer_phone=data.get('customer_phone'),
-                    customer_mobile=data.get('customer_mobile')
+                    customer_mobile=data.get('customer_mobile'),
+                    max_devices=data.get('max_devices', 999),
+                    device_count=data.get('device_count', 0),
                 )
                 if self._status.valid:
                     self._cache.set_license_status(self._status.to_dict())

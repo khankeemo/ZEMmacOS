@@ -156,7 +156,7 @@ class UniversalLicenseCenter:
         self._log("SDK", "INFO", "Engine initializing", "Starting decision engine")
         LiveLog.log("Engine initializing", "Starting decision engine")
         self._status = self.engine.initialize()
-        status = self._status.status if self._status else 'unlicensed'
+        status = self._status.status if self._status else 'no_license'
         self._log("SDK", "INFO", f"Decision engine result: {status}")
         LiveLog.log("Decision engine result", f"Status: {status}")
 
@@ -166,7 +166,7 @@ class UniversalLicenseCenter:
             LiveLog.log("License valid", "Launching application directly")
             return {'action': 'launch', 'status': self._status.to_dict(), 'unlocked': True}
 
-        if status == 'unlicensed' or (not self._status):
+        if status in ('no_license', 'unlicensed') or (not self._status):
             if not self.cache.is_onboarding_complete():
                 self._log("WELCOME", "INFO", "Opening Welcome", "Onboarding required")
                 LiveLog.log("Opening Welcome", "Onboarding required")
@@ -206,10 +206,10 @@ class UniversalLicenseCenter:
 
     def _show_license_center(self, trial_consumed: bool = False) -> Dict[str, Any]:
         LiveLog.log("Opening Universal License Center",
-                     f"Status: {self._status.status if self._status else 'unlicensed'}, "
+                     f"Status: {self._status.status if self._status else 'no_license'}, "
                      f"trial_consumed={trial_consumed}")
         self._log("WELCOME", "INFO", "Opening Universal License Center",
-                   f"Status: {self._status.status if self._status else 'unlicensed'}, trial_consumed={trial_consumed}")
+                   f"Status: {self._status.status if self._status else 'no_license'}, trial_consumed={trial_consumed}")
         self._trial_consumed = trial_consumed
         self._root = tk.Toplevel()
         self._root.title("Universal License Center")
@@ -264,7 +264,14 @@ class UniversalLicenseCenter:
                                         font=("Segoe UI", 10),
                                         bg=self._card_bg, fg=self._text_secondary,
                                         justify="left", wraplength=540)
-        self._status_detail.pack(anchor="w", padx=16, pady=(0, 12))
+        self._status_detail.pack(anchor="w", padx=16, pady=(0, 4))
+
+        self._license_footer = tk.Label(status_frame,
+                                         text="(No hardware diagnostics except Hardware ID if needed for reference)",
+                                         font=("Segoe UI", 8, "italic"),
+                                         bg=self._card_bg, fg="#9ca3af",
+                                         justify="left", wraplength=540)
+        self._license_footer.pack(anchor="w", padx=16, pady=(0, 10))
 
         hw_frame = tk.Frame(main, bg=self._card_bg, bd=1, relief="solid",
                              highlightbackground=self._border)
@@ -276,7 +283,14 @@ class UniversalLicenseCenter:
                                     font=("Segoe UI", 10),
                                     bg=self._card_bg, fg=self._text_secondary,
                                     justify="left", wraplength=540)
-        self._hw_detail.pack(anchor="w", padx=16, pady=(0, 12))
+        self._hw_detail.pack(anchor="w", padx=16, pady=(0, 4))
+
+        self._hw_footer = tk.Label(hw_frame,
+                                    text="(No license information)",
+                                    font=("Segoe UI", 8, "italic"),
+                                    bg=self._card_bg, fg="#9ca3af",
+                                    justify="left", wraplength=540)
+        self._hw_footer.pack(anchor="w", padx=16, pady=(0, 10))
 
         sep = tk.Frame(main, bg=self._border, height=1)
         sep.pack(fill="x", pady=(0, 12))
@@ -284,7 +298,7 @@ class UniversalLicenseCenter:
         btn_frame = tk.Frame(main, bg=self._bg)
         btn_frame.pack(fill="both", expand=True)
 
-        status = self._status.status if self._status else 'unlicensed'
+        status = self._status.status if self._status else 'no_license'
         is_valid = self._status.valid if self._status else False
         is_expired = status == 'expired'
         is_trial = status == 'trial'
@@ -384,7 +398,7 @@ class UniversalLicenseCenter:
             return
         lines = []
 
-        if self._status.status in ('force_activation', 'unlicensed'):
+        if self._status.status in ('no_license', 'force_activation', 'unlicensed'):
             if self._trial_consumed:
                 lines.append("This email has already used its free trial.")
                 lines.append("Please Activate a License or Contact Sales.")
@@ -403,19 +417,23 @@ class UniversalLicenseCenter:
             fg = self._error
         else:
             if self._status.customer_name:
-                lines.append(f"Customer Name: {self._status.customer_name}")
+                lines.append(f"Customer: {self._status.customer_name}")
             if self._status.customer_email:
-                lines.append(f"Customer Email: {self._status.customer_email}")
+                lines.append(f"Email: {self._status.customer_email}")
             if self._product_name:
                 lines.append(f"Product: {self._product_name}")
             if self._status.plan:
                 lines.append(f"Plan: {self._status.plan}")
-            status_display = self._status.status.upper()
-            lines.append(f"License Status: {status_display}")
             if self._status.expiry_date:
-                lines.append(f"Expiry Date: {self._status.expiry_date}")
+                lines.append(f"Expiry: {self._status.expiry_date}")
             if self._status.days_left > 0:
                 lines.append(f"Remaining Days: {self._status.days_left}")
+            if self._status.max_devices:
+                lines.append(f"Device Limit: {self._status.max_devices}")
+                remaining_acts = max(self._status.max_devices - (self._status.device_count or 0), 0)
+                lines.append(f"Remaining Activations: {remaining_acts}")
+            status_display = self._status.status.upper()
+            lines.append(f"License Status: {status_display}")
             if self._status.valid:
                 fg = self._success
             elif self._status.status == "trial":
@@ -443,11 +461,13 @@ class UniversalLicenseCenter:
         cached_hw = cached.get('hardware_id', '')
         binding_status = "Bound" if cached_hw and cached_hw == hw_id else "Not Bound"
         lines = []
-        lines.append(f"Hardware Status: {binding_status}")
         lines.append(f"Hardware ID: {hw_id}")
         lines.append(f"Device Name: {device_name}")
-        lines.append(f"Computer Name: {system_name}")
+        lines.append(f"System Name: {system_name}")
         lines.append(f"Operating System: {os_name}")
+        lines.append(f"Runtime: {RUNTIME_TYPE}")
+        lines.append(f"SDK Version: {SDK_VERSION}")
+        lines.append(f"Hardware Binding Status: {binding_status}")
         self._hw_detail.config(text="\n".join(lines))
 
     def _start_trial(self):
