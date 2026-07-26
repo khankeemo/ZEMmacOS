@@ -184,12 +184,12 @@ class UniversalLicenseCenter:
         )
         return welcome.show()
 
-    def _show_license_center(self, trial_consumed: bool = False) -> Dict[str, Any]:
+def _show_license_center(self, trial_consumed: bool = False) -> Dict[str, Any]:
         LiveLog.log("Opening Universal License Center",
                      f"Status: {self._status.status if self._status else 'no_license'}, "
                      f"trial_consumed={trial_consumed}")
         self._log("WELCOME", "INFO", "Opening Universal License Center",
-                   f"Status: {self._status.status if self._status else 'no_license'}, trial_consumed={trial_consumed}")
+                  f"Status: {self._status.status if self._status else 'no_license'}, trial_consumed={trial_consumed}")
         self._trial_consumed = trial_consumed
         self._root = tk.Toplevel()
         self._root.title("Universal License Center")
@@ -199,6 +199,7 @@ class UniversalLicenseCenter:
         self._root.configure(bg=self._bg)
         self._root.transient()
         self._root.grab_set()
+        self._root.protocol('WM_DELETE_WINDOW', self._on_ulc_close)
         self._build_ui()
         self._refresh_display()
         self._refresh_hardware_display()
@@ -332,14 +333,14 @@ class UniversalLicenseCenter:
             buttons = [
                 ("Activate License", self._activate_license, self._primary),
                 (support_label, self._contact_support, self._text_secondary),
-                ("Close", self._on_close, "#e5e7eb"),
+                ("Close", self._on_ulc_close, "#e5e7eb"),
             ]
         elif is_trial_consumed:
             buttons = [
                 ("Activate License", self._activate_license, self._primary),
                 ("Renew License", self._renew_license_flow, self._primary),
                 ("Contact Support", self._contact_support, self._text_secondary),
-                ("Close", self._on_close, "#e5e7eb"),
+                ("Close", self._on_ulc_close, "#e5e7eb"),
             ]
         else:
             if self._trial_consumed:
@@ -348,7 +349,7 @@ class UniversalLicenseCenter:
                     ("Renew License", self._renew_license_flow, self._primary),
                     ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                     ("Contact Support", self._contact_support, self._text_secondary),
-                    ("Exit", self._on_close, "#e5e7eb"),
+                    ("Exit", self._on_ulc_close, "#e5e7eb"),
                 ]
                 self._status_detail.config(
                     text="This email has already used its free trial. Please Activate a License or Contact Sales.",
@@ -361,7 +362,7 @@ class UniversalLicenseCenter:
                     ("Renew License", self._renew_license_flow, self._primary),
                     ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                     ("Contact Support", self._contact_support, self._text_secondary),
-                    ("Close", self._on_close, "#e5e7eb"),
+                    ("Close", self._on_ulc_close, "#e5e7eb"),
                 ]
 
         for text, cmd, color in buttons:
@@ -385,6 +386,20 @@ class UniversalLicenseCenter:
     def _on_close(self):
         try:
             self._root.destroy()
+        except Exception:
+            pass
+
+    def _on_ulc_close(self):
+        """Handle ULC close when application is locked - exit the process."""
+        self._log("SDK", "INFO", "ULC closed via window X", "Application locked - exiting process")
+        LiveLog.log("ULC closed", "Application locked - exiting process")
+        try:
+            self._root.destroy()
+        except Exception:
+            pass
+        try:
+            import sys
+            sys.exit(0)
         except Exception:
             pass
 
