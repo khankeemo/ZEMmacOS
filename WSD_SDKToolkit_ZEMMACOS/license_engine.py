@@ -232,19 +232,55 @@ class LicenseEngine:
                         )
                         self._notify_ready(False)
                         return self._status
-                except Exception:
+                except ApiError as e:
+                    err_data = e.data if isinstance(e.data, dict) else {}
+                    err_info = err_data.get('error', {})
+                    err_code = err_info.get('code', '') if isinstance(err_info, dict) else ''
+                    err_inactive_reason = err_info.get('inactive_reason', '') if isinstance(err_info, dict) else ''
+                    if err_code == 'LICENSE_INACTIVE':
+                        self._status = LicenseStatus(
+                            valid=False, status='deactivated',
+                            hardware_id=hardware_id,
+                            message='Your license has been deactivated. Please contact your administrator.',
+                        )
+                        self._notify_ready(False)
+                        return self._status
+                    if err_code == 'LICENSE_EXPIRED':
+                        self._status = LicenseStatus(
+                            valid=False, status='expired',
+                            hardware_id=hardware_id, license_key=self._license_key,
+                            message='License has expired. Please renew.'
+                        )
+                        self._notify_ready(False)
+                        return self._status
                     if self._cache.has_ever_activated_paid_license():
                         self._status = LicenseStatus(
                             valid=False, status='force_reactivation',
                             hardware_id=hardware_id, license_key=self._license_key,
-                            message='License validation failed. Please reactivate.'
+                            message='Unable to verify license. Please contact support.'
                         )
                         self._notify_ready(False)
                         return self._status
                     self._status = LicenseStatus(
                         valid=False, status='force_activation',
-                        hardware_id=hardware_id, license_key=self._license_key,
+                        hardware_id=hardware_id,
                         message='License validation failed. Please activate.'
+                    )
+                    self._notify_ready(False)
+                    return self._status
+                except Exception:
+                    if self._cache.has_ever_activated_paid_license():
+                        self._status = LicenseStatus(
+                            valid=False, status='force_reactivation',
+                            hardware_id=hardware_id, license_key=self._license_key,
+                            message='Unable to verify license. Please contact support.'
+                        )
+                        self._notify_ready(False)
+                        return self._status
+                    self._status = LicenseStatus(
+                        valid=False, status='force_activation',
+                        hardware_id=hardware_id,
+                        message='Unable to verify license. Please try again later.'
                     )
                     self._notify_ready(False)
                     return self._status
@@ -253,7 +289,7 @@ class LicenseEngine:
                     self._status = LicenseStatus(
                         valid=False, status='force_reactivation',
                         hardware_id=hardware_id,
-                        message='License key missing. Please reactivate.'
+                        message='Unable to verify license. Please contact support.'
                     )
                     self._notify_ready(False)
                     return self._status
