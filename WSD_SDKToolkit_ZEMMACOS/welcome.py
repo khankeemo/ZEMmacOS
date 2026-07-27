@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, Optional
 
-from .client import ApiClient
+from .client import ApiClient, ApiError
 from .hardware import HardwareDetector
 from .cache import CacheManager
 
@@ -247,6 +247,17 @@ class WelcomeDialog:
                 err_detail = result.get('error', result.get('message', 'Invalid OTP'))
                 self._log("OTP", "ERROR", "OTP verification failed", str(err_detail))
                 self._show_error('OTP verification failed. The OTP you entered is incorrect or has expired. Please check the OTP and try again.', bold=True)
+                self._verify_btn.config(state='normal', text='Verify')
+        except ApiError as e:
+            if e.status_code and 400 <= e.status_code < 500:
+                err_data = e.data if isinstance(e.data, dict) else {}
+                err_msg = err_data.get('message', err_data.get('error', e.message))
+                self._log("OTP", "ERROR", "OTP verification failed", str(err_msg))
+                self._show_error('OTP verification failed. The OTP you entered is incorrect or has expired. Please check the OTP and try again.', bold=True)
+                self._verify_btn.config(state='normal', text='Verify')
+            else:
+                self._log("OTP", "ERROR", "OTP verification server error", str(e))
+                self._show_error('An unexpected error occurred. Please try again later.')
                 self._verify_btn.config(state='normal', text='Verify')
         except Exception as e:
             self._log("OTP", "ERROR", "OTP verification exception", str(e))

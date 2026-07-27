@@ -8,14 +8,12 @@ from .license_engine import LicenseStatus
 class SuccessDialog:
     def __init__(self, parent: tk.Toplevel, status: LicenseStatus,
                  product_name: str, operation: str = "activation",
-                 on_restart: Optional[Callable[[], None]] = None,
-                 on_restart_later: Optional[Callable[[], None]] = None):
+                 on_continue: Optional[Callable[[], None]] = None):
         self._parent = parent
         self._status = status
         self._product_name = product_name
         self._operation = operation
-        self._on_restart = on_restart
-        self._on_restart_later = on_restart_later
+        self._on_continue = on_continue
         self._root: Optional[tk.Toplevel] = None
 
     def show(self) -> None:
@@ -81,7 +79,7 @@ class SuccessDialog:
         sep.pack(fill="x", pady=12)
 
         msg = tk.Label(main,
-                       text="Your product has been updated successfully.\nPlease restart the application to load the latest license information.",
+                       text="Your product has been updated successfully.\nClick Continue to proceed.",
                        font=("Segoe UI", 10), fg="#6b7280", bg="#ffffff",
                        justify="center", wraplength=460)
         msg.pack(pady=(0, 12))
@@ -89,34 +87,18 @@ class SuccessDialog:
         btn_frame = tk.Frame(main, bg="#ffffff")
         btn_frame.pack(fill="x")
 
-        restart_btn = tk.Button(btn_frame, text="Restart Now",
+        continue_btn = tk.Button(btn_frame, text="Continue",
                                 font=("Segoe UI", 12, "bold"),
                                 bg="#6366f1", fg="white", relief="flat",
-                                command=self._on_restart_now, cursor="hand2",
+                                command=self._on_continue_click, cursor="hand2",
                                 padx=20, pady=8)
-        restart_btn.pack(side="left", expand=True, padx=(0, 6))
+        continue_btn.pack(expand=True)
 
-        later_btn = tk.Button(btn_frame, text="Restart Later",
-                              font=("Segoe UI", 12),
-                              bg="#e5e7eb", fg="#374151", relief="flat",
-                              command=self._on_restart_later_click, cursor="hand2",
-                              padx=20, pady=8)
-        later_btn.pack(side="right", expand=True, padx=(6, 0))
-
-    def _on_restart_now(self):
+    def _on_continue_click(self):
         if self._root:
             try:
                 self._root.destroy()
             except Exception:
                 pass
-        if self._on_restart:
-            self._on_restart()
-
-    def _on_restart_later_click(self):
-        if self._root:
-            try:
-                self._root.destroy()
-            except Exception:
-                pass
-        if self._on_restart_later:
-            self._on_restart_later()
+        if self._on_continue:
+            self._on_continue()

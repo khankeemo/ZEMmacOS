@@ -161,20 +161,68 @@ class LicenseEngine:
                 self._status = LicenseStatus.from_dict(cached)
                 if not self._license_key and self._status.license_key:
                     self._license_key = self._status.license_key
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status})")
-                self._notify_ready(self._is_valid_status(self._status))
-                return self._status
+                if self._is_valid_status(self._status):
+                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status}), validating with server")
+                    try:
+                        if self._license_key:
+                            result = self._client.validate_license(self._license_key, hardware_id)
+                            data = result.get('data', result)
+                            if data.get('valid'):
+                                self._cache.set_license_status(cached)
+                                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server confirmed (status: {self._status.status})")
+                                self._notify_ready(True)
+                                return self._status
+                        else:
+                            result = self._client.validate_license('', hardware_id)
+                            data = result.get('data', result)
+                            if data.get('valid') or data.get('status') in ('active', 'trial'):
+                                self._cache.set_license_status(cached)
+                                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server confirmed (status: {self._status.status})")
+                                self._notify_ready(True)
+                                return self._status
+                        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server returned invalid, falling through")
+                    except Exception:
+                        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server unreachable, using cached state")
+                        self._cache.set_license_status(cached)
+                        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache fallback (status: {self._status.status})")
+                        self._notify_ready(self._is_valid_status(self._status))
+                        return self._status
+                    self._cache.invalidate_license_status()
+                else:
+                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status}), not valid, falling through")
         saved = self._cache.peek_license_status()
         if saved:
             self._status = LicenseStatus.from_dict(saved)
             if not self._license_key and self._status.license_key:
                 self._license_key = self._status.license_key
             if self._is_valid_status(self._status):
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — restored saved state, cache TTL expired (status: {self._status.status})")
-                self._cache.set_license_status(self._status.to_dict())
-                self._notify_ready(True)
-                return self._status
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — saved state found but not valid ({self._status.status}), checking server")
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — restored saved state, cache TTL expired (status: {self._status.status}), validating with server")
+                try:
+                    if self._license_key:
+                        result = self._client.validate_license(self._license_key, hardware_id)
+                        data = result.get('data', result)
+                        if data.get('valid'):
+                            self._cache.set_license_status(saved)
+                            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server confirmed (status: {self._status.status})")
+                            self._notify_ready(True)
+                            return self._status
+                    else:
+                        result = self._client.validate_license('', hardware_id)
+                        data = result.get('data', result)
+                        if data.get('valid') or data.get('status') in ('active', 'trial'):
+                            self._cache.set_license_status(saved)
+                            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server confirmed (status: {self._status.status})")
+                            self._notify_ready(True)
+                            return self._status
+                except Exception:
+                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server unreachable, using cached state")
+                    self._cache.set_license_status(saved)
+                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache fallback (status: {self._status.status})")
+                    self._notify_ready(True)
+                    return self._status
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server did not confirm, falling through")
+            else:
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — saved state found but not valid ({self._status.status}), checking server")
         print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache miss, checking server")
         try:
             if not self._license_key:

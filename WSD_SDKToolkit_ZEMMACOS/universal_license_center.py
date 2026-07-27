@@ -15,6 +15,7 @@ from .welcome import WelcomeDialog
 from .universal_success_dialog import SuccessDialog
 from .universal_restart_dialog import RestartDialog
 from .live_log import LiveLog
+from .single_instance import SingleInstance
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -105,6 +106,7 @@ class UniversalLicenseCenter:
             self.on_license_ready(False)
 
     def show(self) -> Dict[str, Any]:
+        self._instance_lock = SingleInstance('UniversalLicenseCenter')
         self._log("SDK", "INFO", "License Center started", "Application lock engaged")
         LiveLog.log("License Center started", "Application lock engaged")
         self._lock_application()
@@ -148,22 +150,19 @@ class UniversalLicenseCenter:
             status=self._status,
             product_name=self._product_name,
             operation=operation,
-            on_restart=self._show_restart_dialog,
-            on_restart_later=self._return_to_ulc,
+            on_continue=lambda: self._show_restart_dialog(operation),
         ).show()
 
     def _show_error_dialog(self, title: str, message: str) -> None:
         LiveLog.log("Showing Error Dialog", f"{title}: {message}")
         messagebox.showerror(title, message, parent=self._root)
 
-    def _show_restart_dialog(self) -> None:
+    def _show_restart_dialog(self, operation: str = "activation") -> None:
         LiveLog.log("Showing Restart Dialog", "Starting restart workflow")
-        allow_later = self._status.status in ('trial', 'active') if self._status else False
         RestartDialog(
             parent=self._root,
             engine=self.engine,
             product_name=self._product_name,
-            allow_restart_later=allow_later,
         ).show()
 
     def _destroy_ulc(self) -> None:
@@ -173,14 +172,6 @@ class UniversalLicenseCenter:
             except Exception:
                 pass
             self._root = None
-
-    def _return_to_ulc(self) -> None:
-        LiveLog.log("Returning to ULC", "User deferred restart")
-        if self._root:
-            try:
-                self._root.lift()
-            except Exception:
-                pass
 
     def _show_license_center(self, trial_consumed: bool = False) -> Dict[str, Any]:
         LiveLog.log("Opening Universal License Center",
@@ -294,7 +285,7 @@ class UniversalLicenseCenter:
                 ("Contact Support", self._contact_support, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
                 ("View Notifications", self._view_notifications, self._text_secondary),
-                ("Close", self._on_close, "#e5e7eb"),
+                ("Close", self._on_ulc_close, "#e5e7eb"),
             ]
         elif is_paid:
             buttons = [
@@ -304,7 +295,7 @@ class UniversalLicenseCenter:
                 ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
                 ("View Notifications", self._view_notifications, self._text_secondary),
-                ("Close", self._on_close, "#e5e7eb"),
+                ("Close", self._on_ulc_close, "#e5e7eb"),
             ]
         elif is_expired:
             buttons = [
@@ -313,18 +304,18 @@ class UniversalLicenseCenter:
                 ("Contact Support", self._contact_support, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
                 ("View Notifications", self._view_notifications, self._text_secondary),
-                ("Close", self._on_close, "#e5e7eb"),
+                ("Close", self._on_ulc_close, "#e5e7eb"),
             ]
         elif is_deactivated:
             buttons = [
                 ("Contact Support", self._contact_support, self._primary),
                 ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
-                ("Close", self._on_close, "#e5e7eb"),
+                ("Close", self._on_ulc_close, "#e5e7eb"),
             ]
         elif is_force_reactivation:
             buttons = [
                 ("Contact Support", self._contact_support, self._primary),
-                ("Close", self._on_close, "#e5e7eb"),
+                ("Close", self._on_ulc_close, "#e5e7eb"),
             ]
         elif is_inactive:
             support_label = f"Contact Support ({self._support_email})" if self._support_email else "Contact Support"
@@ -380,12 +371,6 @@ class UniversalLicenseCenter:
                                        bg=self._bg, fg=self._text_secondary,
                                        wraplength=540, justify="left")
         self._output_label.pack(fill="x", pady=(8, 0))
-
-    def _on_close(self):
-        try:
-            self._root.destroy()
-        except Exception:
-            pass
 
     def _on_ulc_close(self):
         """Handle ULC close when application is locked - exit the process."""
@@ -537,7 +522,6 @@ class UniversalLicenseCenter:
                     self._app_unlocked = True
                     LiveLog.log("Activation successful", f"Key: {key[:8]}...")
                     dialog.destroy()
-                    self._destroy_ulc()
                     self._show_success_dialog("activation")
                 else:
                     err_data = result.get('data', result)
@@ -576,8 +560,7 @@ class UniversalLicenseCenter:
                     self._status = status
                     LiveLog.log("Engine status updated", f"status={status.status}, valid={status.valid}")
                 self._app_unlocked = True
-                LiveLog.log("Trial activated", "Destroying ULC and showing success dialog")
-                self._destroy_ulc()
+                LiveLog.log("Trial activated", "Showing success dialog")
                 self._show_success_dialog("trial")
             else:
                 err_msg = eng_result.get('message', 'Trial activation failed')
@@ -634,7 +617,6 @@ class UniversalLicenseCenter:
                     if status:
                         self._status = status
                     LiveLog.log("Renewal API success", "Engine state updated")
-                    self._destroy_ulc()
                     self._show_success_dialog("renewal")
                 else:
                     err_msg = eng_result.get('message', 'Renewal failed')

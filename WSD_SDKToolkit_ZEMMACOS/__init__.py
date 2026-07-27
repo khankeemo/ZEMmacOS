@@ -10,6 +10,7 @@ __all__ = [
     "HardwareDetector",
     "CacheManager",
     "LiveLog",
+    "SingleInstance",
 ]
 
 from .client import ApiClient, ApiError
@@ -21,6 +22,7 @@ from .live_log import LiveLog
 from .universal_license_center import UniversalLicenseCenter
 from .universal_success_dialog import SuccessDialog
 from .universal_restart_dialog import RestartDialog
+from .single_instance import SingleInstance
 
 from . import activation
 from . import renewal
