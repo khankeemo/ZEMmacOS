@@ -217,13 +217,13 @@ class WelcomeDialog:
                 self._verify_btn.config(state='normal')
                 self._send_btn.config(text='Resend OTP', state='normal')
             else:
-                err_msg = result.get('error', result.get('message', 'Failed to send OTP'))
-                self._log("OTP", "ERROR", "Welcome OTP send failed", str(err_msg))
-                self._show_error(err_msg)
+                err_detail = result.get('error', result.get('message', 'Failed to send OTP'))
+                self._log("OTP", "ERROR", "Welcome OTP send failed", str(err_detail))
+                self._show_error('Failed to send OTP. Please check your email address and try again.')
                 self._send_btn.config(state='normal', text='Send OTP')
         except Exception as e:
             self._log("OTP", "ERROR", "Welcome OTP send exception", str(e))
-            self._show_error(str(e))
+            self._show_error('An unexpected error occurred. Please try again later.')
             self._send_btn.config(state='normal', text='Send OTP')
 
     def _on_verify_otp(self):
@@ -244,13 +244,13 @@ class WelcomeDialog:
                 else:
                     self._complete_onboarding()
             else:
-                err_msg = result.get('error', result.get('message', 'Invalid OTP'))
-                self._log("OTP", "ERROR", "OTP verification failed", str(err_msg))
-                self._show_error(err_msg)
+                err_detail = result.get('error', result.get('message', 'Invalid OTP'))
+                self._log("OTP", "ERROR", "OTP verification failed", str(err_detail))
+                self._show_error('OTP verification failed. The OTP you entered is incorrect or has expired. Please check the OTP and try again.', bold=True)
                 self._verify_btn.config(state='normal', text='Verify')
         except Exception as e:
             self._log("OTP", "ERROR", "OTP verification exception", str(e))
-            self._show_error(str(e))
+            self._show_error('An unexpected error occurred. Please try again later.')
             self._verify_btn.config(state='normal', text='Verify')
 
     def _handle_existing_customer(self):
@@ -318,8 +318,12 @@ class WelcomeDialog:
             self._show_error(str(e))
             self._verify_btn.config(state='normal', text='Verify')
 
-    def _show_error(self, msg: str):
+    def _show_error(self, msg: str, bold: bool = False):
         self._error_label.config(text=msg)
+        if bold:
+            self._error_label.config(font=('Helvetica', 10, 'bold'))
+        else:
+            self._error_label.config(font=('Helvetica', 10))
 
     def _clear_error(self):
         self._error_label.config(text='')

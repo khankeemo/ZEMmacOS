@@ -166,6 +166,14 @@ class UniversalLicenseCenter:
             allow_restart_later=allow_later,
         ).show()
 
+    def _destroy_ulc(self) -> None:
+        if self._root:
+            try:
+                self._root.destroy()
+            except Exception:
+                pass
+            self._root = None
+
     def _return_to_ulc(self) -> None:
         LiveLog.log("Returning to ULC", "User deferred restart")
         if self._root:
@@ -529,6 +537,7 @@ class UniversalLicenseCenter:
                     self._app_unlocked = True
                     LiveLog.log("Activation successful", f"Key: {key[:8]}...")
                     dialog.destroy()
+                    self._destroy_ulc()
                     self._show_success_dialog("activation")
                 else:
                     err_data = result.get('data', result)
@@ -567,7 +576,8 @@ class UniversalLicenseCenter:
                     self._status = status
                     LiveLog.log("Engine status updated", f"status={status.status}, valid={status.valid}")
                 self._app_unlocked = True
-                LiveLog.log("Trial activated", "Showing success dialog")
+                LiveLog.log("Trial activated", "Destroying ULC and showing success dialog")
+                self._destroy_ulc()
                 self._show_success_dialog("trial")
             else:
                 err_msg = eng_result.get('message', 'Trial activation failed')
@@ -624,6 +634,7 @@ class UniversalLicenseCenter:
                     if status:
                         self._status = status
                     LiveLog.log("Renewal API success", "Engine state updated")
+                    self._destroy_ulc()
                     self._show_success_dialog("renewal")
                 else:
                     err_msg = eng_result.get('message', 'Renewal failed')
