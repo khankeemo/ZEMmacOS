@@ -77,6 +77,7 @@ class RestartDialog:
                 key = self._engine.get_license_key()
                 if key:
                     self._engine._cache.save_license_key(key)
+                self._engine._cache.set_onboarding_complete()
                 LiveLog.log("Runtime state saved", f"Status: {status.status}")
                 return True
             LiveLog.log("Runtime state save skipped", "No status available")
@@ -93,16 +94,30 @@ class RestartDialog:
             LiveLog.log("Cache flush failed", str(e))
 
     def _close_all_windows(self) -> None:
-        if self._parent:
-            try:
-                self._parent.destroy()
-            except Exception:
-                pass
         if self._root:
             try:
                 self._root.destroy()
             except Exception:
                 pass
+        if self._parent:
+            try:
+                self._parent.destroy()
+            except Exception:
+                pass
+        try:
+            if tk._default_root:
+                for w in tk._default_root.winfo_children():
+                    try:
+                        w.destroy()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        try:
+            if tk._default_root:
+                tk._default_root.destroy()
+        except Exception:
+            pass
 
     def _on_restart(self):
         LiveLog.log("Restart requested", "User clicked Restart Now")

@@ -155,6 +155,18 @@ class LicenseEngine:
         self._cache.invalidate_if_hardware_mismatch(hardware_id)
         self._process_message_queue()
         print(f"[{time.strftime('%H:%M:%S')}] License Engine initialize — hardware: {hardware_id[:16]}...")
+
+        saved = self._cache.peek_license_status()
+        if saved:
+            self._status = LicenseStatus.from_dict(saved)
+            if not self._license_key and self._status.license_key:
+                self._license_key = self._status.license_key
+            if self._is_valid_status(self._status):
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — restored from cache (status: {self._status.status})")
+                self._notify_ready(True)
+                return self._status
+            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cached state found but not valid ({self._status.status})")
+
         if self._cache.is_valid():
             cached = self._cache.get_license_status()
             if cached:
@@ -162,302 +174,42 @@ class LicenseEngine:
                 if not self._license_key and self._status.license_key:
                     self._license_key = self._status.license_key
                 if self._is_valid_status(self._status):
-                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status}), validating with server")
-                    try:
-                        if self._license_key:
-                            result = self._client.validate_license(self._license_key, hardware_id)
-                            data = result.get('data', result)
-                            if data.get('valid'):
-                                self._cache.set_license_status(cached)
-                                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server confirmed (status: {self._status.status})")
-                                self._notify_ready(True)
-                                return self._status
-                        else:
-                            result = self._client.validate_license('', hardware_id)
-                            data = result.get('data', result)
-                            if data.get('valid') or data.get('status') in ('active', 'trial'):
-                                self._cache.set_license_status(cached)
-                                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server confirmed (status: {self._status.status})")
-                                self._notify_ready(True)
-                                return self._status
-                        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server returned invalid, falling through")
-                    except Exception:
-                        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server unreachable, using cached state")
-                        self._cache.set_license_status(cached)
-                        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache fallback (status: {self._status.status})")
-                        self._notify_ready(self._is_valid_status(self._status))
-                        return self._status
-                    self._cache.invalidate_license_status()
-                else:
-                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status}), not valid, falling through")
-        saved = self._cache.peek_license_status()
-        if saved:
-            self._status = LicenseStatus.from_dict(saved)
-            if not self._license_key and self._status.license_key:
-                self._license_key = self._status.license_key
-            if self._is_valid_status(self._status):
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — restored saved state, cache TTL expired (status: {self._status.status}), validating with server")
-                try:
-                    if self._license_key:
-                        result = self._client.validate_license(self._license_key, hardware_id)
-                        data = result.get('data', result)
-                        if data.get('valid'):
-                            self._cache.set_license_status(saved)
-                            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server confirmed (status: {self._status.status})")
-                            self._notify_ready(True)
-                            return self._status
-                    else:
-                        result = self._client.validate_license('', hardware_id)
-                        data = result.get('data', result)
-                        if data.get('valid') or data.get('status') in ('active', 'trial'):
-                            self._cache.set_license_status(saved)
-                            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server confirmed (status: {self._status.status})")
-                            self._notify_ready(True)
-                            return self._status
-                except Exception:
-                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server unreachable, using cached state")
-                    self._cache.set_license_status(saved)
-                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache fallback (status: {self._status.status})")
+                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status})")
                     self._notify_ready(True)
                     return self._status
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server did not confirm, falling through")
-            else:
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — saved state found but not valid ({self._status.status}), checking server")
-        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache miss, checking server")
-        try:
-            if not self._license_key:
-                self._license_key = self._cache.load_license_key()
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status}), not valid, falling through")
 
-            if self._license_key:
-                print(f"{time.strftime('%H:%M:%S')} License validation started — key: {self._license_key[:8]}...")
-                try:
-                    result = self._client.validate_license(self._license_key, hardware_id)
-                    data = result.get('data', result)
-                    if data.get('valid'):
-                        status_str = data.get('status', 'active')
-                        if status_str == 'expired':
-                            print(f"{time.strftime('%H:%M:%S')} License status: expired — key: {self._license_key[:8]}...")
-                            self._status = LicenseStatus(
-                                valid=False, status='expired',
-                                expiry_date=data.get('expiry_date'), days_left=0,
-                                plan=data.get('plan'), hardware_id=hardware_id,
-                                license_key=self._license_key,
-                                message='License has expired. Please renew.',
-                                customer_name=data.get('customer_name'),
-                                customer_email=data.get('customer_email'),
-                                max_devices=data.get('max_devices', 0),
-                                device_count=data.get('device_count', 0),
-                            )
-                            self._notify_ready(False)
-                            return self._status
-                        print(f"{time.strftime('%H:%M:%S')} License status: {status_str} — key: {self._license_key[:8]}...")
-                        self._status = LicenseStatus(
-                            valid=True, status=status_str,
-                            expiry_date=data.get('expiry_date'),
-                            days_left=data.get('days_left', 0),
-                            plan=data.get('plan'), hardware_id=hardware_id,
-                            license_key=self._license_key,
-                            customer_name=data.get('customer_name'),
-                            customer_email=data.get('customer_email'),
-                            customer_phone=data.get('customer_phone'),
-                            customer_mobile=data.get('customer_mobile'),
-                            message='License active',
-                            max_devices=data.get('max_devices', 999),
-                            device_count=data.get('device_count', 0),
-                        )
-                        self._cache.set_license_status(self._status.to_dict())
-                        self._cache.mark_has_ever_activated_paid_license()
-                        self._cache.set_onboarding_complete()
-                        self._notify_ready(True)
-                        return self._status
-                    else:
-                        server_status = data.get('status', '')
-                        if server_status == 'expired':
-                            self._status = LicenseStatus(
-                                valid=False, status='expired',
-                                expiry_date=data.get('expiry_date'), days_left=0,
-                                plan=data.get('plan'), hardware_id=hardware_id,
-                                license_key=self._license_key,
-                                message='License has expired. Please renew.',
-                                max_devices=data.get('max_devices', 0),
-                                device_count=data.get('device_count', 0),
-                            )
-                            self._notify_ready(False)
-                            return self._status
-                        if self._cache.has_ever_activated_paid_license():
-                            print(f"{time.strftime('%H:%M:%S')} License status: force_reactivation — key: {self._license_key[:8]}...")
-                            self._status = LicenseStatus(
-                                valid=False, status='force_reactivation',
-                                hardware_id=hardware_id, license_key=self._license_key,
-                                message='License inactive. Please reactivate.'
-                            )
-                            self._notify_ready(False)
-                            return self._status
-                        print(f"{time.strftime('%H:%M:%S')} Business: No License Found — key invalid")
-                        self._status = LicenseStatus(
-                            valid=False, status='no_license',
-                            hardware_id=hardware_id, license_key=self._license_key,
-                            message='License key not recognized. Start a Free Trial or activate your license.'
-                        )
-                        self._notify_ready(False)
-                        return self._status
-                except ApiError as e:
-                    err_data = e.data if isinstance(e.data, dict) else {}
-                    err_info = err_data.get('error', {})
-                    err_code = err_info.get('code', '') if isinstance(err_info, dict) else ''
-                    err_inactive_reason = err_info.get('inactive_reason', '') if isinstance(err_info, dict) else ''
-                    if err_code == 'LICENSE_INACTIVE':
-                        if self._cache.has_ever_activated_paid_license():
-                            self._status = LicenseStatus(
-                                valid=False, status='inactive',
-                                hardware_id=hardware_id, license_key=self._license_key,
-                                message='Your license is inactive. Please contact support.',
-                            )
-                        else:
-                            self._status = LicenseStatus(
-                                valid=False, status='inactive',
-                                hardware_id=hardware_id, license_key=self._license_key,
-                                message='Your license is inactive. Please contact support.',
-                            )
-                        self._notify_ready(False)
-                        return self._status
-                    if err_code == 'LICENSE_EXPIRED':
-                        self._status = LicenseStatus(
-                            valid=False, status='expired',
-                            hardware_id=hardware_id, license_key=self._license_key,
-                            message='License has expired. Please renew.'
-                        )
-                        self._notify_ready(False)
-                        return self._status
-                    if err_code == 'LICENSE_NOT_FOUND':
-                        print(f"{time.strftime('%H:%M:%S')} Business: No License Found — key not recognized")
-                        self._status = LicenseStatus(
-                            valid=False, status='no_license',
-                            hardware_id=hardware_id,
-                            message='No license or trial was found. Start a Free Trial or activate your license.'
-                        )
-                        self._notify_ready(False)
-                        return self._status
-                    if self._cache.has_ever_activated_paid_license():
-                        self._status = LicenseStatus(
-                            valid=False, status='force_reactivation',
-                            hardware_id=hardware_id, license_key=self._license_key,
-                            message='Unable to verify license. Please contact support.'
-                        )
-                        self._notify_ready(False)
-                        return self._status
-                    print(f"{time.strftime('%H:%M:%S')} Business: No License Found — validation error, no paid history")
-                    self._status = LicenseStatus(
-                        valid=False, status='no_license',
-                        hardware_id=hardware_id,
-                        message='No license or trial was found. Start a Free Trial or activate your license.'
-                    )
-                    self._notify_ready(False)
-                    return self._status
-                except Exception:
-                    if self._cache.has_ever_activated_paid_license():
-                        self._status = LicenseStatus(
-                            valid=False, status='force_reactivation',
-                            hardware_id=hardware_id, license_key=self._license_key,
-                            message='Unable to verify license. Please contact support.'
-                        )
-                        self._notify_ready(False)
-                        return self._status
-                    print(f"{time.strftime('%H:%M:%S')} Business: No License Found — network error, no paid history")
-                    self._status = LicenseStatus(
-                        valid=False, status='no_license',
-                        hardware_id=hardware_id,
-                        message='No license or trial was found. Start a Free Trial or activate your license.'
-                    )
-                    self._notify_ready(False)
-                    return self._status
-            else:
-                if self._cache.has_ever_activated_paid_license():
-                    self._status = LicenseStatus(
-                        valid=False, status='force_reactivation',
-                        hardware_id=hardware_id,
-                        message='Unable to verify license. Please contact support.'
-                    )
-                    self._notify_ready(False)
-                    return self._status
-            if not self._cache.has_ever_activated_paid_license():
-                print(f"{time.strftime('%H:%M:%S')} Trial check started — hardware: {hardware_id[:16]}...")
-                trial_response = self._client.get_trial_status(hardware_id)
-                trial_data = trial_response.get('data', {})
-                if trial_data.get('has_trial'):
-                    status_str = trial_data.get('status', 'trial')
-                    print(f"{time.strftime('%H:%M:%S')} Trial status: {status_str}")
-                    if status_str == 'expired':
-                        self._status = LicenseStatus(
-                            valid=False, status='expired',
-                            expiry_date=trial_data.get('expiry_date'), days_left=0,
-                            plan=trial_data.get('plan'), hardware_id=hardware_id,
-                            message='Trial has expired. Please renew.',
-                            customer_name=trial_data.get('customer_name'),
-                            customer_email=trial_data.get('customer_email'),
-                        )
-                        self._notify_ready(False)
-                        return self._status
-                    status_valid = status_str in ('active', 'trial')
-                    self._status = LicenseStatus(
-                        valid=status_valid, status=status_str,
-                        expiry_date=trial_data.get('expiry_date'),
-                        days_left=trial_data.get('days_left', 0),
-                        plan=trial_data.get('plan'), hardware_id=hardware_id,
-                        message=f"Trial is {status_str}",
-                        customer_name=trial_data.get('customer_name'),
-                        customer_email=trial_data.get('customer_email'),
-                        customer_phone=trial_data.get('customer_phone'),
-                        customer_mobile=trial_data.get('customer_mobile')
-                    )
-                    if status_valid:
-                        self._cache.set_license_status(self._status.to_dict())
-                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server returned trial (status: {status_str})")
-                    self._notify_ready(self._is_valid_status(self._status))
-                    return self._status
-            onboarding_complete = self._cache.is_onboarding_complete()
-            if not onboarding_complete:
-                onboarding_complete = self._cache.peek_onboarding_complete()
-            has_paid = self._cache.has_ever_activated_paid_license()
-            if not has_paid and onboarding_complete:
-                has_paid = self._cache.peek_has_ever_activated_paid_license()
-            if onboarding_complete:
-                if has_paid:
-                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — inactive (existing customer with paid history)")
-                    self._status = LicenseStatus(
-                        valid=False, status='inactive',
-                        hardware_id=hardware_id,
-                        message='Your license is inactive. Activate a new license or contact support.'
-                    )
-                else:
-                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — trial_consumed (onboarding complete, no paid license)")
-                    self._status = LicenseStatus(
-                        valid=False, status='trial_consumed',
-                        hardware_id=hardware_id,
-                        message='Your trial has ended. Please activate a paid license or renew an existing license.'
-                    )
-            else:
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no_license (new customer)")
+        onboarding_complete = self._cache.is_onboarding_complete()
+        if not onboarding_complete:
+            onboarding_complete = self._cache.peek_onboarding_complete()
+        has_paid = self._cache.has_ever_activated_paid_license()
+        if not has_paid and onboarding_complete:
+            has_paid = self._cache.peek_has_ever_activated_paid_license()
+
+        if onboarding_complete:
+            if has_paid:
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — inactive (existing customer with paid history)")
                 self._status = LicenseStatus(
-                    valid=False, status='no_license',
+                    valid=False, status='inactive',
                     hardware_id=hardware_id,
-                    message='No license or trial was found. Start a Free Trial or activate your license.'
+                    message='Your license is inactive. Activate a new license or contact support.'
                 )
-            self._notify_ready(False)
-            return self._status
-        except Exception as e:
-            logger.exception("Unexpected error during license initialization")
-            cached = self._cache.get_license_status()
-            if cached:
-                status = LicenseStatus.from_dict(cached)
-                self._notify_ready(self._is_valid_status(status))
-                return status
+            else:
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — trial_consumed (onboarding complete, no paid license)")
+                self._status = LicenseStatus(
+                    valid=False, status='trial_consumed',
+                    hardware_id=hardware_id,
+                    message='Your trial has ended. Please activate a paid license or renew an existing license.'
+                )
+        else:
+            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no_license (new customer)")
             self._status = LicenseStatus(
-                valid=False, status='error',
-                message=f"Unexpected error: {str(e)}"
+                valid=False, status='no_license',
+                hardware_id=hardware_id,
+                message='No license or trial was found. Start a Free Trial or activate your license.'
             )
-            self._notify_ready(False)
-            return self._status
+        self._notify_ready(False)
+        return self._status
 
     def get_hardware_id(self) -> str:
         return self._hardware.get_fingerprint()

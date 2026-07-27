@@ -38,7 +38,8 @@ def _load_api_config() -> Dict[str, Any]:
 class UniversalLicenseCenter:
     def __init__(self, config_path: Optional[str] = None,
                  on_license_ready: Optional[Callable[[bool], None]] = None,
-                 log_fn: Optional[Callable[[str, str, str, Optional[str]], None]] = None):
+                 log_fn: Optional[Callable[[str, str, str, Optional[str]], None]] = None,
+                 initial_status: Optional[LicenseStatus] = None):
         self.config = _load_api_config() if config_path is None else self._load_config(config_path)
         self.hardware = HardwareDetector()
         self.cache = CacheManager(self.config)
@@ -50,7 +51,8 @@ class UniversalLicenseCenter:
             def _sdk_log_forwarder(event: str, detail: str = ""):
                 log_fn("SDK", "INFO", event, detail)
             LiveLog.set_external_logger(_sdk_log_forwarder)
-        self._status: Optional[LicenseStatus] = None
+        self._status: Optional[LicenseStatus] = initial_status
+        self._initialized = initial_status is not None
         self._root: Optional[tk.Toplevel] = None
         self._app_unlocked = False
         self._trial_consumed = False
@@ -110,9 +112,15 @@ class UniversalLicenseCenter:
         self._log("SDK", "INFO", "License Center started", "Application lock engaged")
         LiveLog.log("License Center started", "Application lock engaged")
         self._lock_application()
-        self._log("SDK", "INFO", "Engine initializing", "Starting decision engine")
-        LiveLog.log("Engine initializing", "Starting decision engine")
-        self._status = self.engine.initialize()
+
+        if not self._initialized:
+            self._log("SDK", "INFO", "Engine initializing", "Starting decision engine")
+            LiveLog.log("Engine initializing", "Starting decision engine")
+            self._status = self.engine.initialize()
+            self._initialized = True
+        else:
+            self._log("SDK", "INFO", "Using pre-initialized engine status", "Skipping duplicate initialize()")
+
         status = self._status.status if self._status else 'no_license'
         self._log("SDK", "INFO", f"Decision engine result: {status}")
         LiveLog.log("Decision engine result", f"Status: {status}")
@@ -517,8 +525,10 @@ class UniversalLicenseCenter:
                     status = self.engine.get_status()
                     if status:
                         self._status = status
-                        self._cache.set_license_status(status.to_dict())
-                        self._cache.mark_has_ever_activated_paid_license()
+                        self._initialized = True
+                        self.cache.set_license_status(status.to_dict())
+                        self.cache.mark_has_ever_activated_paid_license()
+                    self.cache.set_onboarding_complete()
                     self._app_unlocked = True
                     LiveLog.log("Activation successful", f"Key: {key[:8]}...")
                     dialog.destroy()
@@ -558,7 +568,10 @@ class UniversalLicenseCenter:
                 status = self.engine.get_status()
                 if status:
                     self._status = status
+                    self._initialized = True
                     LiveLog.log("Engine status updated", f"status={status.status}, valid={status.valid}")
+                self.cache.set_onboarding_complete()
+                self.engine._cache.set_onboarding_complete()
                 self._app_unlocked = True
                 LiveLog.log("Trial activated", "Showing success dialog")
                 self._show_success_dialog("trial")
@@ -616,6 +629,7 @@ class UniversalLicenseCenter:
                     status = self.engine.get_status()
                     if status:
                         self._status = status
+                        self._initialized = True
                     LiveLog.log("Renewal API success", "Engine state updated")
                     self._show_success_dialog("renewal")
                 else:
