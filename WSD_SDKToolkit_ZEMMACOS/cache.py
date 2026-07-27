@@ -124,6 +124,13 @@ class CacheManager:
     def invalidate_license_status(self) -> None:
         self.delete('license_status')
 
+    def peek_license_status(self) -> Optional[Dict[str, Any]]:
+        cache = self._load_cache()
+        entry = cache.get('license_status')
+        if entry is None:
+            return None
+        return entry.get('value')
+
     def save_license_key(self, license_key: str) -> None:
         key_path = self._cache_dir / 'license.key'
         try:
@@ -156,6 +163,13 @@ class CacheManager:
     def is_onboarding_complete(self) -> bool:
         return self.get('onboarding_complete') is True
 
+    def peek_onboarding_complete(self) -> bool:
+        cache = self._load_cache()
+        entry = cache.get('onboarding_complete')
+        if entry is None:
+            return False
+        return entry.get('value') is True
+
     def mark_has_ever_activated_paid_license(self) -> None:
         cache = self._load_cache()
         cache['has_ever_activated_paid_license'] = {'value': True, 'cached_at': time.time()}
@@ -163,6 +177,13 @@ class CacheManager:
 
     def has_ever_activated_paid_license(self) -> bool:
         return self.get('has_ever_activated_paid_license') is True
+
+    def peek_has_ever_activated_paid_license(self) -> bool:
+        cache = self._load_cache()
+        entry = cache.get('has_ever_activated_paid_license')
+        if entry is None:
+            return False
+        return entry.get('value') is True
 
     # ====================================================================
     # Message Queue (Offline Retry)

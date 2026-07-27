@@ -161,10 +161,21 @@ class LicenseEngine:
                 self._status = LicenseStatus.from_dict(cached)
                 if not self._license_key and self._status.license_key:
                     self._license_key = self._status.license_key
-                print(f"{time.strftime('%H:%M:%S')} Customer found (cache hit) — status: {self._status.status}")
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status})")
                 self._notify_ready(self._is_valid_status(self._status))
                 return self._status
-        print(f"{time.strftime('%H:%M:%S')} Cache miss or invalid — checking server")
+        saved = self._cache.peek_license_status()
+        if saved:
+            self._status = LicenseStatus.from_dict(saved)
+            if not self._license_key and self._status.license_key:
+                self._license_key = self._status.license_key
+            if self._is_valid_status(self._status):
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — restored saved state, cache TTL expired (status: {self._status.status})")
+                self._cache.set_license_status(self._status.to_dict())
+                self._notify_ready(True)
+                return self._status
+            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — saved state found but not valid ({self._status.status}), checking server")
+        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache miss, checking server")
         try:
             if not self._license_key:
                 self._license_key = self._cache.load_license_key()
@@ -339,8 +350,9 @@ class LicenseEngine:
                         )
                         self._notify_ready(False)
                         return self._status
+                    status_valid = status_str in ('active', 'trial')
                     self._status = LicenseStatus(
-                        valid=status_str == 'active', status=status_str,
+                        valid=status_valid, status=status_str,
                         expiry_date=trial_data.get('expiry_date'),
                         days_left=trial_data.get('days_left', 0),
                         plan=trial_data.get('plan'), hardware_id=hardware_id,
@@ -350,27 +362,34 @@ class LicenseEngine:
                         customer_phone=trial_data.get('customer_phone'),
                         customer_mobile=trial_data.get('customer_mobile')
                     )
-                    if self._status.valid:
+                    if status_valid:
                         self._cache.set_license_status(self._status.to_dict())
+                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server returned trial (status: {status_str})")
                     self._notify_ready(self._is_valid_status(self._status))
                     return self._status
-            if self._cache.is_onboarding_complete():
-                if self._cache.has_ever_activated_paid_license():
-                    print(f"{time.strftime('%H:%M:%S')} Business: Inactive License (existing customer with paid history)")
+            onboarding_complete = self._cache.is_onboarding_complete()
+            if not onboarding_complete:
+                onboarding_complete = self._cache.peek_onboarding_complete()
+            has_paid = self._cache.has_ever_activated_paid_license()
+            if not has_paid and onboarding_complete:
+                has_paid = self._cache.peek_has_ever_activated_paid_license()
+            if onboarding_complete:
+                if has_paid:
+                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — inactive (existing customer with paid history)")
                     self._status = LicenseStatus(
                         valid=False, status='inactive',
                         hardware_id=hardware_id,
                         message='Your license is inactive. Activate a new license or contact support.'
                     )
                 else:
-                    print(f"{time.strftime('%H:%M:%S')} Business: Trial Consumed (onboarding complete, no paid license)")
+                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — trial_consumed (onboarding complete, no paid license)")
                     self._status = LicenseStatus(
                         valid=False, status='trial_consumed',
                         hardware_id=hardware_id,
                         message='Your trial has ended. Please activate a paid license or renew an existing license.'
                     )
             else:
-                print(f"{time.strftime('%H:%M:%S')} Business: No License Found (new customer)")
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no_license (new customer)")
                 self._status = LicenseStatus(
                     valid=False, status='no_license',
                     hardware_id=hardware_id,
