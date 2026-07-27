@@ -1,11 +1,12 @@
 """Universal Restart Dialog — save state, close, exit, restart application"""
 import os
+import subprocess
 import sys
 import tkinter as tk
 from typing import Optional
 
 from .license_engine import LicenseEngine
-from .livelog import LiveLog
+from .live_log import LiveLog
 
 
 class RestartDialog:
@@ -27,6 +28,7 @@ class RestartDialog:
         self._root.transient(self._parent)
         self._root.grab_set()
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
+        LiveLog.log("Restart dialog shown", "Waiting for user action")
         self._build_ui()
         self._center_window()
         self._root.wait_window()
@@ -78,38 +80,46 @@ class RestartDialog:
                                   padx=24, pady=8)
             later_btn.pack(side="right", expand=True, padx=(6, 0))
 
-    def _save_runtime_state(self) -> None:
+    def _save_runtime_state(self) -> bool:
         try:
             status = self._engine.get_status()
             if status:
                 self._engine._cache.set_license_status(status.to_dict())
-            LiveLog.log("Runtime state saved", "Pre-restart state persisted")
-        except Exception:
-            pass
+                LiveLog.log("Runtime state saved", f"Status: {status.status}")
+                return True
+            LiveLog.log("Runtime state save skipped", "No status available")
+            return False
+        except Exception as e:
+            LiveLog.log("Runtime state save failed", str(e))
+            return False
 
     def _shutdown(self) -> None:
-        LiveLog.log("Shutting down", "Starting clean shutdown sequence")
-        self._save_runtime_state()
+        LiveLog.log("Shutdown sequence started", "Saving state and flushing cache")
+        saved = self._save_runtime_state()
         try:
             self._engine._cache._save_cache()
-        except Exception:
-            pass
-        LiveLog.log("Shutdown complete", "Exiting process")
+            LiveLog.log("Cache flushed to disk", "Pre-restart cache write complete")
+        except Exception as e:
+            LiveLog.log("Cache flush failed", str(e))
+        LiveLog.log("Shutdown complete", f"State saved: {saved}, exiting process")
 
     def _on_restart(self):
-        LiveLog.log("Restart initiated", "User clicked Restart Now")
+        LiveLog.log("Restart requested", "User clicked Restart Now")
         self._shutdown()
         if self._root:
             try:
                 self._root.destroy()
             except Exception:
                 pass
-        python = sys.executable
-        script = sys.argv[0] if sys.argv else ''
+        cmd = [sys.executable] + sys.argv
+        LiveLog.log("Restart command", f"Executing: {' '.join(cmd[:3])}...")
         try:
-            os.execl(python, python, script, *sys.argv[1:])
-        except Exception:
-            sys.exit(0)
+            subprocess.Popen(cmd)
+            LiveLog.log("Restart command launched", "New process started")
+        except Exception as e:
+            LiveLog.log("Restart launch failed", str(e))
+        LiveLog.log("Current process closing", "Exiting")
+        sys.exit(0)
 
     def _on_restart_later(self):
         LiveLog.log("Restart deferred", "User clicked Restart Later")

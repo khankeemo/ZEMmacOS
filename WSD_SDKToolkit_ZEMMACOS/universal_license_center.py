@@ -3,7 +3,6 @@ import json
 import os
 import platform
 import sys
-import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, Optional
@@ -15,7 +14,7 @@ from .cache import CacheManager
 from .welcome import WelcomeDialog
 from .universal_success_dialog import SuccessDialog
 from .universal_restart_dialog import RestartDialog
-from .livelog import LiveLog
+from .live_log import LiveLog
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -152,6 +151,10 @@ class UniversalLicenseCenter:
             on_restart=self._show_restart_dialog,
             on_restart_later=self._return_to_ulc,
         ).show()
+
+    def _show_error_dialog(self, title: str, message: str) -> None:
+        LiveLog.log("Showing Error Dialog", f"{title}: {message}")
+        messagebox.showerror(title, message, parent=self._root)
 
     def _show_restart_dialog(self) -> None:
         LiveLog.log("Showing Restart Dialog", "Starting restart workflow")
@@ -552,14 +555,27 @@ class UniversalLicenseCenter:
         self._log("TRIAL", "INFO", "Starting trial flow")
         result = self._show_welcome()
         if result.get('trial_started'):
-            status = self.engine.get_status()
-            if status:
-                self._status = status
-            self._app_unlocked = True
-            LiveLog.log("Trial activated", "Showing success dialog")
-            self._show_success_dialog("trial")
+            email = result.get('email', '')
+            name = result.get('name', '')
+            customer_data = result.get('customer_data', {})
+            LiveLog.log("Trial activating via engine", f"email={email}, name={name}")
+            eng_result = self.engine.start_trial(email, name, customer_data)
+            if eng_result.get('success'):
+                LiveLog.log("Trial started on server", "Engine state updated")
+                status = self.engine.get_status()
+                if status:
+                    self._status = status
+                    LiveLog.log("Engine status updated", f"status={status.status}, valid={status.valid}")
+                self._app_unlocked = True
+                LiveLog.log("Trial activated", "Showing success dialog")
+                self._show_success_dialog("trial")
+            else:
+                err_msg = eng_result.get('message', 'Trial activation failed')
+                LiveLog.log("Trial server response", err_msg)
+                self._show_error_dialog("Trial Error", err_msg)
         elif result.get('customer_exists'):
             self._trial_consumed = True
+            LiveLog.log("Customer exists", "Trial already consumed, showing ULC")
             self._status_detail.config(
                 text="This email has already used its free trial. Please Activate a License or Contact Sales.",
                 fg=self._warning
@@ -600,15 +616,21 @@ class UniversalLicenseCenter:
                 status_label.config(text="Please enter a license key")
                 return
             try:
-                LiveLog.log("Checking license for renewal", f"Key: {key[:8]}...")
-                status = self.engine.get_status()
-                self._status = status
-                if status and status.status == 'active':
-                    messagebox.showinfo("Already Active", "Your license is already active.")
+                LiveLog.log("Renewal started", f"Key: {key[:8]}...")
+                self.engine._license_key = key
+                eng_result = self.engine.renew()
+                if eng_result.get('success'):
+                    status = self.engine.get_status()
+                    if status:
+                        self._status = status
+                    LiveLog.log("Renewal API success", "Engine state updated")
+                    self._show_success_dialog("renewal")
+                else:
+                    err_msg = eng_result.get('message', 'Renewal failed')
+                    LiveLog.log("Renewal API failed", err_msg)
+                    status_label.config(text=err_msg)
                     dialog.destroy()
                     return
-                if status:
-                    self._show_success_dialog("renewal")
                 dialog.destroy()
             except Exception as e:
                 LiveLog.log("Renewal error", str(e))

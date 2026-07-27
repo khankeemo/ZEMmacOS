@@ -283,41 +283,33 @@ class WelcomeDialog:
                 country_code=country_code, hardware_id=hardware_id,
                 company_name=company
             )
-            self._status_label.config(text='Starting your free trial...', fg=self._primary)
-            self._root.update()
-            trial_result = self.client.start_trial(email, name, {
-                'mobile': mobile, 'country_code': country_code,
-                'company_name': company, 'hardware_id': hardware_id
-            })
-            if trial_result.get('success'):
-                self.cache.set_onboarding_complete()
-                self.cache.set('customer_email', email)
-                self._result = {
-                    'name': name, 'email': email, 'hardware_id': hardware_id,
-                    'onboarding_complete': True, 'trial_started': True
-                }
-                self._status_label.config(text='Trial activated! You can now use the software.', fg=self._success)
-                self._root.after(2000, self._root.destroy)
-            else:
-                err = trial_result.get('message', trial_result.get('error', ''))
-                err_code = trial_result.get('error', {})
-                if isinstance(err_code, dict):
-                    err_code = err_code.get('code', '')
-                if 'TRIAL_ALREADY_CONSUMED' in err or 'already used' in err.lower() or 'PAID_LICENSE_EXISTS' in err or err_code == 'PAID_LICENSE_EXISTS':
-                    self.cache.set_onboarding_complete()
-                    self.cache.set('customer_email', email)
-                    self._status_label.config(text='Customer already exists — continuing...', fg=self._primary)
-                    self._root.update()
-                    _time.sleep(1)
-                    self._result = {
-                        'name': name, 'email': email, 'hardware_id': hardware_id,
-                        'onboarding_complete': True, 'trial_consumed': True,
-                        'customer_exists': True
-                    }
-                    self._root.destroy()
-                else:
-                    self._show_error(err)
-                    self._verify_btn.config(state='normal', text='Verify')
+            if not register_result.get('success'):
+                err = register_result.get('message', register_result.get('error', 'Registration failed'))
+                self._log("WELCOME", "ERROR", "Registration failed", err)
+                self._show_error(err)
+                self._verify_btn.config(state='normal', text='Verify')
+                return
+            self.cache.set_onboarding_complete()
+            self.cache.set('customer_email', email)
+            customer_data = {
+                'mobile': mobile,
+                'country_code': country_code,
+                'company_name': company,
+                'hardware_id': hardware_id,
+            }
+            self._result = {
+                'name': name,
+                'email': email,
+                'hardware_id': hardware_id,
+                'mobile': mobile,
+                'country_code': country_code,
+                'company_name': company,
+                'customer_data': customer_data,
+                'onboarding_complete': True,
+                'trial_started': True,
+            }
+            self._status_label.config(text='Registration complete! Activating trial...', fg=self._success)
+            self._root.after(2000, self._root.destroy)
         except Exception as e:
             tb = traceback.format_exc()
             self._log("WELCOME", "ERROR", "Onboarding exception", str(e))
