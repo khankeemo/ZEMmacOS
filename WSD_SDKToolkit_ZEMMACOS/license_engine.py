@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .client import ApiClient
+from .client import ApiClient, ApiError
 from .hardware import HardwareDetector
 from .cache import CacheManager
 
@@ -166,11 +166,9 @@ class LicenseEngine:
                 return self._status
         print(f"{time.strftime('%H:%M:%S')} Cache miss or invalid — checking server")
         try:
-            # Load persisted license key if not already in memory
             if not self._license_key:
                 self._license_key = self._cache.load_license_key()
 
-            # Priority 1: Validate active paid license from server
             if self._license_key:
                 print(f"{time.strftime('%H:%M:%S')} License validation started — key: {self._license_key[:8]}...")
                 try:
@@ -323,7 +321,6 @@ class LicenseEngine:
                     )
                     self._notify_ready(False)
                     return self._status
-            # Priority 2: Check for active trial (only if user never had a paid license)
             if not self._cache.has_ever_activated_paid_license():
                 print(f"{time.strftime('%H:%M:%S')} Trial check started — hardware: {hardware_id[:16]}...")
                 trial_response = self._client.get_trial_status(hardware_id)
@@ -357,7 +354,6 @@ class LicenseEngine:
                         self._cache.set_license_status(self._status.to_dict())
                     self._notify_ready(self._is_valid_status(self._status))
                     return self._status
-            # Priority 3: Determine customer state from cache
             if self._cache.is_onboarding_complete():
                 if self._cache.has_ever_activated_paid_license():
                     print(f"{time.strftime('%H:%M:%S')} Business: Inactive License (existing customer with paid history)")

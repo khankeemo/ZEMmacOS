@@ -1,6 +1,7 @@
 """Welcome Dialog - Customer onboarding with OTP verification and trial generation"""
 import json
 import os
+import time as _time
 import traceback
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -259,7 +260,6 @@ class WelcomeDialog:
         self.cache.set('customer_email', email)
         self._status_label.config(text='Customer already exists — opening License Center...', fg=self._primary)
         self._root.update()
-        import time as _time
         _time.sleep(1)
         self._result = {
             'name': name, 'email': email,
@@ -308,7 +308,6 @@ class WelcomeDialog:
                     self.cache.set('customer_email', email)
                     self._status_label.config(text='Customer already exists — continuing...', fg=self._primary)
                     self._root.update()
-                    import time as _time
                     _time.sleep(1)
                     self._result = {
                         'name': name, 'email': email, 'hardware_id': hardware_id,

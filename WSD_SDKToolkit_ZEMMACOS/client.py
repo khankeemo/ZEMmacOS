@@ -340,3 +340,91 @@ class ApiClient:
             'message': message or 'Support request from SDK',
         }
         return self._request('support', payload)
+
+    def create_communication(self, category: str = 'general',
+                             customer_email: str = '',
+                             customer_name: str = '',
+                             subject: str = '', message: str = '',
+                             product_id: str = '', license_key: str = '',
+                             hardware_id: str = '', sdk_version: str = '',
+                             runtime_type: str = '') -> Dict[str, Any]:
+        payload = {
+            'category': category,
+            'customer_email': customer_email,
+            'customer_name': customer_name or 'SDK User',
+            'subject': subject or f'{category} request',
+            'message': message or f'{category} request from SDK',
+            'product_id': product_id,
+            'license_key': license_key or '',
+            'hardware_id': hardware_id or self._get_hardware_id(),
+            'sdk_version': sdk_version or SDK_VERSION,
+            'runtime_type': runtime_type or RUNTIME_TYPE,
+        }
+        return self._request('communication/create', payload)
+
+    def get_conversation(self, conversation_id: str) -> Dict[str, Any]:
+        url = f"{self.base_url}/api/{self.api_version}/communication/{conversation_id}"
+        try:
+            resp = requests.get(url, timeout=self.timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            return {'success': False, 'conversation': None}
+        except Exception:
+            return {'success': False, 'conversation': None}
+
+    def reply_to_conversation(self, conversation_id: str, message: str,
+                               customer_name: str = '',
+                               customer_email: str = '') -> Dict[str, Any]:
+        url = f"{self.base_url}/api/{self.api_version}/communication/{conversation_id}/reply"
+        payload = {
+            'message': message,
+            'customer_name': customer_name or 'SDK User',
+            'customer_email': customer_email or '',
+        }
+        try:
+            resp = requests.post(url, json=payload, timeout=self.timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            return {'success': False, 'message': 'Failed to send reply'}
+        except Exception:
+            return {'success': False, 'message': 'Failed to send reply'}
+
+    def list_conversations(self, email: str) -> Dict[str, Any]:
+        url = f"{self.base_url}/api/{self.api_version}/communication/list?email={email}"
+        try:
+            resp = requests.get(url, timeout=self.timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            return {'success': False, 'conversations': []}
+        except Exception:
+            return {'success': False, 'conversations': []}
+
+    def get_notifications(self, email: str) -> Dict[str, Any]:
+        url = f"{self.base_url}/api/{self.api_version}/notifications?email={email}"
+        try:
+            resp = requests.get(url, timeout=self.timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            return {'success': False, 'notifications': []}
+        except Exception:
+            return {'success': False, 'notifications': []}
+
+    def mark_notification_read(self, notification_id: str) -> Dict[str, Any]:
+        url = f"{self.base_url}/api/{self.api_version}/notifications/read"
+        try:
+            resp = requests.post(url, json={'id': notification_id}, timeout=self.timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            return {'success': False}
+        except Exception:
+            return {'success': False}
+
+    def get_unread_notification_count(self, email: str) -> Dict[str, Any]:
+        url = f"{self.base_url}/api/{self.api_version}/notifications/unread-count?email={email}"
+        try:
+            resp = requests.get(url, timeout=self.timeout)
+            if resp.status_code == 200:
+                return resp.json()
+            return {'success': False, 'count': 0}
+        except Exception:
+            return {'success': False, 'count': 0}

@@ -21,8 +21,20 @@ from cleaner import Cleaner
 from settings import SettingsManager, AppSettingsService
 from update import AppUpdater
 from live_log import get_live_log
-from WSD_SDKToolkit_ZEMMACOS import LicenseEngine, LicenseStatus
-from WSD_SDKToolkit_ZEMMACOS import UniversalLicenseCenter
+
+# ====================================================================
+# ZEMmacOS SDK — Universal License Platform Integration
+# Every licensing operation goes through the SDK. No direct backend calls.
+# ====================================================================
+from WSD_SDKToolkit_ZEMMACOS import (
+    LicenseEngine, LicenseStatus, UniversalLicenseCenter,
+    WelcomeDialog, SuccessDialog, RestartDialog,
+    ApiClient, ApiError, HardwareDetector, CacheManager,
+)
+from WSD_SDKToolkit_ZEMMACOS import (
+    activation, renewal, reactivation, trial,
+    communication, notifications, support, sales, config as sdk_config,
+)
 
 
 def main():
@@ -54,6 +66,13 @@ NETWORK_ERROR_KEYWORDS = [
 def _is_network_error_str(err_str):
     low = err_str.lower()
     return any(k in low for k in NETWORK_ERROR_KEYWORDS)
+
+
+SDK_CONFIG_PATH = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
+
+
+def _get_sdk_config_path() -> str:
+    return str(SDK_CONFIG_PATH)
 
 
 class ZEMmacOSApp(ZEMmacOSUI):
@@ -111,9 +130,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.live_log.write("STARTUP", "INFO", "Configuration loaded")
         self.live_log.write("STARTUP", "INFO", "Theme loaded")
 
-        # --- License Integration ---
-        self.license_engine = None
-        self.license_status = None
+        # --- SDK License Layer ---
+        # All license logic is owned by the SDK (WSD_SDKToolkit_ZEMMACOS).
+        # main.py only orchestrates startup: init engine → decide → show ULC or main app.
+        self.license_engine: LicenseEngine = None
+        self.license_status: LicenseStatus = None
         self._license_initialized = False
         self._customer_name = ""
         self._customer_email = ""
@@ -132,12 +153,32 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.log(f"[{category}] {message}", level.lower() if level != "SUCCESS" else "success")
 
     # -----------------------------------------------------------------
-    # STRICT STARTUP SEQUENCE
+    # SDK STARTUP SEQUENCE
+    #
+    # Architecture (from UNIVERSAL_LICENSE_PLATFORM_IMPLEMENTATION.md):
+    #
+    #   Application Start
+    #       │
+    #       ▼
+    #   LicenseEngine.initialize()
+    #       │
+    #       ▼
+    #   Decision Engine
+    #       │
+    #       ├── ACTIVE LICENSE / TRIAL → Launch Main Application immediately
+    #       │
+    #       └── All other states → Show Universal License Center
+    #               │
+    #               ▼
+    #       Customer Workflow (via ULC)
+    #               │
+    #               ▼
+    #       Success Dialog → Restart Dialog → Restart → LicenseEngine.initialize() → Main App
     # -----------------------------------------------------------------
     def _license_startup(self):
-        self.live_log.write("STARTUP", "INFO", "Splash screen created")
+        self.live_log.write("STARTUP", "INFO", "Starting SDK initialization sequence")
         self._create_splash()
-        self.root.after(50, self._init_server_check)
+        self.root.after(50, self._init_license_engine)
 
     def _create_splash(self):
         splash = tk.Toplevel(self.root)
@@ -152,58 +193,49 @@ class ZEMmacOSApp(ZEMmacOSUI):
                  fg="#ffffff", bg="#1d1d1f").pack(expand=True, pady=(40, 4))
         tk.Label(splash, text="macOS Download Manager", font=("SF Pro Text", 10),
                  fg="#86868b", bg="#1d1d1f").pack()
-        self._splash_status = tk.Label(splash, text="Checking server connectivity...",
+        self._splash_status = tk.Label(splash, text="Checking license...",
                                        font=("SF Pro Text", 10),
                                        fg="#6e6e73", bg="#1d1d1f")
         self._splash_status.pack(pady=(24, 0))
         splash.update()
         self._splash = splash
 
-    def _init_server_check(self):
-        config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        self.log_live("SDK", "INFO", "Server connectivity check")
+    def _init_license_engine(self):
+        self.log_live("SDK", "INFO", "Initializing license engine")
         self.log_live("UI", "INFO", "UI locked")
 
         def do():
-            live = self.live_log
             try:
-                live.write("SDK", "INFO", "Loading SDK config")
-                self.license_engine = LicenseEngine(config_path=config_path)
+                self.live_log.write("SDK", "INFO", "Loading SDK config")
+                self.license_engine = LicenseEngine(config_path=_get_sdk_config_path())
 
-                live.write("SDK", "INFO", "Hardware detection")
+                self.live_log.write("SDK", "INFO", "Detecting hardware")
                 self.license_engine.get_hardware_id()
 
-                live.write("SDK", "INFO", "Checking server connectivity")
+                self.live_log.write("SDK", "INFO", "Running decision engine")
                 self.license_status = self.license_engine.initialize()
                 self._license_initialized = True
 
                 status = self.license_status
                 if status:
-                    live.write("SDK", "INFO", f"Server status: {status.status}")
+                    self.live_log.write("SDK", "INFO", f"Decision engine result: {status.status}")
                     if status.valid:
-                        msg = status.message or f"Status: {status.status}"
-                        live.write("SDK", "SUCCESS", msg)
-                    else:
-                        live.write("SDK", "INFO", "No license or trial found — onboarding required")
+                        self.live_log.write("SDK", "SUCCESS", f"Valid {status.status} — launching main application")
+                        self.root.after(0, self._launch_main_app)
+                        return
+                    self.live_log.write("SDK", "INFO", f"State: {status.status} — showing Universal License Center")
                 else:
-                    live.write("SDK", "ERROR", "Server returned no status")
+                    self.live_log.write("SDK", "ERROR", "Engine returned no status")
             except Exception as e:
-                live.write("SDK", "ERROR", f"Server check failed: {e}")
-                eng = None
-                try:
-                    eng = LicenseEngine(config_path=config_path)
-                except Exception:
-                    eng = None
-                self.license_engine = eng
-                self.license_status = LicenseStatus(
-                    valid=False, status='error', message=str(e)
-                )
-            finally:
-                self.root.after(0, self._on_license_init_done)
+                self.live_log.write("SDK", "ERROR", f"Engine init failed: {e}")
+                self.license_engine = None
+                self.license_status = LicenseStatus(valid=False, status='error', message=str(e))
+            self.root.after(0, self._open_ulc)
+
         threading.Thread(target=do, daemon=True).start()
 
-    def _on_license_init_done(self):
-        self.log_live("STARTUP", "INFO", "SDK initialization complete")
+    def _launch_main_app(self):
+        self.log_live("STARTUP", "SUCCESS", "License valid — building main application")
         if self._splash:
             try:
                 self._splash.destroy()
@@ -219,7 +251,6 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.root.deiconify()
         self.show_dashboard()
         self.log_live("STARTUP", "INFO", "UI built, dashboard shown")
-        self._lock_ui()
         self._start_network_monitor()
         self.root.after(500, self._show_startup_toast)
         self.root.after(1000, self._auto_fetch)
@@ -227,79 +258,76 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.settings_service.check_first_run_directory()
         self._countdown_running = True
         self.root.after(1000, self._update_validity_countdown)
-
-        self.root.after(300, self._check_license_on_startup)
-
-    def _check_license_on_startup(self):
-        status = self.license_status
-        if status and status.valid:
-            self.log_live("UI", "INFO", "License valid — enabling UI")
-            self._unlock_ui()
-        elif status and status.status == "trial":
-            self.log_live("UI", "INFO", "Trial active — enabling UI")
-            self._unlock_ui()
-        elif status and status.status == "force_reactivation":
-            self.log_live("WELCOME", "INFO", "Paid license detected — opening reactivation")
-            self.root.after(200, self._open_reactivation_web_dialog)
-        elif status and status.status == "unlicensed":
-            self.log_live("WELCOME", "INFO", "No license — opening welcome dialog")
-            self.root.after(200, self._run_welcome_flow)
-        else:
-            self.log_live("WELCOME", "INFO", f"Server returned {status.status if status else 'None'} — opening welcome dialog")
-            self.root.after(200, self._run_welcome_flow)
-        self.root.after(500, self._check_aws01_condition)
-
-    def _open_reactivation_web_dialog(self):
-        self.log_live("REACTIVATION", "INFO", "Opening reactivation web page")
-        import webbrowser
-        try:
-            base = self.license_engine.config.get('api', {}).get('base_url', 'https://websmithdigital.com')
-            url = f"{base}/internal/api/license/reactivation"
-            webbrowser.open(url)
-            self.log_live("REACTIVATION", "SUCCESS", f"Opened {url}")
-        except Exception as e:
-            self.log_live("REACTIVATION", "ERROR", f"Failed to open reactivation page: {e}")
         self._unlock_ui()
 
     # -----------------------------------------------------------------
-    # AWS-01: Inactive License + Unbound Hardware Detection
+    # UNIVERSAL LICENSE CENTER — single entry point for all license operations
+    #
+    # The ULC handles every customer workflow internally:
+    #   - Welcome / Trial (Start Free Trial)
+    #   - Activation (validate → OTP → activate)
+    #   - Renewal (validate → plans → communication)
+    #   - Reactivation
+    #   - Support / Sales / Communication / Notifications
+    #
+    # On success it shows SuccessDialog → RestartDialog → restart.
+    # The process exits and restarts fresh; on next launch the engine
+    # sees the valid license and goes directly to _launch_main_app.
     # -----------------------------------------------------------------
-    def _check_aws01_condition(self):
-        if not self.license_engine or not self.license_status:
-            return
-        if self.license_status.valid or self.license_status.status == 'trial':
-            return
-        if not self.license_engine.has_license_key():
-            return
-        if getattr(self, '_inactive_license_dialog_open', False):
-            return
-
-        self.log_live("AWS01", "INFO", "Checking AWS-01 condition")
-
-        def do():
+    def _open_ulc(self):
+        self.log_live("SDK", "INFO", "Opening Universal License Center")
+        if self._splash:
             try:
-                result = self.license_engine.validate()
-                data = result.get('data', result)
-                status_str = (data.get('status', '') or '').upper()
-                hw_id = data.get('hardware_id')
-                if status_str == 'INACTIVE' and not hw_id:
-                    self.log_live("AWS01", "WARNING", "License inactive & hardware unbound — showing dialog")
-                    self.root.after(0, self._show_inactive_license_dialog)
-                else:
-                    self.log_live("AWS01", "INFO", "AWS-01 condition not met")
-            except Exception as e:
-                self.log_live("AWS01", "ERROR", f"AWS-01 check failed: {e}")
+                self._splash.destroy()
+            except Exception:
+                pass
+            self._splash = None
 
-        threading.Thread(target=do, daemon=True).start()
+        def on_ready(valid):
+            if valid:
+                self.log_live("SDK", "SUCCESS", "License resolved via SDK callback")
+                self.root.after(0, self._launch_main_app)
+
+        center = UniversalLicenseCenter(
+            config_path=_get_sdk_config_path(),
+            on_license_ready=on_ready,
+            log_fn=self.log_live,
+        )
+        result = center.show()
+
+        if result and result.get('status') and result['status'].get('valid'):
+            self.log_live("SDK", "SUCCESS", "License resolved via ULC — building main app")
+            self.license_status = LicenseStatus.from_dict(result['status'])
+            self._launch_main_app()
+        else:
+            self.log_live("SDK", "WARNING", "ULC closed without resolving license — exiting")
+            self._shutdown_app()
 
     # -----------------------------------------------------------------
-    # UI LOCK / UNLOCK
+    # APPLICATION SHUTDOWN (Rule 18: close behaviour)
+    # When the ULC is the only active window and the user closes it:
+    #   Stop background workers → Destroy all SDK dialogs → Flush cache → Exit process
+    # -----------------------------------------------------------------
+    def _shutdown_app(self):
+        self.log("License flow incomplete — shutting down", "error")
+        if hasattr(self, 'live_log'):
+            self.live_log.write("STARTUP", "WARNING", "Application shutdown due to incomplete license flow")
+            self.live_log.stop()
+        self.logger.stop()
+        try:
+            self.root.destroy()
+        except Exception:
+            import sys as _sys
+            _sys.exit(1)
+
+    # -----------------------------------------------------------------
+    # UI LOCK / UNLOCK — used by the main application when license is valid
     # -----------------------------------------------------------------
     def _lock_ui(self):
         self._ui_enabled = False
         self._disable_nav()
         self._show_lock_overlay()
-        self.log_live("UI", "INFO", "UI locked — waiting for license")
+        self.log_live("UI", "INFO", "UI locked")
 
     def _unlock_ui(self):
         self._ui_enabled = True
@@ -352,252 +380,57 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self._lock_overlay = None
 
     # -----------------------------------------------------------------
-    # UNIVERSAL LICENSE CENTER FLOW
-    # -----------------------------------------------------------------
-    def _run_welcome_flow(self):
-        self.log_live("WELCOME", "INFO", "Opening Universal License Center")
-        config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        center = UniversalLicenseCenter(config_path=str(config_path), log_fn=self.log_live)
-        result = center.show()
-        self.log_live("WELCOME", "INFO", "License center closed")
-
-        status_dict = result.get('status') if result else None
-        if status_dict and status_dict.get('valid'):
-            self.log_live("WELCOME", "SUCCESS", "License session completed — refreshing status")
-            self.refresh_license()
-            self.root.after(500, self._unlock_ui)
-        else:
-            self.log_live("WELCOME", "WARNING", "License center closed without completing registration")
-            self._shutdown_app()
-
-    # -----------------------------------------------------------------
-    # ACTIVATION FLOW — uses Universal License Center
+    # SDK-DELEGATED OPERATIONS — open ULC for specific tasks
+    # These are called from menu / settings to launch the SDK workflow.
     # -----------------------------------------------------------------
     def open_activation(self, license_key=None):
-        if not self.license_engine:
-            return
         self.log_live("ACTIVATION", "INFO", "Opening Universal License Center for activation")
-        config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        center = UniversalLicenseCenter(config_path=str(config_path), log_fn=self.log_live)
+        center = UniversalLicenseCenter(
+            config_path=_get_sdk_config_path(),
+            log_fn=self.log_live,
+        )
         result = center.show()
-        self.log_live("ACTIVATION", "INFO", f"License center closed")
+        if result and result.get('status') and result['status'].get('valid'):
+            self.log_live("ACTIVATION", "SUCCESS", "Activation completed")
+            self.license_status = LicenseStatus.from_dict(result['status'])
+            self._update_all_license_ui()
+        return result
 
-        status_dict = result.get('status') if result else None
-        if status_dict and status_dict.get('valid'):
-            self.log_live("ACTIVATION", "SUCCESS", "Activation session completed — refreshing license state")
-
-            def _refresh():
-                try:
-                    new_status = self.license_engine.initialize()
-                    if new_status is not None:
-                        self.license_status = new_status
-
-                    self.root.after(0, self._update_all_license_ui)
-
-                    if self.license_status and self.license_status.valid:
-                        self.root.after(0, self._show_stylish_activation_success)
-
-                    self.log_live(
-                        "ACTIVATION",
-                        "SUCCESS",
-                        "License refresh completed after activation"
-                    )
-                except Exception as e:
-                    import traceback as _tb
-                    _tb_detail = _tb.format_exc()
-                    self.log_live(
-                        "ACTIVATION",
-                        "ERROR",
-                        f"License refresh error after activation: {e}"
-                    )
-                    for _tb_line in _tb_detail.strip().split("\n"):
-                        self.log_live("ACTIVATION", "ERROR", _tb_line)
-                    self.root.after(0, self._show_stylish_activation_success)
-
-            threading.Thread(target=_refresh, daemon=True).start()
-        else:
-            self.log_live("ACTIVATION", "WARNING", "Activation dialog cancelled")
+    def open_renew_license(self):
+        self.log_live("RENEWAL", "INFO", "Opening Universal License Center for renewal")
+        center = UniversalLicenseCenter(
+            config_path=_get_sdk_config_path(),
+            log_fn=self.log_live,
+        )
+        result = center.show()
+        if result and result.get('status') and result['status'].get('valid'):
+            self.log_live("RENEWAL", "SUCCESS", "Renewal completed")
+            self.license_status = LicenseStatus.from_dict(result['status'])
+            self._update_all_license_ui()
         return result
 
     # -----------------------------------------------------------------
-    # RENEW FLOW — uses Universal License Center
-    # -----------------------------------------------------------------
-    def open_renew_license(self):
-        if not self.license_engine:
-            return
-        self.log_live("RENEWAL", "INFO", "Opening Universal License Center for renewal")
-        config_path = Path(BASE_DIR) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        center = UniversalLicenseCenter(config_path=str(config_path), log_fn=self.log_live)
-        result = center.show()
-        self.log_live("RENEWAL", "INFO", "Renewal dialog closed")
-
-        status_dict = result.get('status') if result else None
-        if status_dict and status_dict.get('valid'):
-            self.log_live("RENEWAL", "SUCCESS", "Renewal session completed — refreshing license state")
-            def _refresh_renew():
-                try:
-                    new_status = self.license_engine.initialize()
-                    if new_status is not None:
-                        self.license_status = new_status
-                    self.root.after(0, self._update_all_license_ui)
-                    self.log_live("RENEWAL", "SUCCESS", "License refreshed after renew")
-                except Exception as e:
-                    import traceback as _tb
-                    _tb_detail = _tb.format_exc()
-                    self.log_live("RENEWAL", "ERROR", f"License refresh error after renew: {e}")
-                    for _tb_line in _tb_detail.strip().split("\n"):
-                        self.log_live("RENEWAL", "ERROR", _tb_line)
-            threading.Thread(target=_refresh_renew, daemon=True).start()
-
-    def _show_stylish_activation_success(self):
-        self.log_live("UI", "INFO", "Creating Activation Success dialog")
-        status = self.license_status
-        plan_name = (status.plan or '') if status else ''
-        lic_key = (status.license_key or '') if status else ''
-        if lic_key and len(lic_key) > 12:
-            formatted = ''
-            for i, ch in enumerate(lic_key):
-                if i > 0 and i % 4 == 0:
-                    formatted += '-'
-                formatted += ch
-            lic_key = formatted
-        expiry = (status.expiry_date or '') if status else ''
-        if expiry and 'T' in expiry:
-            try:
-                from datetime import datetime
-                dt = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
-                expiry = dt.strftime('%d %b %Y')
-            except Exception:
-                expiry = expiry.split('T')[0]
-
-        c = self.colors
-        W, H = 400, 300
-
-        def on_restart():
-            self.log_live("UI", "INFO", "Restart button clicked")
-            self.log_live("APP", "INFO", "Restart requested")
-            try:
-                d.destroy()
-            except Exception:
-                pass
-            self._restart_app()
-
-        def on_later():
-            self.log_live("UI", "INFO", "Restart later clicked")
-            try:
-                d.destroy()
-            except Exception:
-                pass
-
-        self.log_live("UI", "INFO", "Showing Activation Success dialog")
-        self.log_live("UI", "INFO", "Waiting for Restart confirmation")
-        d, canvas = self._make_modal_dialog(W, H, close_cb=on_later)
-        cx = W // 2
-
-        canvas.create_oval(cx - 20, 28, cx + 20, 68,
-                           fill=c["success"], outline="")
-        canvas.create_line(cx - 10, 48, cx - 3, 55,
-                           fill="white", width=3, capstyle="round")
-        canvas.create_line(cx - 3, 55, cx + 12, 38,
-                           fill="white", width=3, capstyle="round")
-
-        canvas.create_text(cx, 95, text="License Activated Successfully",
-                           font=("SF Pro Display", 16, "bold"),
-                           fill=c["text"], anchor="center")
-
-        detail_bg = c.get("input_bg", "#f5f5f7")
-        canvas.create_rectangle(24, 115, W - 24, 215,
-                                fill=detail_bg, outline=c["border"], width=1)
-
-        details = [
-            ("Plan:", plan_name or '--'),
-            ("License:", lic_key or '--'),
-            ("Expires:", expiry or '--'),
-        ]
-        for i, (label, value) in enumerate(details):
-            y = 130 + i * 28
-            canvas.create_text(40, y, text=label, font=("SF Pro Text", 9, "bold"),
-                               fill=c["text_secondary"], anchor='w')
-            canvas.create_text(130, y, text=value, font=("SF Pro Text", 9, "bold"),
-                               fill=c["text"], anchor='w')
-
-        canvas.create_text(cx, 235, text="Restart to load your new license.",
-                           font=("SF Pro Text", 10),
-                           fill=c["muted"], anchor="center")
-
-        bw, bh = 130, 34
-        by = 258
-        self._make_dialog_button(d, "Restart Now", c["accent"], "white",
-                                 on_restart, cx - bw - 6, by, bw, bh)
-        self._make_dialog_button(d, "Later", c["btn_secondary_bg"], c["text"],
-                                 on_later, cx + 6, by, bw, bh)
-
-    def _restart_app(self):
-        self.log_live("ACTIVATION", "INFO", "Inside _restart_app")
-        self.log_live("APP", "INFO", "Restart requested")
-        self.log_live("APP", "INFO", "Reloading license cache")
-        # Stop the validity countdown BEFORE destroying anything
-        self._countdown_running = False
-        self.log_live("APP", "INFO", "Closing application")
-        self._stop_network_monitor()
-        if hasattr(self, 'live_log'):
-            self.live_log.write("STARTUP", "INFO", "Application restarting for new license")
-            self.live_log.stop()
-        self.logger.stop()
-        try:
-            self.root.destroy()
-        except Exception:
-            pass
-        self.log_live("APP", "INFO", "Restarting application")
-        python = sys.executable
-        import subprocess as _subprocess
-        script = os.path.abspath(sys.argv[0]) if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
-        try:
-            _subprocess.Popen([python, script] + sys.argv[1:])
-        except Exception:
-            os.execv(python, [python, script] + sys.argv[1:])
-        sys.exit(0)
-
-    # -----------------------------------------------------------------
-    # APPLICATION SHUTDOWN (for incomplete flows)
-    # -----------------------------------------------------------------
-    def _shutdown_app(self):
-        self.log("License flow incomplete — shutting down", "error")
-        if hasattr(self, 'live_log'):
-            self.live_log.write("STARTUP", "WARNING", "Application shutdown due to incomplete license flow")
-            self.live_log.stop()
-        self.logger.stop()
-        try:
-            self.root.destroy()
-        except Exception:
-            import sys as _sys
-            _sys.exit(1)
-
-
-
-    # -----------------------------------------------------------------
-    # LICENSE REFRESH
+    # LICENSE REFRESH — re-reads cached client-side state
     # -----------------------------------------------------------------
     def refresh_license(self):
         if not self.license_engine:
             return
-        self.log_live("ACTIVATION", "INFO", "License refresh started")
+        self.log_live("SDK", "INFO", "License refresh started")
         def do():
             try:
                 new_status = self.license_engine.initialize()
                 if new_status is not None:
                     self.license_status = new_status
                     self.root.after(0, self._update_all_license_ui)
-                    self.log_live("ACTIVATION", "SUCCESS", "License refresh completed")
-                    self.root.after(100, self._check_aws01_condition)
+                    self.log_live("SDK", "SUCCESS", "License refresh completed")
                 else:
-                    self.log_live("ACTIVATION", "WARNING", "License refresh returned None - keeping previous data")
+                    self.log_live("SDK", "WARNING", "License refresh returned None - keeping previous data")
             except Exception as e:
                 import traceback as _tb
                 _tb_detail = _tb.format_exc()
-                self.log_live("ACTIVATION", "ERROR", f"License refresh error: {e}")
+                self.log_live("SDK", "ERROR", f"License refresh error: {e}")
                 for _tb_line in _tb_detail.strip().split("\n"):
-                    self.log_live("ACTIVATION", "ERROR", _tb_line)
+                    self.log_live("SDK", "ERROR", _tb_line)
         threading.Thread(target=do, daemon=True).start()
 
     def _update_all_license_ui(self):
@@ -611,20 +444,13 @@ class ZEMmacOSApp(ZEMmacOSUI):
             self._customer_name = st.customer_name or ''
             self._customer_email = st.customer_email or ''
             self._customer_mobile = st.customer_mobile or ''
-        # Also update settings license panel if open
         try:
             if hasattr(self, 'settings_ui') and self.settings_ui:
                 self.settings_ui._update_license_panel()
         except Exception:
             pass
-        now = time.time()
-        last = getattr(self, '_last_aws01_check', 0)
-        if now - last > 30:
-            self._last_aws01_check = now
-            self._check_aws01_condition()
 
     def _update_validity_countdown(self):
-        """Update validity countdown every second."""
         if not getattr(self, '_countdown_running', False):
             return
         self._update_all_license_ui()
