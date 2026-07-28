@@ -106,7 +106,7 @@ class CacheManager:
         return self.get('license_status')
 
     def is_hardware_consistent(self, current_hardware_id: str) -> bool:
-        status = self.get_license_status()
+        status = self.peek_license_status()
         if not status:
             return True
         hardware_id = status.get('hardware_id')
