@@ -183,7 +183,7 @@ class LicenseEngine:
         try:
             trial_response = self._client.get_trial_status(hardware_id)
             trial_data = trial_response.get('data', trial_response)
-            if trial_data.get('active') or trial_data.get('status') == 'trial':
+            if trial_data.get('has_trial') and trial_data.get('status') == 'active':
                 days_left = trial_data.get('days_left', trial_data.get('duration_days', 0))
                 self._status = LicenseStatus(
                     valid=True, status='trial',
