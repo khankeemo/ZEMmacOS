@@ -51,7 +51,7 @@ class WelcomeDialog:
         self._result = None
         self._root = tk.Toplevel()
         self._root.title(self.product_name or 'Welcome')
-        self._root.geometry('480x580')
+        self._root.geometry('480x650')
         self._root.resizable(False, False)
         self._root.configure(bg=self._bg)
         self._root.transient()
@@ -95,7 +95,7 @@ class WelcomeDialog:
         sub.pack(pady=(12, 16))
         frame = tk.Frame(root, bg=self._card_bg, bd=1, relief='solid',
                          highlightbackground=self._border)
-        frame.pack(fill='both', expand=True, padx=30, pady=(0, 16))
+        frame.pack(fill='both', expand=True, padx=30, pady=(0, 20))
         padding = {'padx': 20, 'pady': 4}
         tk.Label(frame, text='Name *', font=('Segoe UI', 11),
                  fg=self._text_primary, bg=self._card_bg).pack(anchor='w', **padding)
@@ -145,13 +145,13 @@ class WelcomeDialog:
                                      state='disabled',
                                      padx=12, pady=7)
         self._verify_btn.pack(side='left', padx=(8, 0))
-        self._error_label = tk.Label(frame, text='', font=('Segoe UI', 9),
+        self._error_label = tk.Label(frame, text='', font=('Segoe UI', 10),
                                       bg=self._card_bg, fg=self._error)
-        self._error_label.pack(padx=20, pady=(5, 10))
+        self._error_label.pack(padx=20, pady=(5, 16))
         company = self.product_name or 'License'
         footer = tk.Label(self._root, text=f'Protected by {company}',
                           font=('Segoe UI', 9), bg=self._bg, fg='#9ca3af')
-        footer.pack(side='bottom', pady=(0, 15))
+        footer.pack(side='bottom', pady=(0, 22))
 
     def _load_countries(self):
         global _COUNTRIES_CACHE
@@ -339,7 +339,7 @@ class WelcomeDialog:
             self._verify_btn.config(state='normal', text='Verify')
 
     def _show_error(self, msg: str):
-        self._error_label.config(text=msg, font=('Segoe UI', 9))
+        self._error_label.config(text=msg, font=('Segoe UI', 10))
 
     def _clear_error(self):
         self._error_label.config(text='')

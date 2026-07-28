@@ -176,7 +176,59 @@ class UniversalLicenseCenter:
                 pass
             self._root = None
 
+    def _fetch_live_license_status(self) -> None:
+        hardware_id = self.hardware.get_fingerprint()
+        self._log("SDK", "INFO", "Fetching live license status from backend",
+                  f"hardware={hardware_id[:16]}...")
+        try:
+            trial_response = self.client.get_trial_status(hardware_id)
+            trial_data = trial_response.get('data', trial_response)
+            if trial_data.get('active') or trial_data.get('status') == 'trial':
+                self._status = LicenseStatus(
+                    valid=True, status='trial',
+                    expiry_date=trial_data.get('expiry_date'),
+                    days_left=trial_data.get('days_left', trial_data.get('duration_days', 0)),
+                    plan=trial_data.get('plan', 'Trial'),
+                    hardware_id=hardware_id,
+                    customer_name=trial_data.get('customer_name'),
+                    customer_email=trial_data.get('customer_email'),
+                    trial_active=True,
+                )
+                self.cache.set_license_status(self._status.to_dict())
+                self._log("SDK", "INFO", "Live trial status fetched",
+                          f"status=trial, days_left={self._status.days_left}")
+                return
+        except Exception as e:
+            self._log("SDK", "WARNING", "Live trial status fetch failed", str(e))
+
+        try:
+            hw_result = self.client.validate_license('', hardware_id)
+            hw_data = hw_result.get('data', hw_result)
+            if hw_data.get('valid') and hw_data.get('status') in ('active',):
+                self._status = LicenseStatus(
+                    valid=True, status='active',
+                    expiry_date=hw_data.get('expiry_date'),
+                    days_left=hw_data.get('days_left', 0),
+                    plan=hw_data.get('plan'),
+                    hardware_id=hardware_id,
+                    license_key=hw_data.get('license_key'),
+                    customer_name=hw_data.get('customer_name'),
+                    customer_email=hw_data.get('customer_email'),
+                    max_devices=hw_data.get('max_devices', 999),
+                    device_count=hw_data.get('device_count', 0),
+                )
+                self.cache.set_license_status(self._status.to_dict())
+                self.cache.mark_has_ever_activated_paid_license()
+                self._log("SDK", "INFO", "Live license status fetched",
+                          f"status=active, plan={self._status.plan}")
+                return
+        except Exception as e:
+            self._log("SDK", "WARNING", "Live license status fetch failed", str(e))
+
+        self._log("SDK", "INFO", "No live license or trial found", "keeping current status")
+
     def _show_license_center(self, trial_consumed: bool = False) -> Dict[str, Any]:
+        self._fetch_live_license_status()
         LiveLog.log("Opening Universal License Center",
                      f"Status: {self._status.status if self._status else 'no_license'}, "
                      f"trial_consumed={trial_consumed}")
