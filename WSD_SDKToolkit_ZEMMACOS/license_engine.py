@@ -148,7 +148,7 @@ class LicenseEngine:
     def _is_valid_status(status: Optional[LicenseStatus]) -> bool:
         if not status:
             return False
-        return status.status in ('active', 'trial')
+        return status.status in ('licensed', 'trial')
 
     def initialize(self) -> LicenseStatus:
         hardware_id = self._hardware.get_fingerprint()
@@ -179,61 +179,44 @@ class LicenseEngine:
                     return self._status
                 print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status}), not valid, falling through")
 
-        # Cache missed — ask server for trial status
+        # Cache missed — ask server via unified license status endpoint
         try:
-            trial_response = self._client.get_trial_status(hardware_id)
-            trial_data = trial_response.get('data', trial_response)
-            if trial_data.get('has_trial') and trial_data.get('status') == 'active':
-                days_left = trial_data.get('days_left', trial_data.get('duration_days', 0))
-                self._status = LicenseStatus(
-                    valid=True, status='trial',
-                    expiry_date=trial_data.get('expiry_date'),
-                    days_left=days_left,
-                    plan=trial_data.get('plan', 'Trial'),
-                    hardware_id=hardware_id,
-                    customer_name=trial_data.get('customer_name'),
-                    customer_email=trial_data.get('customer_email'),
-                    customer_phone=trial_data.get('customer_phone'),
-                    customer_mobile=trial_data.get('customer_mobile'),
-                    trial_active=True,
-                )
-                self._cache.set_license_status(self._status.to_dict())
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — trial active on server (restored from API)")
-                self._notify_ready(True)
-                return self._status
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no active trial on server")
+            status_response = self._client.get_license_status(hardware_id)
+            if status_response.get('success'):
+                api_status = status_response.get('status', 'no_license')
+                if api_status in ('licensed', 'trial'):
+                    cust = status_response.get('customer', {})
+                    lic = status_response.get('license', {})
+                    plan = status_response.get('plan', {})
+                    product = status_response.get('product', {})
+                    devices = status_response.get('devices', {})
+                    self._status = LicenseStatus(
+                        valid=True,
+                        status=api_status,
+                        expiry_date=lic.get('expiry_date'),
+                        days_left=lic.get('days_remaining', 0),
+                        plan=plan.get('name', 'Trial' if api_status == 'trial' else ''),
+                        hardware_id=hardware_id,
+                        license_key=lic.get('license_key', ''),
+                        customer_name=cust.get('name'),
+                        customer_email=cust.get('email'),
+                        customer_mobile=cust.get('mobile'),
+                        max_devices=devices.get('maximum', 999),
+                        device_count=devices.get('current', 0),
+                        trial_active=(api_status == 'trial'),
+                    )
+                    self._cache.set_license_status(self._status.to_dict())
+                    if api_status == 'licensed' and self._status.license_key:
+                        self._license_key = self._status.license_key
+                        self._cache.mark_has_ever_activated_paid_license()
+                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — {api_status} on server (unified API)")
+                    self._notify_ready(True)
+                    return self._status
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no active state on server (status={api_status})")
+            else:
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server returned error, falling through")
         except Exception as e:
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Warning — trial status check failed: {e}")
-
-        # Validate paid license on server
-        try:
-            hw_result = self._client.validate_license('', hardware_id)
-            hw_data = hw_result.get('data', hw_result)
-            if hw_data.get('valid') and hw_data.get('status') in ('active',):
-                self._status = LicenseStatus(
-                    valid=True, status='active',
-                    expiry_date=hw_data.get('expiry_date'),
-                    days_left=hw_data.get('days_left', 0),
-                    plan=hw_data.get('plan'),
-                    hardware_id=hardware_id,
-                    license_key=hw_data.get('license_key'),
-                    customer_name=hw_data.get('customer_name'),
-                    customer_email=hw_data.get('customer_email'),
-                    customer_phone=hw_data.get('customer_phone'),
-                    customer_mobile=hw_data.get('customer_mobile'),
-                    max_devices=hw_data.get('max_devices', 999),
-                    device_count=hw_data.get('device_count', 0),
-                )
-                self._cache.set_license_status(self._status.to_dict())
-                self._cache.mark_has_ever_activated_paid_license()
-                if self._status.license_key:
-                    self._license_key = self._status.license_key
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — paid license active on server (restored from API)")
-                self._notify_ready(True)
-                return self._status
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no paid license on server")
-        except Exception as e:
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Warning — paid license check failed: {e}")
+            print(f"{time.strftime('%H:%M:%S')} LiveLog: Warning — unified license status check failed: {e}")
 
         # Final decision: server confirmed no active state exists
         onboarding_complete = self._cache.is_onboarding_complete()
@@ -286,22 +269,25 @@ class LicenseEngine:
             raise ValueError("License key unavailable.")
         hardware_id = self._hardware.get_fingerprint()
         result = self._client.validate_license(key, hardware_id)
-        data = result.get('data', result)
-        if data.get('valid'):
-            if data.get('license_key'):
-                self._license_key = data['license_key']
+        if result.get('status') in ('licensed',):
+            lic = result.get('license', {})
+            cust = result.get('customer', {})
+            if lic.get('license_key'):
+                self._license_key = lic['license_key']
             self._status = LicenseStatus(
-                valid=data.get('valid', True),
-                status=data.get('status', 'active'),
-                expiry_date=data.get('expiry_date'),
-                days_left=data.get('days_left', 0),
-                plan=data.get('plan'),
+                valid=True,
+                status='licensed',
+                expiry_date=lic.get('expiry_date'),
+                days_left=lic.get('days_left', 0),
+                plan=lic.get('plan'),
                 hardware_id=hardware_id,
-                license_key=data.get('license_key'),
-                customer_name=data.get('customer_name'),
-                customer_email=data.get('customer_email'),
-                customer_phone=data.get('customer_phone'),
-                customer_mobile=data.get('customer_mobile')
+                license_key=lic.get('license_key'),
+                customer_name=cust.get('name'),
+                customer_email=cust.get('email'),
+                customer_phone=cust.get('phone'),
+                customer_mobile=cust.get('mobile'),
+                max_devices=lic.get('max_devices', 999),
+                device_count=lic.get('device_count', 0),
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
@@ -312,19 +298,22 @@ class LicenseEngine:
         if result.get('success'):
             self._license_key = license_key
             self._cache.save_license_key(license_key)
-            data = result.get('data', result)
+            lic = result.get('license', {})
+            cust = result.get('customer', {})
             self._status = LicenseStatus(
                 valid=True,
-                status=data.get('status', 'active'),
-                expiry_date=data.get('expiry_date'),
-                days_left=data.get('days_left', 0),
-                plan=data.get('plan'),
+                status=result.get('status', 'licensed'),
+                expiry_date=lic.get('expiry_date'),
+                days_left=lic.get('days_left', 0),
+                plan=lic.get('plan'),
                 hardware_id=self._hardware.get_fingerprint(),
                 license_key=license_key,
-                customer_name=data.get('customer_name'),
-                customer_email=data.get('customer_email'),
-                customer_phone=data.get('customer_phone'),
-                customer_mobile=data.get('customer_mobile')
+                customer_name=cust.get('name'),
+                customer_email=cust.get('email'),
+                customer_phone=cust.get('phone'),
+                customer_mobile=cust.get('mobile'),
+                max_devices=lic.get('max_devices', 999),
+                device_count=lic.get('device_count', 0),
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
@@ -336,58 +325,55 @@ class LicenseEngine:
     def validate_hardware(self) -> Dict[str, Any]:
         hardware_id = self._hardware.get_fingerprint()
         result = self._client.validate_license('', hardware_id)
-        if result.get('success'):
-            data = result.get('data', result)
-            if data.get('valid'):
-                self._status = LicenseStatus(
-                    valid=True,
-                    status=data.get('status', 'active'),
-                    expiry_date=data.get('expiry_date'),
-                    days_left=data.get('days_left', 0),
-                    plan=data.get('plan'),
-                    hardware_id=hardware_id,
-                    license_key=data.get('license_key'),
-                    customer_name=data.get('customer_name'),
-                    customer_email=data.get('customer_email'),
-                    customer_phone=data.get('customer_phone'),
-                    customer_mobile=data.get('customer_mobile'),
-                    max_devices=data.get('max_devices', 999),
-                    device_count=data.get('device_count', 0),
-                )
-                if self._status.valid:
-                    self._cache.set_license_status(self._status.to_dict())
-                    self._cache.mark_has_ever_activated_paid_license()
+        if result.get('status') in ('licensed', 'force_reactivation'):
+            lic = result.get('license', {})
+            cust = result.get('customer', {})
+            self._status = LicenseStatus(
+                valid=result.get('status') == 'licensed',
+                status=result.get('status', 'licensed'),
+                expiry_date=lic.get('expiry_date'),
+                days_left=lic.get('days_left', 0),
+                plan=lic.get('plan'),
+                hardware_id=hardware_id,
+                license_key=lic.get('license_key'),
+                customer_name=cust.get('name'),
+                customer_email=cust.get('email'),
+                customer_phone=cust.get('phone'),
+                customer_mobile=cust.get('mobile'),
+                max_devices=lic.get('max_devices', 999),
+                device_count=lic.get('device_count', 0),
+            )
+            if self._status.status == 'licensed':
+                self._cache.set_license_status(self._status.to_dict())
+                self._cache.mark_has_ever_activated_paid_license()
                 self._notify_ready(True)
-                return {'success': True, 'data': self._status.to_dict()}
-            else:
-                server_status = data.get('status', '')
-                err_code = data.get('error', {}).get('code', '')
-                err_msg = data.get('error', {}).get('message', '') or data.get('message', '')
-                if err_code:
-                    return {'success': False, 'valid': False, 'error': {'code': err_code, 'message': err_msg}, 'status': server_status}
-                return {'success': False, 'valid': False, 'message': err_msg or 'License validation failed'}
+                return {'success': True, 'status': self._status.status, 'data': self._status.to_dict()}
+            return {'success': True, 'status': 'force_reactivation', 'message': 'License requires reactivation. Contact support.', 'data': self._status.to_dict()}
+        elif result.get('error'):
+            err = result.get('error', {})
+            err_code = err.get('code', '')
+            if err_code == 'LICENSE_EXPIRED':
+                return {'success': False, 'valid': False, 'error': {'code': 'LICENSE_EXPIRED', 'message': err.get('message', 'License has expired')}, 'status': 'expired'}
+            return {'success': False, 'valid': False, 'error': err, 'status': result.get('status', 'unlicensed')}
         else:
-            err_code = result.get('error', {}).get('code', '')
-            if err_code == 'NO_LICENSE_FOUND':
-                return {'success': False, 'error': {'code': 'NO_LICENSE_FOUND', 'message': 'No license found for this hardware'}}
-            return {'success': False, 'error': result.get('error', {'code': '', 'message': result.get('message', 'Unknown error')})}
+            return {'success': False, 'valid': False, 'error': {'code': 'NO_LICENSE_FOUND', 'message': 'No license found for this hardware'}, 'status': 'unlicensed'}
 
     def start_trial(self, email: str, customer_name: str = '',
                     customer_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         result = self._client.start_trial(email, customer_name=customer_name, customer_data=customer_data)
         if result.get('success'):
-            data = result.get('data', result)
+            trial_data = result.get('trial', {}) if isinstance(result.get('trial'), dict) else result
             self._status = LicenseStatus(
                 valid=True,
                 status='trial',
-                expiry_date=data.get('expiry_date'),
-                days_left=data.get('days_left', data.get('duration_days', 0)),
-                plan=data.get('plan', 'Trial'),
+                expiry_date=trial_data.get('expiry_date'),
+                days_left=trial_data.get('days_left', trial_data.get('duration_days', 0)),
+                plan=trial_data.get('plan', 'Trial'),
                 hardware_id=self._hardware.get_fingerprint(),
-                customer_name=data.get('customer_name') or customer_name,
-                customer_email=data.get('customer_email') or email,
-                customer_phone=data.get('customer_phone'),
-                customer_mobile=data.get('customer_mobile')
+                customer_name=trial_data.get('customer_name') or customer_name,
+                customer_email=trial_data.get('customer_email') or email,
+                customer_phone=trial_data.get('customer_phone'),
+                customer_mobile=trial_data.get('customer_mobile')
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
@@ -401,21 +387,21 @@ class LicenseEngine:
         hardware_id = self._hardware.get_fingerprint()
         result = self._client.convert_trial(hardware_id, plan, customer_name, customer_email)
         if result.get('success'):
-            data = result.get('data', result)
-            if 'license_key' in data:
-                self._license_key = data.get('license_key')
+            lic = result.get('license', {})
+            if 'license_key' in lic:
+                self._license_key = lic.get('license_key')
             self._status = LicenseStatus(
                 valid=True,
-                status=data.get('status', 'active'),
-                expiry_date=data.get('expiry_date'),
-                days_left=data.get('days_left', 0),
-                plan=data.get('plan'),
+                status=result.get('status', 'licensed'),
+                expiry_date=lic.get('expiry_date'),
+                days_left=lic.get('days_left', 0),
+                plan=lic.get('plan'),
                 hardware_id=hardware_id,
-                license_key=data.get('license_key'),
-                customer_name=data.get('customer_name'),
-                customer_email=data.get('customer_email'),
-                customer_phone=data.get('customer_phone'),
-                customer_mobile=data.get('customer_mobile')
+                license_key=lic.get('license_key'),
+                customer_name=result.get('customer', {}).get('name'),
+                customer_email=result.get('customer', {}).get('email'),
+                customer_phone=result.get('customer', {}).get('phone'),
+                customer_mobile=result.get('customer', {}).get('mobile')
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
@@ -431,20 +417,20 @@ class LicenseEngine:
             raise ValueError("License key unavailable. Please activate first.")
         result = self._client.renew_license(self._license_key, extra_days)
         if result.get('success'):
-            data = result.get('data', result)
+            lic = result.get('license', {})
             hardware_id = self._hardware.get_fingerprint()
             self._status = LicenseStatus(
                 valid=True,
-                status=data.get('status', 'active'),
-                expiry_date=data.get('new_expiry_date') or data.get('expiry_date'),
-                days_left=data.get('days_left', 0),
-                plan=data.get('plan'),
+                status='licensed',
+                expiry_date=lic.get('new_expiry_date') or lic.get('expiry_date'),
+                days_left=lic.get('days_left', 0),
+                plan=lic.get('plan'),
                 hardware_id=hardware_id,
                 license_key=self._license_key,
-                customer_name=data.get('customer_name'),
-                customer_email=data.get('customer_email'),
-                customer_phone=data.get('customer_phone'),
-                customer_mobile=data.get('customer_mobile')
+                customer_name=result.get('customer', {}).get('name'),
+                customer_email=result.get('customer', {}).get('email'),
+                customer_phone=result.get('customer', {}).get('phone'),
+                customer_mobile=result.get('customer', {}).get('mobile')
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
@@ -479,20 +465,20 @@ class LicenseEngine:
         result = self._client.bind_device(key, device_name=device_name)
         if result.get('success'):
             self._license_key = key
-            data = result.get('data', result)
+            lic = result.get('license', {})
             hardware_id = self._hardware.get_fingerprint()
             self._status = LicenseStatus(
                 valid=True,
-                status=data.get('status', 'active'),
-                expiry_date=data.get('expiry_date'),
-                days_left=data.get('days_left', 0),
-                plan=data.get('plan'),
+                status='licensed',
+                expiry_date=lic.get('expiry_date'),
+                days_left=lic.get('days_left', 0),
+                plan=lic.get('plan'),
                 hardware_id=hardware_id,
                 license_key=key,
-                customer_name=data.get('customer_name'),
-                customer_email=data.get('customer_email'),
-                customer_phone=data.get('customer_phone'),
-                customer_mobile=data.get('customer_mobile'),
+                customer_name=result.get('customer', {}).get('name'),
+                customer_email=result.get('customer', {}).get('email'),
+                customer_phone=result.get('customer', {}).get('phone'),
+                customer_mobile=result.get('customer', {}).get('mobile'),
                 message='Device bound'
             )
             if self._status.valid:
