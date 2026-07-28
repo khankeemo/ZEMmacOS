@@ -13,7 +13,6 @@ from .hardware import HardwareDetector
 from .cache import CacheManager
 from .welcome import WelcomeDialog
 from .universal_success_dialog import SuccessDialog
-from .universal_restart_dialog import RestartDialog
 from .live_log import LiveLog
 from .single_instance import SingleInstance
 
@@ -113,17 +112,21 @@ class UniversalLicenseCenter:
         LiveLog.log("License Center started", "Application lock engaged")
         self._lock_application()
 
-        if not self._initialized:
-            self._log("SDK", "INFO", "Engine initializing", "Starting decision engine")
-            LiveLog.log("Engine initializing", "Starting decision engine")
-            self._status = self.engine.initialize()
-            self._initialized = True
-        else:
-            self._log("SDK", "INFO", "Using pre-initialized engine status", "Skipping duplicate initialize()")
+        # ULC must never run the Decision Engine.
+        # Decision Engine runs once during LicenseEngine.initialize() in main.py.
+        if not self._status:
+            self._log("SDK", "WARNING", "ULC shown without pre-initialised status",
+                      "Defaulting to no_license. Decision Engine must be called before ULC.")
+            self._status = LicenseStatus(
+                valid=False, status='no_license',
+                hardware_id=self.hardware.get_fingerprint(),
+                message='No license or trial was found. Start a Free Trial or activate your license.'
+            )
+        self._initialized = True
 
         status = self._status.status if self._status else 'no_license'
-        self._log("SDK", "INFO", f"Decision engine result: {status}")
-        LiveLog.log("Decision engine result", f"Status: {status}")
+        self._log("SDK", "INFO", f"Using pre-initialised status: {status}")
+        LiveLog.log("ULC using status", f"Status: {status}")
 
         if self._status and self._status.valid:
             self._unlock_application()
@@ -158,20 +161,12 @@ class UniversalLicenseCenter:
             status=self._status,
             product_name=self._product_name,
             operation=operation,
-            on_continue=lambda: self._show_restart_dialog(operation),
+            engine=self.engine,
         ).show()
 
     def _show_error_dialog(self, title: str, message: str) -> None:
         LiveLog.log("Showing Error Dialog", f"{title}: {message}")
         messagebox.showerror(title, message, parent=self._root)
-
-    def _show_restart_dialog(self, operation: str = "activation") -> None:
-        LiveLog.log("Showing Restart Dialog", "Starting restart workflow")
-        RestartDialog(
-            parent=self._root,
-            engine=self.engine,
-            product_name=self._product_name,
-        ).show()
 
     def _destroy_ulc(self) -> None:
         if self._root:
@@ -482,30 +477,37 @@ class UniversalLicenseCenter:
         LiveLog.log("Activation started", "Opening license entry dialog")
         dialog = tk.Toplevel(self._root)
         dialog.title("Activate License")
-        dialog.geometry("480x320")
-        dialog.configure(bg=self._card_bg)
+        dialog.geometry("480x380")
+        dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
         dialog.resizable(False, False)
 
-        tk.Label(dialog, text="Activate License",
-                 font=("Segoe UI", 16, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(pady=(20, 10))
-        tk.Label(dialog, text="Enter your license key:",
+        header = tk.Frame(dialog, bg=self._primary, height=64)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(header, text="Activate License",
+                 font=("Segoe UI", 18, "bold"),
+                 fg="white", bg=self._primary).pack(expand=True)
+
+        main = tk.Frame(dialog, bg=self._card_bg, padx=24, pady=20)
+        main.pack(fill="both", expand=True)
+
+        tk.Label(main, text="Enter your license key:",
                  font=("Segoe UI", 11),
-                 bg=self._card_bg, fg=self._text_secondary).pack(pady=(0, 10))
-        key_entry = tk.Entry(dialog, font=("Consolas", 14), width=30,
+                 bg=self._card_bg, fg=self._text_secondary).pack(anchor="w", pady=(0, 8))
+        key_entry = tk.Entry(main, font=("Consolas", 14), width=30,
                               relief="solid", bd=1, justify="center")
-        key_entry.pack(pady=(0, 10), padx=20)
+        key_entry.pack(fill="x", pady=(0, 6))
         key_entry.focus()
 
         hw_id = self.hardware.get_fingerprint()[:16] + "..."
-        tk.Label(dialog, text=f"Hardware: {hw_id}",
-                 font=("Segoe UI", 9), bg=self._card_bg, fg="#9ca3af").pack()
+        tk.Label(main, text=f"Hardware: {hw_id}",
+                 font=("Segoe UI", 9), bg=self._card_bg, fg="#9ca3af").pack(anchor="w")
 
-        status_label = tk.Label(dialog, text="", font=("Segoe UI", 10),
-                                bg=self._card_bg, fg=self._error)
-        status_label.pack(pady=(5, 0))
+        status_label = tk.Label(main, text="", font=("Segoe UI", 10),
+                                bg=self._card_bg, fg=self._error, wraplength=420, justify="left")
+        status_label.pack(fill="x", pady=(8, 0))
 
         def do_activate():
             key = key_entry.get().strip()
@@ -542,15 +544,17 @@ class UniversalLicenseCenter:
                 LiveLog.log("Activation error", str(e))
                 status_label.config(text=str(e))
 
-        tk.Button(dialog, text="Activate", command=do_activate,
+        btn_frame = tk.Frame(main, bg=self._card_bg)
+        btn_frame.pack(fill="x", pady=(12, 0))
+        tk.Button(btn_frame, text="Activate", command=do_activate,
                   font=("Segoe UI", 12, "bold"),
                   bg=self._primary, fg="white", relief="flat",
-                  padx=20, pady=8, cursor="hand2").pack(pady=(10, 5))
-        tk.Button(dialog, text="Cancel",
+                  padx=20, pady=8, cursor="hand2").pack(fill="x", pady=(0, 6))
+        tk.Button(btn_frame, text="Cancel",
                   font=("Segoe UI", 11),
                   bg="#e5e7eb", fg=self._text_primary, relief="flat",
                   command=dialog.destroy, cursor="hand2",
-                  padx=12, pady=4).pack(pady=(0, 10))
+                  padx=12, pady=4).pack(fill="x")
         dialog.wait_window()
 
     def _start_trial(self):
@@ -594,27 +598,34 @@ class UniversalLicenseCenter:
         LiveLog.log("Renewal started", "Opening license key entry")
         dialog = tk.Toplevel(self._root)
         dialog.title("Renew License")
-        dialog.geometry("480x350")
-        dialog.configure(bg=self._card_bg)
+        dialog.geometry("480x380")
+        dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
 
-        tk.Label(dialog, text="Renew License",
-                 font=("Segoe UI", 16, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(pady=(20, 10))
-        tk.Label(dialog, text="Enter your license key:",
+        header = tk.Frame(dialog, bg=self._primary, height=64)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(header, text="Renew License",
+                 font=("Segoe UI", 18, "bold"),
+                 fg="white", bg=self._primary).pack(expand=True)
+
+        main = tk.Frame(dialog, bg=self._card_bg, padx=24, pady=20)
+        main.pack(fill="both", expand=True)
+
+        tk.Label(main, text="Enter your license key:",
                  font=("Segoe UI", 11),
-                 bg=self._card_bg, fg=self._text_secondary).pack(pady=(0, 10))
-        key_entry = tk.Entry(dialog, font=("Consolas", 14), width=30,
+                 bg=self._card_bg, fg=self._text_secondary).pack(anchor="w", pady=(0, 8))
+        key_entry = tk.Entry(main, font=("Consolas", 14), width=30,
                               relief="solid", bd=1, justify="center")
-        key_entry.pack(pady=(0, 10), padx=20)
+        key_entry.pack(fill="x", pady=(0, 6))
         key_entry.focus()
         if self.engine.get_license_key():
             key_entry.insert(0, self.engine.get_license_key())
 
-        status_label = tk.Label(dialog, text="", font=("Segoe UI", 10),
-                                bg=self._card_bg, fg=self._error)
-        status_label.pack(pady=(5, 0))
+        status_label = tk.Label(main, text="", font=("Segoe UI", 10),
+                                bg=self._card_bg, fg=self._error, wraplength=420, justify="left")
+        status_label.pack(fill="x", pady=(6, 0))
 
         def do_renew():
             key = key_entry.get().strip()
@@ -631,6 +642,7 @@ class UniversalLicenseCenter:
                         self._status = status
                         self._initialized = True
                     LiveLog.log("Renewal API success", "Engine state updated")
+                    dialog.destroy()
                     self._show_success_dialog("renewal")
                 else:
                     err_msg = eng_result.get('message', 'Renewal failed')
@@ -638,20 +650,21 @@ class UniversalLicenseCenter:
                     status_label.config(text=err_msg)
                     dialog.destroy()
                     return
-                dialog.destroy()
             except Exception as e:
                 LiveLog.log("Renewal error", str(e))
                 status_label.config(text=str(e))
 
-        tk.Button(dialog, text="Proceed with Renewal", command=do_renew,
+        btn_frame = tk.Frame(main, bg=self._card_bg)
+        btn_frame.pack(fill="x", pady=(12, 0))
+        tk.Button(btn_frame, text="Proceed with Renewal", command=do_renew,
                   font=("Segoe UI", 12, "bold"),
                   bg=self._primary, fg="white", relief="flat",
-                  padx=20, pady=8, cursor="hand2").pack(pady=(10, 5))
-        tk.Button(dialog, text="Cancel",
+                  padx=20, pady=8, cursor="hand2").pack(fill="x", pady=(0, 6))
+        tk.Button(btn_frame, text="Cancel",
                   font=("Segoe UI", 11),
                   bg="#e5e7eb", fg=self._text_primary, relief="flat",
                   command=dialog.destroy, cursor="hand2",
-                  padx=12, pady=4).pack(pady=(0, 10))
+                  padx=12, pady=4).pack(fill="x")
         dialog.wait_window()
 
     def _contact_support(self):
@@ -665,17 +678,21 @@ class UniversalLicenseCenter:
     def _show_request_dialog(self, title: str, category: str):
         dialog = tk.Toplevel(self._root)
         dialog.title(title)
-        dialog.geometry("520x480")
-        dialog.configure(bg=self._card_bg)
+        dialog.geometry("520x500")
+        dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
 
-        tk.Label(dialog, text=title,
-                 font=("Segoe UI", 16, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(pady=(20, 10))
+        header = tk.Frame(dialog, bg=self._primary, height=64)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(header, text=title,
+                 font=("Segoe UI", 18, "bold"),
+                 fg="white", bg=self._primary).pack(expand=True)
 
-        info_frame = tk.Frame(dialog, bg=self._card_bg)
-        info_frame.pack(fill="x", padx=20, pady=(0, 10))
+        main = tk.Frame(dialog, bg=self._card_bg, padx=24, pady=16)
+        main.pack(fill="both", expand=True)
+
         status = self._status
 
         fields_data = [
@@ -689,22 +706,25 @@ class UniversalLicenseCenter:
             fields_data.append(("License Key", status.license_key[:8] + "..." if len(status.license_key) > 8 else status.license_key))
 
         for label, value in fields_data:
-            row = tk.Frame(info_frame, bg=self._card_bg)
-            row.pack(fill="x", pady=1)
-            tk.Label(row, text=f"{label}:", font=("Segoe UI", 10, "bold"),
-                     fg="#6b7280", bg=self._card_bg, width=14, anchor="w").pack(side="left")
-            tk.Label(row, text=value, font=("Segoe UI", 10),
+            row = tk.Frame(main, bg=self._card_bg)
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=f"{label}:", font=("Segoe UI", 10),
+                     fg=self._text_secondary, bg=self._card_bg, width=14, anchor="w").pack(side="left")
+            tk.Label(row, text=value, font=("Segoe UI", 10, "bold"),
                      fg=self._text_primary, bg=self._card_bg, anchor="w").pack(side="left")
 
-        tk.Label(dialog, text="Message:",
-                 font=("Segoe UI", 11, "bold"),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", padx=20, pady=(0, 5))
-        msg_text = tk.Text(dialog, font=("Segoe UI", 11), height=6,
+        sep = tk.Frame(main, bg=self._border, height=1)
+        sep.pack(fill="x", pady=12)
+
+        tk.Label(main, text="Message:",
+                 font=("Segoe UI", 11),
+                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", pady=(0, 6))
+        msg_text = tk.Text(main, font=("Segoe UI", 11), height=6,
                            relief="solid", bd=1)
-        msg_text.pack(fill="x", padx=20, pady=(0, 10))
+        msg_text.pack(fill="x", pady=(0, 10))
         msg_text.focus()
 
-        status_label = tk.Label(dialog, text="", font=("Segoe UI", 10),
+        status_label = tk.Label(main, text="", font=("Segoe UI", 10),
                                 bg=self._card_bg, fg=self._success)
         status_label.pack(pady=(0, 5))
 
@@ -739,17 +759,17 @@ class UniversalLicenseCenter:
                 LiveLog.log(f"{category} request error", str(e))
                 status_label.config(text=str(e), fg=self._error)
 
-        btn_frame = tk.Frame(dialog, bg=self._card_bg)
-        btn_frame.pack(fill="x", padx=20, pady=(0, 15))
+        btn_frame = tk.Frame(main, bg=self._card_bg)
+        btn_frame.pack(fill="x", pady=(8, 0))
         tk.Button(btn_frame, text="Send", command=do_send,
                   font=("Segoe UI", 12, "bold"),
                   bg=self._primary, fg="white", relief="flat",
-                  padx=20, pady=8, cursor="hand2").pack(side="left", expand=True, padx=(0, 6))
+                  padx=20, pady=8, cursor="hand2").pack(fill="x", pady=(0, 6))
         tk.Button(btn_frame, text="Cancel",
                   font=("Segoe UI", 11),
                   bg="#e5e7eb", fg=self._text_primary, relief="flat",
                   command=dialog.destroy, cursor="hand2",
-                  padx=12, pady=4).pack(side="right", expand=True, padx=(6, 0))
+                  padx=12, pady=4).pack(fill="x")
         dialog.wait_window()
 
     def _view_hardware_status(self):

@@ -82,70 +82,75 @@ class WelcomeDialog:
 
     def _build_ui(self):
         root = self._root
-        header = tk.Label(root, text='Welcome', font=('Helvetica', 22, 'bold'),
-                          bg=self._bg, fg=self._text_primary)
-        header.pack(pady=(30, 5))
+
+        header = tk.Frame(root, bg=self._primary, height=72)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(header, text='Welcome',
+                 font=('Segoe UI', 20, 'bold'),
+                 fg='white', bg=self._primary).pack(expand=True)
+
         sub = tk.Label(root, text='Complete your registration to start the trial',
-                       font=('Helvetica', 11), bg=self._bg, fg=self._text_secondary)
-        sub.pack(pady=(0, 20))
+                       font=('Segoe UI', 11), bg=self._bg, fg=self._text_secondary)
+        sub.pack(pady=(12, 16))
         frame = tk.Frame(root, bg=self._card_bg, bd=1, relief='solid',
                          highlightbackground=self._border)
-        frame.pack(fill='both', expand=True, padx=30, pady=(0, 20))
-        padding = {'padx': 20, 'pady': 5}
-        tk.Label(frame, text='Name *', font=('Helvetica', 11, 'bold'),
+        frame.pack(fill='both', expand=True, padx=30, pady=(0, 16))
+        padding = {'padx': 20, 'pady': 4}
+        tk.Label(frame, text='Name *', font=('Segoe UI', 11),
                  fg=self._text_primary, bg=self._card_bg).pack(anchor='w', **padding)
-        self._name_entry = tk.Entry(frame, font=('Helvetica', 12), relief='solid',
+        self._name_entry = tk.Entry(frame, font=('Segoe UI', 12), relief='solid',
                                      bd=1, highlightbackground=self._border)
         self._name_entry.pack(fill='x', padx=20, pady=(0, 10))
         self._name_entry.focus()
-        tk.Label(frame, text='Email *', font=('Helvetica', 11, 'bold'),
+        tk.Label(frame, text='Email *', font=('Segoe UI', 11),
                  fg=self._text_primary, bg=self._card_bg).pack(anchor='w', **padding)
-        self._email_entry = tk.Entry(frame, font=('Helvetica', 12), relief='solid',
+        self._email_entry = tk.Entry(frame, font=('Segoe UI', 12), relief='solid',
                                       bd=1, highlightbackground=self._border)
         self._email_entry.pack(fill='x', padx=20, pady=(0, 10))
-        tk.Label(frame, text='Mobile Number *', font=('Helvetica', 11, 'bold'),
+        tk.Label(frame, text='Mobile Number *', font=('Segoe UI', 11),
                  fg=self._text_primary, bg=self._card_bg).pack(anchor='w', **padding)
         mobile_frame = tk.Frame(frame, bg=self._card_bg)
         mobile_frame.pack(fill='x', padx=20, pady=(0, 10))
         self._country_var = tk.StringVar()
         self._country_menu = ttk.Combobox(mobile_frame, textvariable=self._country_var,
-                                           width=14, state='readonly', font=('Helvetica', 11))
+                                           width=14, state='readonly', font=('Segoe UI', 11))
         self._country_menu.pack(side='left')
-        self._mobile_entry = tk.Entry(mobile_frame, font=('Helvetica', 12), relief='solid',
+        self._mobile_entry = tk.Entry(mobile_frame, font=('Segoe UI', 12), relief='solid',
                                        bd=1, highlightbackground=self._border)
         self._mobile_entry.pack(side='left', fill='x', expand=True, padx=(8, 0))
-        tk.Label(frame, text='Company (optional)', font=('Helvetica', 11, 'bold'),
+        tk.Label(frame, text='Company (optional)', font=('Segoe UI', 11),
                  fg=self._text_secondary, bg=self._card_bg).pack(anchor='w', **padding)
-        self._company_entry = tk.Entry(frame, font=('Helvetica', 12), relief='solid',
+        self._company_entry = tk.Entry(frame, font=('Segoe UI', 12), relief='solid',
                                         bd=1, highlightbackground=self._border)
-        self._company_entry.pack(fill='x', padx=20, pady=(0, 15))
-        self._status_label = tk.Label(frame, text='', font=('Helvetica', 10),
+        self._company_entry.pack(fill='x', padx=20, pady=(0, 12))
+        self._status_label = tk.Label(frame, text='', font=('Segoe UI', 10),
                                        bg=self._card_bg, fg=self._success)
-        self._status_label.pack(padx=20, pady=(0, 5))
-        self._send_btn = tk.Button(frame, text='Send OTP', font=('Helvetica', 12, 'bold'),
+        self._status_label.pack(padx=20, pady=(0, 4))
+        self._send_btn = tk.Button(frame, text='Send OTP', font=('Segoe UI', 12, 'bold'),
                                    bg=self._primary, fg='white', relief='flat',
                                    command=self._on_send_otp, cursor='hand2',
-                                   padx=12, pady=6)
+                                   padx=12, pady=7)
         self._send_btn.pack(fill='x', padx=20, pady=(0, 8))
         otp_frame = tk.Frame(frame, bg=self._card_bg)
         otp_frame.pack(fill='x', padx=20, pady=(0, 5))
-        self._otp_entry = tk.Entry(otp_frame, font=('Helvetica', 16), relief='solid',
+        self._otp_entry = tk.Entry(otp_frame, font=('Segoe UI', 16), relief='solid',
                                     bd=1, highlightbackground=self._border,
                                     justify='center', width=10)
         self._otp_entry.pack(side='left', fill='x', expand=True)
         self._otp_entry.config(state='disabled')
-        self._verify_btn = tk.Button(otp_frame, text='Verify', font=('Helvetica', 12, 'bold'),
+        self._verify_btn = tk.Button(otp_frame, text='Verify', font=('Segoe UI', 12, 'bold'),
                                      bg=self._success, fg='white', relief='flat',
                                      command=self._on_verify_otp, cursor='hand2',
                                      state='disabled',
-                                     padx=12, pady=6)
+                                     padx=12, pady=7)
         self._verify_btn.pack(side='left', padx=(8, 0))
-        self._error_label = tk.Label(frame, text='', font=('Helvetica', 10),
+        self._error_label = tk.Label(frame, text='', font=('Segoe UI', 9),
                                       bg=self._card_bg, fg=self._error)
         self._error_label.pack(padx=20, pady=(5, 10))
         company = self.product_name or 'License'
         footer = tk.Label(self._root, text=f'Protected by {company}',
-                          font=('Helvetica', 9), bg=self._bg, fg='#9ca3af')
+                          font=('Segoe UI', 9), bg=self._bg, fg='#9ca3af')
         footer.pack(side='bottom', pady=(0, 15))
 
     def _load_countries(self):
@@ -247,7 +252,7 @@ class WelcomeDialog:
                 self._otp_entry.delete(0, 'end')
                 err_detail = result.get('error', result.get('message', 'Invalid OTP'))
                 self._log("OTP", "ERROR", "OTP verification failed", str(err_detail))
-                self._show_error('OTP verification failed. Please check the OTP and try again.', bold=True)
+                self._show_error('OTP verification failed. Please check the OTP and try again.')
                 self._verify_btn.config(state='normal', text='Verify')
                 self._otp_entry.focus()
         except ApiError as e:
@@ -256,7 +261,7 @@ class WelcomeDialog:
                 err_data = e.data if isinstance(e.data, dict) else {}
                 err_msg = err_data.get('message', err_data.get('error', e.message))
                 self._log("OTP", "ERROR", "OTP verification failed", str(err_msg))
-                self._show_error('OTP verification failed. Please check the OTP and try again.', bold=True)
+                self._show_error('OTP verification failed. Please check the OTP and try again.')
                 self._verify_btn.config(state='normal', text='Verify')
                 self._otp_entry.focus()
             else:
@@ -333,12 +338,8 @@ class WelcomeDialog:
             self._show_error(str(e))
             self._verify_btn.config(state='normal', text='Verify')
 
-    def _show_error(self, msg: str, bold: bool = False):
-        self._error_label.config(text=msg)
-        if bold:
-            self._error_label.config(font=('Helvetica', 10, 'bold'))
-        else:
-            self._error_label.config(font=('Helvetica', 10))
+    def _show_error(self, msg: str):
+        self._error_label.config(text=msg, font=('Segoe UI', 9))
 
     def _clear_error(self):
         self._error_label.config(text='')
