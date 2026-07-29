@@ -31,6 +31,8 @@ class ApiClient:
         self.config = config
         self.api_config = config.get('api', {})
         self.base_url = self.api_config.get('url', '').rstrip('/')
+        app_url = self.api_config.get('app_url', '').rstrip('/')
+        self.app_url = app_url or self.base_url
         self.api_version = self.api_config.get('version', 'v1')
         self.api_key = self.api_config.get('public_key', '')
         self.api_secret = self.api_config.get('secret', '')
@@ -222,7 +224,7 @@ class ApiClient:
     def get_license_status(self, hardware_id: Optional[str] = None) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
-        url = f"{self.base_url}/internal/backend/license/status?hardware_id={hardware_id}"
+        url = f"{self.app_url}/internal/backend/license/status?hardware_id={hardware_id}"
         try:
             resp = requests.get(url, timeout=self.timeout)
             if resp.status_code == 200:
