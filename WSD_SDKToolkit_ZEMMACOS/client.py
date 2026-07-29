@@ -1,6 +1,7 @@
 """API Client for ZEM MAC OS License API"""
 import time
 from typing import Any, Dict, Optional
+from urllib.parse import urlencode
 
 import requests
 
@@ -224,7 +225,8 @@ class ApiClient:
     def get_license_status(self, hardware_id: Optional[str] = None) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
-        url = f"{self.base_url}/internal/backend/license/status?hardware_id={hardware_id}"
+        query = urlencode({'hardware_id': hardware_id})
+        url = f"{self.base_url}/internal/backend/license/status?{query}"
         try:
             resp = requests.get(url, timeout=self.timeout)
             if resp.status_code == 200:
