@@ -354,8 +354,8 @@ class UniversalLicenseCenter:
         sep = tk.Frame(main, bg=self._border, height=1)
         sep.pack(fill="x", pady=(0, 12))
 
-        btn_frame = tk.Frame(main, bg=self._bg)
-        btn_frame.pack(fill="both", expand=True)
+        self._btn_frame = tk.Frame(main, bg=self._bg)
+        self._btn_frame.pack(fill="both", expand=True)
 
         status = self._status.status if self._status else 'no_license'
         is_valid = self._status.valid if self._status else False
@@ -371,6 +371,10 @@ class UniversalLicenseCenter:
                   f"is_paid={is_paid}, trial_consumed={self._trial_consumed}, "
                   f"is_expired={is_expired}")
 
+        refresh_btn = ("Refresh", self._refresh_ui, self._text_secondary)
+        close_btn = ("Close", self._on_ulc_close, "#e5e7eb")
+        exit_btn = ("Exit", self._on_ulc_close, "#e5e7eb")
+
         if is_trial:
             buttons = [
                 ("Activate License", self._activate_license, self._primary),
@@ -378,7 +382,8 @@ class UniversalLicenseCenter:
                 ("Contact Support", self._contact_support, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
                 ("View Notifications", self._view_notifications, self._text_secondary),
-                ("Close", self._on_ulc_close, "#e5e7eb"),
+                refresh_btn,
+                close_btn,
             ]
         elif is_paid:
             buttons = [
@@ -388,7 +393,8 @@ class UniversalLicenseCenter:
                 ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
                 ("View Notifications", self._view_notifications, self._text_secondary),
-                ("Close", self._on_ulc_close, "#e5e7eb"),
+                refresh_btn,
+                close_btn,
             ]
         elif is_expired:
             buttons = [
@@ -397,32 +403,37 @@ class UniversalLicenseCenter:
                 ("Contact Support", self._contact_support, self._text_secondary),
                 ("View Conversations", self._view_conversations, self._text_secondary),
                 ("View Notifications", self._view_notifications, self._text_secondary),
-                ("Close", self._on_ulc_close, "#e5e7eb"),
+                refresh_btn,
+                close_btn,
             ]
         elif is_deactivated:
             buttons = [
                 ("Contact Support", self._contact_support, self._primary),
                 ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
-                ("Close", self._on_ulc_close, "#e5e7eb"),
+                refresh_btn,
+                close_btn,
             ]
         elif is_force_reactivation:
             buttons = [
                 ("Contact Support", self._contact_support, self._primary),
-                ("Close", self._on_ulc_close, "#e5e7eb"),
+                refresh_btn,
+                close_btn,
             ]
         elif is_inactive:
             support_label = f"Contact Support ({self._support_email})" if self._support_email else "Contact Support"
             buttons = [
                 ("Activate License", self._activate_license, self._primary),
                 (support_label, self._contact_support, self._text_secondary),
-                ("Close", self._on_ulc_close, "#e5e7eb"),
+                refresh_btn,
+                close_btn,
             ]
         elif is_trial_consumed:
             buttons = [
                 ("Activate License", self._activate_license, self._primary),
                 ("Renew License", self._renew_license_flow, self._primary),
                 ("Contact Support", self._contact_support, self._text_secondary),
-                ("Close", self._on_ulc_close, "#e5e7eb"),
+                refresh_btn,
+                close_btn,
             ]
         else:
             if self._trial_consumed:
@@ -431,7 +442,8 @@ class UniversalLicenseCenter:
                     ("Renew License", self._renew_license_flow, self._primary),
                     ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                     ("Contact Support", self._contact_support, self._text_secondary),
-                    ("Exit", self._on_ulc_close, "#e5e7eb"),
+                    refresh_btn,
+                    exit_btn,
                 ]
                 self._status_detail.config(
                     text="This email has already used its free trial. Please Activate a License or Contact Sales.",
@@ -444,17 +456,18 @@ class UniversalLicenseCenter:
                     ("Renew License", self._renew_license_flow, self._primary),
                     ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                     ("Contact Support", self._contact_support, self._text_secondary),
-                    ("Close", self._on_ulc_close, "#e5e7eb"),
+                    refresh_btn,
+                    close_btn,
                 ]
 
         for text, cmd, color in buttons:
             if color == "#e5e7eb":
-                btn = tk.Button(btn_frame, text=text, command=cmd,
+                btn = tk.Button(self._btn_frame, text=text, command=cmd,
                                 font=("Segoe UI", 11),
                                 bg=color, fg=self._text_primary,
                                 relief="flat", padx=12, pady=8, cursor="hand2")
             else:
-                btn = tk.Button(btn_frame, text=text, command=cmd,
+                btn = tk.Button(self._btn_frame, text=text, command=cmd,
                                 font=("Segoe UI", 11, "bold"),
                                 bg=color, fg="white", relief="flat",
                                 padx=12, pady=8, cursor="hand2")
@@ -464,6 +477,120 @@ class UniversalLicenseCenter:
                                        bg=self._bg, fg=self._text_secondary,
                                        wraplength=540, justify="left")
         self._output_label.pack(fill="x", pady=(8, 0))
+
+    def _refresh_ui(self):
+        self._log("SDK", "INFO", "=== REFRESH_UI: Refreshing license status from API")
+        self._fetch_live_license_status()
+        if self._btn_frame and self._btn_frame.winfo_exists():
+            for child in self._btn_frame.winfo_children():
+                child.destroy()
+        self._rebuild_buttons()
+        self._refresh_display()
+        self._refresh_hardware_display()
+
+    def _rebuild_buttons(self):
+        if not self._btn_frame or not self._btn_frame.winfo_exists():
+            return
+        status = self._status.status if self._status else 'no_license'
+        is_valid = self._status.valid if self._status else False
+        is_expired = status == 'expired'
+        is_trial = status == 'trial'
+        is_paid = status == 'licensed' and is_valid
+        is_deactivated = status == 'deactivated'
+        is_force_reactivation = status == 'force_reactivation'
+        is_inactive = status == 'inactive'
+        is_trial_consumed = status == 'trial_consumed'
+        self._log("SDK", "INFO", "=== REBUILD_BUTTONS: Button status evaluation",
+                  f"status='{status}', valid={is_valid}, is_trial={is_trial}, "
+                  f"is_paid={is_paid}, trial_consumed={self._trial_consumed}, "
+                  f"is_expired={is_expired}")
+
+        refresh_btn = ("Refresh", self._refresh_ui, self._text_secondary)
+        close_btn = ("Close", self._on_ulc_close, "#e5e7eb")
+        exit_btn = ("Exit", self._on_ulc_close, "#e5e7eb")
+
+        if is_trial:
+            buttons = [
+                ("Activate License", self._activate_license, self._primary),
+                ("Renew License", self._renew_license_flow, self._primary),
+                ("Contact Support", self._contact_support, self._text_secondary),
+                refresh_btn,
+                close_btn,
+            ]
+        elif is_paid:
+            buttons = [
+                ("Renew License", self._renew_license_flow, self._primary),
+                ("Contact Support", self._contact_support, self._text_secondary),
+                ("View Hardware Status", self._view_hardware_status, self._text_secondary),
+                refresh_btn,
+                close_btn,
+            ]
+        elif is_expired:
+            buttons = [
+                ("Renew License", self._renew_license_flow, self._primary),
+                ("Contact Support", self._contact_support, self._text_secondary),
+                refresh_btn,
+                close_btn,
+            ]
+        elif is_deactivated:
+            buttons = [
+                ("Contact Support", self._contact_support, self._primary),
+                refresh_btn,
+                close_btn,
+            ]
+        elif is_force_reactivation:
+            buttons = [
+                ("Contact Support", self._contact_support, self._primary),
+                refresh_btn,
+                close_btn,
+            ]
+        elif is_inactive:
+            support_label = f"Contact Support ({self._support_email})" if self._support_email else "Contact Support"
+            buttons = [
+                ("Activate License", self._activate_license, self._primary),
+                (support_label, self._contact_support, self._text_secondary),
+                refresh_btn,
+                close_btn,
+            ]
+        elif is_trial_consumed:
+            buttons = [
+                ("Activate License", self._activate_license, self._primary),
+                ("Renew License", self._renew_license_flow, self._primary),
+                ("Contact Support", self._contact_support, self._text_secondary),
+                refresh_btn,
+                close_btn,
+            ]
+        else:
+            if self._trial_consumed:
+                buttons = [
+                    ("Activate License", self._activate_license, self._primary),
+                    ("Renew License", self._renew_license_flow, self._primary),
+                    ("Contact Support", self._contact_support, self._text_secondary),
+                    refresh_btn,
+                    exit_btn,
+                ]
+            else:
+                buttons = [
+                    ("Start Free Trial", self._start_trial, self._success),
+                    ("Activate License", self._activate_license, self._primary),
+                    ("Renew License", self._renew_license_flow, self._primary),
+                    ("Contact Support", self._contact_support, self._text_secondary),
+                    refresh_btn,
+                    close_btn,
+                ]
+
+        for text, cmd, color in buttons:
+            if color == "#e5e7eb":
+                btn = tk.Button(self._btn_frame, text=text, command=cmd,
+                                font=("Segoe UI", 11),
+                                bg=color, fg=self._text_primary,
+                                relief="flat", padx=12, pady=8, cursor="hand2")
+            else:
+                btn = tk.Button(self._btn_frame, text=text, command=cmd,
+                                font=("Segoe UI", 11, "bold"),
+                                bg=color, fg="white", relief="flat",
+                                padx=12, pady=8, cursor="hand2")
+            btn.pack(fill="x", pady=(0, 6))
 
     def _on_ulc_close(self):
         """Handle ULC close when application is locked - exit the process."""
@@ -645,6 +772,7 @@ class UniversalLicenseCenter:
                     LiveLog.log("Activation successful", f"Key: {key[:8]}...")
                     dialog.destroy()
                     self._show_success_dialog("activation")
+                    self._refresh_ui()
                 else:
                     err_data = result.get('data', result)
                     err_msg = err_data.get('message', '') or err_data.get('error', 'Activation failed')
@@ -689,6 +817,7 @@ class UniversalLicenseCenter:
                 self._app_unlocked = True
                 LiveLog.log("Trial activated", "Showing success dialog")
                 self._show_success_dialog("trial")
+                self._refresh_ui()
             else:
                 err_msg = eng_result.get('message', 'Trial activation failed')
                 LiveLog.log("Trial server response", err_msg)
@@ -754,6 +883,7 @@ class UniversalLicenseCenter:
                     LiveLog.log("Renewal API success", "Engine state updated")
                     dialog.destroy()
                     self._show_success_dialog("renewal")
+                    self._refresh_ui()
                 else:
                     err_msg = eng_result.get('message', 'Renewal failed')
                     LiveLog.log("Renewal API failed", err_msg)
