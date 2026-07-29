@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -148,6 +149,16 @@ class LicenseEngine:
     def _is_valid_status(status: Optional[LicenseStatus]) -> bool:
         if not status:
             return False
+        if status.status == 'trial':
+            if status.days_left is not None and status.days_left <= 0:
+                return False
+            if status.expiry_date:
+                try:
+                    expiry = datetime.fromisoformat(status.expiry_date.replace('Z', '+00:00'))
+                    if expiry.timestamp() < datetime.now().timestamp():
+                        return False
+                except Exception:
+                    pass
         return status.status in ('licensed', 'trial')
 
     def initialize(self) -> LicenseStatus:

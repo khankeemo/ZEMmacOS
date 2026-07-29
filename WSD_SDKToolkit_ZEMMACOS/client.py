@@ -224,7 +224,7 @@ class ApiClient:
     def get_license_status(self, hardware_id: Optional[str] = None) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
-        url = f"{self.app_url}/internal/backend/license/status?hardware_id={hardware_id}"
+        url = f"{self.base_url}/internal/backend/license/status?hardware_id={hardware_id}"
         try:
             resp = requests.get(url, timeout=self.timeout)
             if resp.status_code == 200:

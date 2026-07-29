@@ -180,28 +180,19 @@ class UniversalLicenseCenter:
 
     def _fetch_live_license_status(self) -> None:
         hardware_id = self.hardware.get_fingerprint()
-        self._log("SDK", "INFO", "=== STAGE 1: Fetching live license status from unified endpoint",
-                  f"hardware={hardware_id[:16] if hardware_id else 'NONE'}...")
 
         try:
             status_response = self.client.get_license_status(hardware_id)
-            self._log("SDK", "INFO", "=== STAGE 1a: Raw API response",
-                      f"response={json.dumps(status_response, default=str)}")
 
             if not status_response.get('success'):
-                self._log("SDK", "WARNING", "=== STAGE 1b: API returned success=false",
-                          "keeping current status")
                 return
 
             api_status = status_response.get('status', 'no_license')
-            self._log("SDK", "INFO", "=== STAGE 1c: Status evaluation",
-                      f"api_status='{api_status}'")
 
             if api_status == 'trial':
                 cust = status_response.get('customer', {})
                 lic = status_response.get('license', {})
                 plan = status_response.get('plan', {})
-                self._log("SDK", "INFO", "=== STAGE 1d: Creating trial LicenseStatus from unified response")
                 self._status = LicenseStatus(
                     valid=True, status='trial',
                     expiry_date=lic.get('expiry_date'),
@@ -214,8 +205,7 @@ class UniversalLicenseCenter:
                     trial_active=True,
                 )
                 self.cache.set_license_status(self._status.to_dict())
-                self._log("SDK", "INFO", "=== STAGE 1e: Trial status SET from unified endpoint",
-                          f"status=trial, days_left={self._status.days_left}")
+                self._unlock_application()
                 return
 
             elif api_status == 'licensed':
@@ -223,7 +213,6 @@ class UniversalLicenseCenter:
                 lic = status_response.get('license', {})
                 plan = status_response.get('plan', {})
                 devices = status_response.get('devices', {})
-                self._log("SDK", "INFO", "=== STAGE 1f: Creating licensed LicenseStatus from unified response")
                 self._status = LicenseStatus(
                     valid=True, status='licensed',
                     expiry_date=lic.get('expiry_date'),
@@ -239,31 +228,64 @@ class UniversalLicenseCenter:
                 )
                 self.cache.set_license_status(self._status.to_dict())
                 self.cache.mark_has_ever_activated_paid_license()
-                self._log("SDK", "INFO", "=== STAGE 1g: Licensed status SET from unified endpoint",
-                          f"status=licensed, plan={self._status.plan}")
+                self._unlock_application()
+                return
+
+            elif api_status == 'expired':
+                cust = status_response.get('customer', {})
+                lic = status_response.get('license', {})
+                plan = status_response.get('plan', {})
+                self._status = LicenseStatus(
+                    valid=False, status='expired',
+                    expiry_date=lic.get('expiry_date'),
+                    days_left=0,
+                    plan=plan.get('name'),
+                    hardware_id=hardware_id,
+                    license_key=lic.get('license_key'),
+                    customer_name=cust.get('name'),
+                    customer_email=cust.get('email'),
+                    customer_mobile=cust.get('mobile', ''),
+                    message='Your license has expired. Please renew.'
+                )
+                self.cache.set_license_status(self._status.to_dict())
+                return
+
+            elif api_status == 'inactive':
+                cust = status_response.get('customer', {})
+                lic = status_response.get('license', {})
+                plan = status_response.get('plan', {})
+                self._status = LicenseStatus(
+                    valid=False, status='inactive',
+                    plan=plan.get('name'),
+                    hardware_id=hardware_id,
+                    license_key=lic.get('license_key'),
+                    customer_name=cust.get('name'),
+                    customer_email=cust.get('email'),
+                    customer_mobile=cust.get('mobile', ''),
+                    message='Your license is inactive. Please contact support.'
+                )
+                self.cache.set_license_status(self._status.to_dict())
                 return
 
             else:
-                self._log("SDK", "INFO", f"=== STAGE 1h: No active status (status='{api_status}')",
-                          "keeping current status")
+                cust = status_response.get('customer', {})
+                self._status = LicenseStatus(
+                    valid=False, status=api_status,
+                    hardware_id=hardware_id,
+                    customer_name=cust.get('name'),
+                    customer_email=cust.get('email'),
+                    message=status_response.get('message', 'No active license or trial found.')
+                )
 
         except Exception as e:
-            self._log("SDK", "WARNING", "=== STAGE 1-EXCEPTION: Unified license status fetch failed", str(e))
+            pass
 
     def _show_license_center(self, trial_consumed: bool = False) -> Dict[str, Any]:
-        pre_fetch_status = self._status.status if self._status else 'None'
-        self._log("SDK", "INFO", "=== ULC: BEFORE _fetch_live_license_status()",
-                  f"self._status.status='{pre_fetch_status}', trial_consumed={trial_consumed}")
         self._fetch_live_license_status()
         post_fetch_status = self._status.status if self._status else 'None'
-        self._log("SDK", "INFO", "=== ULC: AFTER _fetch_live_license_status()",
-                  f"self._status.status='{post_fetch_status}', trial_consumed={trial_consumed}, "
-                  f"self._status.valid={self._status.valid if self._status else False}")
         LiveLog.log("Opening Universal License Center",
                      f"Status: {post_fetch_status}, "
                      f"trial_consumed={trial_consumed}")
-        self._log("WELCOME", "INFO", "Opening Universal License Center",
-                  f"Status: {post_fetch_status}, trial_consumed={trial_consumed}")
         self._trial_consumed = trial_consumed
         self._root = tk.Toplevel()
         self._root.title("Universal License Center")
@@ -275,10 +297,6 @@ class UniversalLicenseCenter:
         self._root.grab_set()
         self._root.protocol('WM_DELETE_WINDOW', self._on_ulc_close)
         self._build_ui()
-        pre_refresh_status = self._status.status if self._status else 'None'
-        self._log("SDK", "INFO", "=== ULC: Status IMMEDIATELY BEFORE _refresh_display()",
-                  f"status='{pre_refresh_status}', valid={self._status.valid if self._status else False}, "
-                  f"trial_consumed={self._trial_consumed}")
         self._refresh_display()
         self._refresh_hardware_display()
         self._center_window()
@@ -366,10 +384,6 @@ class UniversalLicenseCenter:
         is_force_reactivation = status == 'force_reactivation'
         is_inactive = status == 'inactive'
         is_trial_consumed = status == 'trial_consumed'
-        self._log("SDK", "INFO", "=== BUILD_UI: Button status evaluation",
-                  f"status='{status}', valid={is_valid}, is_trial={is_trial}, "
-                  f"is_paid={is_paid}, trial_consumed={self._trial_consumed}, "
-                  f"is_expired={is_expired}")
 
         refresh_btn = ("Refresh", self._refresh_ui, self._text_secondary)
         close_btn = ("Close", self._on_ulc_close, "#e5e7eb")
@@ -479,7 +493,6 @@ class UniversalLicenseCenter:
         self._output_label.pack(fill="x", pady=(8, 0))
 
     def _refresh_ui(self):
-        self._log("SDK", "INFO", "=== REFRESH_UI: Refreshing license status from API")
         self._fetch_live_license_status()
         if self._btn_frame and self._btn_frame.winfo_exists():
             for child in self._btn_frame.winfo_children():
@@ -500,10 +513,6 @@ class UniversalLicenseCenter:
         is_force_reactivation = status == 'force_reactivation'
         is_inactive = status == 'inactive'
         is_trial_consumed = status == 'trial_consumed'
-        self._log("SDK", "INFO", "=== REBUILD_BUTTONS: Button status evaluation",
-                  f"status='{status}', valid={is_valid}, is_trial={is_trial}, "
-                  f"is_paid={is_paid}, trial_consumed={self._trial_consumed}, "
-                  f"is_expired={is_expired}")
 
         refresh_btn = ("Refresh", self._refresh_ui, self._text_secondary)
         close_btn = ("Close", self._on_ulc_close, "#e5e7eb")
@@ -593,26 +602,21 @@ class UniversalLicenseCenter:
             btn.pack(fill="x", pady=(0, 6))
 
     def _on_ulc_close(self):
-        """Handle ULC close when application is locked - exit the process."""
-        self._log("SDK", "INFO", "ULC closed via window X", "Application locked - exiting process")
-        LiveLog.log("ULC closed", "Application locked - exiting process")
         try:
             self._root.destroy()
         except Exception:
             pass
-        try:
-            sys.exit(0)
-        except Exception:
-            pass
+        if not self._app_unlocked:
+            LiveLog.log("ULC closed", "Application locked - exiting process")
+            try:
+                sys.exit(0)
+            except Exception:
+                pass
 
     def _refresh_display(self):
         if not self._status:
-            self._log("SDK", "WARNING", "=== REFRESH_DISPLAY: self._status is None, showing Unknown")
             self._status_detail.config(text="Status: Unknown", fg=self._text_secondary)
             return
-        self._log("SDK", "INFO", "=== REFRESH_DISPLAY: Rendering status",
-                  f"status='{self._status.status}', valid={self._status.valid}, "
-                  f"trial_consumed={self._trial_consumed}")
         lines = []
 
         if self._status.status in ('no_license', 'force_activation', 'unlicensed'):
