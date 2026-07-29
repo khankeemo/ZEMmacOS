@@ -210,6 +210,7 @@ class UniversalLicenseCenter:
                     hardware_id=hardware_id,
                     customer_name=cust.get('name'),
                     customer_email=cust.get('email'),
+                    customer_mobile=cust.get('mobile', ''),
                     trial_active=True,
                 )
                 self.cache.set_license_status(self._status.to_dict())
@@ -232,6 +233,7 @@ class UniversalLicenseCenter:
                     license_key=lic.get('license_key'),
                     customer_name=cust.get('name'),
                     customer_email=cust.get('email'),
+                    customer_mobile=cust.get('mobile', ''),
                     max_devices=devices.get('maximum', 999),
                     device_count=devices.get('current', 0),
                 )
@@ -524,6 +526,10 @@ class UniversalLicenseCenter:
                 lines.append(f"Customer: {self._status.customer_name}")
             if self._status.customer_email:
                 lines.append(f"Email: {self._status.customer_email}")
+            if self._status.customer_mobile:
+                lines.append(f"Mobile: {self._status.customer_mobile}")
+            if self._status.license_key:
+                lines.append(f"License Key: {self._status.license_key}")
             if self._status.days_left is not None:
                 lines.append(f"Days remaining: {self._status.days_left}")
             if self._status.expiry_date:
@@ -535,16 +541,18 @@ class UniversalLicenseCenter:
                 lines.append(f"Product: {self._product_name}")
             if self._status.plan:
                 lines.append(f"Plan: {self._status.plan}")
-            if self._status.days_left is not None and self._status.days_left > 0:
-                lines.append(f"Days remaining: {self._status.days_left}")
-            elif self._status.days_left is not None:
-                lines.append(f"Days remaining: {self._status.days_left}")
-            if self._status.expiry_date:
-                lines.append(f"Expires: {self._status.expiry_date}")
             if self._status.customer_name:
                 lines.append(f"Customer: {self._status.customer_name}")
             if self._status.customer_email:
                 lines.append(f"Email: {self._status.customer_email}")
+            if self._status.customer_mobile:
+                lines.append(f"Mobile: {self._status.customer_mobile}")
+            if self._status.license_key:
+                lines.append(f"License Key: {self._status.license_key}")
+            if self._status.days_left is not None:
+                lines.append(f"Days remaining: {self._status.days_left}")
+            if self._status.expiry_date:
+                lines.append(f"Expires: {self._status.expiry_date}")
             fg = self._success
         else:
             lines.append(f"Status: {self._status.status.upper()}")

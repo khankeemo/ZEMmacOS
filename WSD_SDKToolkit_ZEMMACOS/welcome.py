@@ -32,6 +32,8 @@ class WelcomeDialog:
         self._countries = []
         self._selected_country = None
         self._otp_sent = False
+        self._otp_expires_at = 0.0
+        self._otp_timer_id = None
         branding = client.config.get('branding', {})
         self._primary = branding.get('primary_color', '#6366f1')
         self._bg = '#f0f2f5'
@@ -217,7 +219,8 @@ class WelcomeDialog:
             if result.get('success'):
                 self._otp_sent = True
                 self._log("OTP", "SUCCESS", "Welcome OTP sent successfully", f"email={email}")
-                self._status_label.config(text='OTP sent to your email', fg=self._success)
+                expires_in = result.get('expires_in', 300)
+                self._start_otp_timer(expires_in)
                 self._otp_entry.config(state='normal')
                 self._verify_btn.config(state='normal')
                 self._send_btn.config(text='Resend OTP', state='normal')
@@ -343,3 +346,24 @@ class WelcomeDialog:
 
     def _clear_error(self):
         self._error_label.config(text='')
+
+    def _start_otp_timer(self, expires_in: int = 300):
+        if self._otp_timer_id is not None:
+            self._root.after_cancel(self._otp_timer_id)
+            self._otp_timer_id = None
+        self._otp_expires_at = _time.time() + expires_in
+        self._update_otp_timer()
+
+    def _update_otp_timer(self):
+        remaining = int(self._otp_expires_at - _time.time())
+        if remaining <= 0:
+            self._otp_expires_at = 0.0
+            self._status_label.config(text='OTP expired. Request a new OTP.', fg=self._error)
+            self._otp_entry.config(state='disabled')
+            self._verify_btn.config(state='disabled')
+            self._otp_timer_id = None
+            return
+        minutes = remaining // 60
+        seconds = remaining % 60
+        self._status_label.config(text=f'OTP sent — expires in {minutes}:{seconds:02d}', fg=self._success)
+        self._otp_timer_id = self._root.after(1000, self._update_otp_timer)

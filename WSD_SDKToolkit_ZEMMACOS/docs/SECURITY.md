@@ -52,7 +52,7 @@ The application must block at any failed step.
 
 ## OTP Security
 
-- OTP codes expire after 10 minutes
+- OTP codes expire after 5 minutes
 - OTP codes are single-use (verified = true prevents reuse)
 - Wrong OTP codes are rejected with `"Invalid OTP code"`
 - Already-used OTP codes return `"OTP code already used"`
