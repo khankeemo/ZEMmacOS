@@ -178,113 +178,13 @@ class UniversalLicenseCenter:
                 pass
             self._root = None
 
-    def _fetch_live_license_status(self) -> None:
-        hardware_id = self.hardware.get_fingerprint()
-
-        try:
-            status_response = self.client.get_license_status(hardware_id)
-
-            if not status_response.get('success'):
-                return
-
-            api_status = status_response.get('status', 'no_license')
-
-            if api_status == 'trial':
-                cust = status_response.get('customer', {})
-                lic = status_response.get('license', {})
-                plan = status_response.get('plan', {})
-                self._status = LicenseStatus(
-                    valid=True, status='trial',
-                    expiry_date=lic.get('expiry_date'),
-                    days_left=lic.get('days_remaining', 0),
-                    plan=plan.get('name', 'Trial'),
-                    hardware_id=hardware_id,
-                    customer_name=cust.get('name'),
-                    customer_email=cust.get('email'),
-                    customer_mobile=cust.get('mobile', ''),
-                    trial_active=True,
-                )
-                self.cache.set_license_status(self._status.to_dict())
-                self._unlock_application()
-                return
-
-            elif api_status == 'licensed':
-                cust = status_response.get('customer', {})
-                lic = status_response.get('license', {})
-                plan = status_response.get('plan', {})
-                devices = status_response.get('devices', {})
-                self._status = LicenseStatus(
-                    valid=True, status='licensed',
-                    expiry_date=lic.get('expiry_date'),
-                    days_left=lic.get('days_remaining', 0),
-                    plan=plan.get('name'),
-                    hardware_id=hardware_id,
-                    license_key=lic.get('license_key'),
-                    customer_name=cust.get('name'),
-                    customer_email=cust.get('email'),
-                    customer_mobile=cust.get('mobile', ''),
-                    max_devices=devices.get('maximum', 999),
-                    device_count=devices.get('current', 0),
-                )
-                self.cache.set_license_status(self._status.to_dict())
-                self.cache.mark_has_ever_activated_paid_license()
-                self._unlock_application()
-                return
-
-            elif api_status == 'expired':
-                cust = status_response.get('customer', {})
-                lic = status_response.get('license', {})
-                plan = status_response.get('plan', {})
-                self._status = LicenseStatus(
-                    valid=False, status='expired',
-                    expiry_date=lic.get('expiry_date'),
-                    days_left=0,
-                    plan=plan.get('name'),
-                    hardware_id=hardware_id,
-                    license_key=lic.get('license_key'),
-                    customer_name=cust.get('name'),
-                    customer_email=cust.get('email'),
-                    customer_mobile=cust.get('mobile', ''),
-                    message='Your license has expired. Please renew.'
-                )
-                self.cache.set_license_status(self._status.to_dict())
-                return
-
-            elif api_status == 'inactive':
-                cust = status_response.get('customer', {})
-                lic = status_response.get('license', {})
-                plan = status_response.get('plan', {})
-                self._status = LicenseStatus(
-                    valid=False, status='inactive',
-                    plan=plan.get('name'),
-                    hardware_id=hardware_id,
-                    license_key=lic.get('license_key'),
-                    customer_name=cust.get('name'),
-                    customer_email=cust.get('email'),
-                    customer_mobile=cust.get('mobile', ''),
-                    message='Your license is inactive. Please contact support.'
-                )
-                self.cache.set_license_status(self._status.to_dict())
-                return
-
-            else:
-                cust = status_response.get('customer', {})
-                self._status = LicenseStatus(
-                    valid=False, status=api_status,
-                    hardware_id=hardware_id,
-                    customer_name=cust.get('name'),
-                    customer_email=cust.get('email'),
-                    message=status_response.get('message', 'No active license or trial found.')
-                )
-
-        except Exception as e:
-            pass
-
     def _show_license_center(self, trial_consumed: bool = False) -> Dict[str, Any]:
-        self._fetch_live_license_status()
-        post_fetch_status = self._status.status if self._status else 'None'
+        # ULC must never run the Decision Engine.
+        # LicenseEngine.initialize() already determined the status.
+        # We use the pre-initialised initial_status passed from startup.
+        pre_status = self._status.status if self._status else 'None'
         LiveLog.log("Opening Universal License Center",
-                     f"Status: {post_fetch_status}, "
+                     f"Status: {pre_status}, "
                      f"trial_consumed={trial_consumed}")
         self._trial_consumed = trial_consumed
         self._root = tk.Toplevel()
@@ -493,7 +393,8 @@ class UniversalLicenseCenter:
         self._output_label.pack(fill="x", pady=(8, 0))
 
     def _refresh_ui(self):
-        self._fetch_live_license_status()
+        # ULC must never run the Decision Engine.
+        # Refresh only rebuilds the UI from the current pre-initialised status.
         if self._btn_frame and self._btn_frame.winfo_exists():
             for child in self._btn_frame.winfo_children():
                 child.destroy()

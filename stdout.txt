@@ -1,0 +1,17 @@
+[22:18:29] License Engine initialize — hardware: d382a42f39d54ba3...
+22:18:30 LiveLog: Decision — server returned error, falling through
+22:18:30 LiveLog: Decision — no_license (new customer)
+[22:18:30] [SDK] [INFO] License Center started — Application lock engaged
+[22:18:30] License Center started — Application lock engaged
+[22:18:30] [SDK] [WARNING] ULC shown without pre-initialised status — Defaulting to no_license. Decision Engine must be called before ULC.
+[22:18:30] [SDK] [INFO] Using pre-initialised status: no_license
+[22:18:30] ULC using status — Status: no_license
+[22:18:30] [SDK] [INFO] Opening Universal License Center — Status: no_license, trial_consumed=False
+[22:18:30] Opening Universal License Center — Status: no_license, trial_consumed=False
+[22:18:31] Opening Universal License Center — Status: no_license, trial_consumed=False
+[22:19:01] Trial started — Opening Welcome Dialog
+[22:19:01] [TRIAL] [INFO] Starting trial flow
+[22:19:01] Opening Welcome Dialog
+[22:19:01] [WELCOME] [INFO] Opening Welcome Dialog
+[22:19:47] Customer exists — Trial already consumed, showing ULC
+[22:20:19] ULC closed — Application locked - exiting process
