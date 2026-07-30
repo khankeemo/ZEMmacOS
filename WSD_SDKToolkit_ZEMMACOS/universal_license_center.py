@@ -514,6 +514,11 @@ class UniversalLicenseCenter:
             self._root.destroy()
         except Exception:
             pass
+        if hasattr(self, '_instance_lock'):
+            try:
+                self._instance_lock._release()
+            except Exception:
+                pass
         # Exit behaviour decided dynamically at close time based on actual license validity
         if self._status and self._status.valid:
             return
