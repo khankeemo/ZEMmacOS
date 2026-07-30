@@ -3,6 +3,7 @@ import json
 import os
 import platform
 import sys
+import tempfile
 import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, Optional
@@ -109,6 +110,12 @@ class UniversalLicenseCenter:
             self.on_license_ready(False)
 
     def show(self) -> Dict[str, Any]:
+        _lock_path = os.path.join(tempfile.gettempdir(), 'UniversalLicenseCenter.opencode.lock')
+        try:
+            if os.path.exists(_lock_path):
+                os.unlink(_lock_path)
+        except Exception:
+            pass
         self._instance_lock = SingleInstance('UniversalLicenseCenter')
         self._log("SDK", "INFO", "License Center started", "Application lock engaged")
         LiveLog.log("License Center started", "Application lock engaged")
