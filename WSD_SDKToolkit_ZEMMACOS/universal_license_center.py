@@ -167,7 +167,10 @@ class UniversalLicenseCenter:
             product_name=self._product_name,
             operation=operation,
             engine=self.engine,
+            reentry=self._reentry,
         ).show()
+        if self._reentry:
+            self._on_ulc_close()
 
     def _show_error_dialog(self, title: str, message: str) -> None:
         LiveLog.log("Showing Error Dialog", f"{title}: {message}")
@@ -398,6 +401,8 @@ class UniversalLicenseCenter:
         self._output_label.pack(fill="x", pady=(8, 0))
 
     def _refresh_ui(self):
+        if not self._root or not self._root.winfo_exists():
+            return
         # ULC must never run the Decision Engine.
         # Refresh only rebuilds the UI from the current pre-initialised status.
         if self._btn_frame and self._btn_frame.winfo_exists():

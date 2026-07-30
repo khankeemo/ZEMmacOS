@@ -11,12 +11,14 @@ from .live_log import LiveLog
 class SuccessDialog:
     def __init__(self, parent: tk.Toplevel, status: LicenseStatus,
                  product_name: str, operation: str = "activation",
-                 engine: Optional[LicenseEngine] = None):
+                 engine: Optional[LicenseEngine] = None,
+                 reentry: bool = False):
         self._parent = parent
         self._status = status
         self._product_name = product_name
         self._operation = operation
         self._engine = engine
+        self._reentry = reentry
         self._root: Optional[tk.Toplevel] = None
 
         # Branding / color constants
@@ -96,7 +98,8 @@ class SuccessDialog:
                        justify="center", wraplength=460)
         msg.pack(pady=(0, 20))
 
-        btn = tk.Button(main, text="Restart Now",
+        btn_text = "Close" if self._reentry else "Restart Now"
+        btn = tk.Button(main, text=btn_text,
                         font=("Segoe UI", 13, "bold"),
                         bg="#6366f1", fg="white", relief="flat",
                         command=self._on_restart, cursor="hand2",
@@ -133,6 +136,8 @@ class SuccessDialog:
                 self._root.destroy()
             except Exception:
                 pass
+        if self._reentry:
+            return
         if self._parent and self._parent != self._root:
             try:
                 self._parent.destroy()
@@ -154,10 +159,12 @@ class SuccessDialog:
             pass
 
     def _on_restart(self):
-        LiveLog.log("Restart requested", "User clicked Restart Now")
         self._save_runtime_state()
         self._flush_cache()
         self._close_all_windows()
+        if self._reentry:
+            LiveLog.log("Dialog closed", "Returning to Dashboard")
+            return
         cmd = [sys.executable] + sys.argv
         LiveLog.log("Restart command", f"Executing: {' '.join(cmd[:3])}...")
         try:
