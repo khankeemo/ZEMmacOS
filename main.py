@@ -248,6 +248,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
         self.log_live("STARTUP", "INFO", "Building UI")
         self.build_main_ui()
         self.settings_service.apply_saved_theme()
+        self.root.state('zoomed')
         self.root.deiconify()
         self.show_dashboard()
         self.log_live("STARTUP", "INFO", "UI built, dashboard shown")

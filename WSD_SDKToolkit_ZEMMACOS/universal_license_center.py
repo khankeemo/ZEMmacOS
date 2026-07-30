@@ -202,8 +202,8 @@ class UniversalLicenseCenter:
         self._trial_consumed = trial_consumed
         self._root = tk.Toplevel()
         self._root.title("Universal License Center")
-        self._root.geometry("600x820")
-        self._root.minsize(520, 660)
+        self._root.geometry("680x880")
+        self._root.minsize(600, 700)
         self._root.resizable(True, True)
         self._root.configure(bg=self._bg)
         self._root.transient()
@@ -852,7 +852,7 @@ class UniversalLicenseCenter:
     def _show_request_dialog(self, title: str, category: str):
         dialog = tk.Toplevel(self._root)
         dialog.title(title)
-        dialog.geometry("520x500")
+        dialog.geometry("580x600")
         dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
