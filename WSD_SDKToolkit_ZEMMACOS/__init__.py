@@ -1,4 +1,4 @@
-"""ZEM MAC OS SDK - Universal License Center"""
+"""Universal SDK — License Center, API client, hardware detection, and messaging"""
 __version__ = "1.0.0"
 __all__ = [
     "UniversalLicenseCenter",
@@ -6,14 +6,14 @@ __all__ = [
     "SuccessDialog",
     "RestartDialog",
     "LicenseEngine", "LicenseStatus",
-    "ApiClient", "ApiError",
+    "ApiClient", "ApiError", "ConnectionUnavailable",
     "HardwareDetector",
     "CacheManager",
     "LiveLog",
     "SingleInstance",
 ]
 
-from .client import ApiClient, ApiError
+from .client import ApiClient, ApiError, ConnectionUnavailable
 from .license_engine import LicenseEngine, LicenseStatus
 from .hardware import HardwareDetector
 from .cache import CacheManager

@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .client import ApiClient, ApiError
+from .client import ApiClient, ApiError, ConnectionUnavailable
 from .hardware import HardwareDetector
 from .cache import CacheManager
 
@@ -568,6 +568,18 @@ class LicenseEngine:
                 hardware_id=hardware_id or self._hardware.get_fingerprint(),
                 sdk_version=sdk_version, runtime_type=runtime_type,
             )
+        except ConnectionUnavailable:
+            self._cache.queue_message({
+                'category': category, 'customer_email': customer_email,
+                'customer_name': customer_name, 'subject': subject,
+                'message': message, 'product_id': product_id,
+                'license_key': license_key,
+                'hardware_id': hardware_id or self._hardware.get_fingerprint(),
+                'sdk_version': sdk_version, 'runtime_type': runtime_type,
+            })
+            return {'success': False, 'message': 'Message queued - will send when online.', 'queued': True}
+        except ApiError:
+            raise
         except Exception as e:
             self._cache.queue_message({
                 'category': category, 'customer_email': customer_email,
@@ -577,7 +589,7 @@ class LicenseEngine:
                 'hardware_id': hardware_id or self._hardware.get_fingerprint(),
                 'sdk_version': sdk_version, 'runtime_type': runtime_type,
             })
-            return {'success': False, 'message': 'Message queued for delivery when online.', 'queued': True}
+            return {'success': False, 'message': 'Message queued - will send when online.', 'queued': True}
 
     def get_conversation(self, conversation_id: str) -> Dict[str, Any]:
         return self._client.get_conversation(conversation_id)
@@ -588,7 +600,7 @@ class LicenseEngine:
         try:
             return self._client.reply_to_conversation(
                 conversation_id, message, customer_name, customer_email)
-        except Exception:
+        except ConnectionUnavailable:
             cached = self._cache.get_license_status() or {}
             self._cache.queue_message({
                 'category': 'general',
@@ -597,7 +609,9 @@ class LicenseEngine:
                 'subject': f'Reply to conversation {conversation_id}',
                 'message': message,
             })
-            return {'success': False, 'message': 'Reply queued for delivery when online.', 'queued': True}
+            return {'success': False, 'message': 'Reply queued - will send when online.', 'queued': True}
+        except ApiError:
+            raise
 
     def list_conversations(self, email: str) -> Dict[str, Any]:
         return self._client.list_conversations(email)

@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, Optional
 
-from .client import ApiClient
+from .client import ApiClient, ApiError
 from .license_engine import LicenseEngine, LicenseStatus
 from .hardware import HardwareDetector
 from .cache import CacheManager
@@ -852,7 +852,7 @@ class UniversalLicenseCenter:
     def _show_request_dialog(self, title: str, category: str, parent: Optional[tk.Widget] = None):
         dialog = tk.Toplevel(parent or self._root)
         dialog.title(title)
-        dialog.geometry("580x600")
+        dialog.geometry("580x633")
         dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
@@ -869,23 +869,39 @@ class UniversalLicenseCenter:
 
         status = self._status
 
-        fields_data = [
-            ("Customer", status.customer_name if status else "-"),
-            ("Email", status.customer_email if status else "-"),
-            ("Product", self._product_name),
-        ]
-        if status and status.plan:
-            fields_data.append(("Plan", status.plan))
-        if status and status.license_key:
-            fields_data.append(("License Key", status.license_key[:8] + "..." if len(status.license_key) > 8 else status.license_key))
-
-        for label, value in fields_data:
-            row = tk.Frame(main, bg=self._card_bg)
+        def _add_field_row(parent_frame, label_text, entry_var, default_value):
+            row = tk.Frame(parent_frame, bg=self._card_bg)
             row.pack(fill="x", pady=2)
-            tk.Label(row, text=f"{label}:", font=("Segoe UI", 10),
+            tk.Label(row, text=f"{label_text}:", font=("Segoe UI", 10),
                      fg=self._text_secondary, bg=self._card_bg, width=14, anchor="w").pack(side="left")
-            tk.Label(row, text=value, font=("Segoe UI", 10, "bold"),
-                     fg=self._text_primary, bg=self._card_bg, anchor="w").pack(side="left")
+            entry = tk.Entry(row, font=("Segoe UI", 10), relief="solid", bd=1,
+                             textvariable=entry_var)
+            entry.pack(side="left", fill="x", expand=True)
+            if default_value:
+                entry_var.set(default_value)
+            return entry
+
+        def _add_label_row(parent_frame, label_text, value_text):
+            row = tk.Frame(parent_frame, bg=self._card_bg)
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=f"{label_text}:", font=("Segoe UI", 10),
+                     fg=self._text_secondary, bg=self._card_bg, width=14, anchor="w").pack(side="left")
+            tk.Label(row, text=value_text, font=("Segoe UI", 10, "bold"),
+                     fg=self._text_primary, bg=self._card_bg, anchor="w").pack(side="left", fill="x", expand=True)
+
+        customer_name_var = tk.StringVar()
+        customer_email_var = tk.StringVar()
+
+        _add_field_row(main, "Name", customer_name_var,
+                       status.customer_name if status else "")
+        _add_field_row(main, "Email", customer_email_var,
+                       status.customer_email if status else "")
+        _add_label_row(main, "Product", self._product_name)
+        if status and status.plan:
+            _add_label_row(main, "Plan", status.plan)
+        if status and status.license_key:
+            display_key = status.license_key[:8] + "..." if len(status.license_key) > 8 else status.license_key
+            _add_label_row(main, "License Key", display_key)
 
         sep = tk.Frame(main, bg=self._border, height=1)
         sep.pack(fill="x", pady=12)
@@ -904,15 +920,23 @@ class UniversalLicenseCenter:
 
         def do_send():
             message = msg_text.get("1.0", "end-1c").strip()
+            name = customer_name_var.get().strip()
+            email = customer_email_var.get().strip()
             if not message:
                 status_label.config(text="Please enter a message", fg=self._error)
+                return
+            if not name:
+                status_label.config(text="Please enter your name", fg=self._error)
+                return
+            if not email or "@" not in email:
+                status_label.config(text="Please enter a valid email address", fg=self._error)
                 return
             try:
                 LiveLog.log(f"Sending {category} request", f"Category: {category}")
                 result = self.engine.create_communication(
                     category=category,
-                    customer_email=status.customer_email if status else '',
-                    customer_name=status.customer_name if status else '',
+                    customer_email=email,
+                    customer_name=name,
                     message=message,
                     license_key=status.license_key if status else '',
                     hardware_id=self.hardware.get_fingerprint(),
@@ -929,6 +953,9 @@ class UniversalLicenseCenter:
                     else:
                         err = result.get('message', 'Failed to send message')
                         status_label.config(text=str(err), fg=self._error)
+            except ApiError as e:
+                LiveLog.log(f"{category} request error", f"{e.status_code}: {e.message}")
+                status_label.config(text=e.message, fg=self._error)
             except Exception as e:
                 LiveLog.log(f"{category} request error", str(e))
                 status_label.config(text=str(e), fg=self._error)

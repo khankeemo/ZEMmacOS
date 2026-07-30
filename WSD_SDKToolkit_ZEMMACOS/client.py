@@ -1,4 +1,4 @@
-"""API Client for ZEM MAC OS License API"""
+"""API Client for Universal License Platform"""
 import time
 from typing import Any, Dict, Optional
 
@@ -19,6 +19,12 @@ class ApiError(Exception):
         self.message = message
         self.data = data or {}
         super().__init__(f"API Error {status_code}: {message}")
+
+
+class ConnectionUnavailable(ApiError):
+    """Backend is genuinely unreachable (network error / timeout)."""
+    def __init__(self, message: str):
+        super().__init__(503, message)
 
 
 class ApiClient:
@@ -107,12 +113,12 @@ class ApiClient:
                 if attempt < max_retries:
                     time.sleep((attempt + 1) * 2)
                     continue
-                raise ApiError(504, f'Request timeout after {self.timeout}s')
+                raise ConnectionUnavailable(f'Request timeout after {self.timeout}s')
             except requests.exceptions.ConnectionError as e:
                 if attempt < max_retries:
                     time.sleep((attempt + 1) * 2)
                     continue
-                raise ApiError(503, f'Connection error: {str(e)}')
+                raise ConnectionUnavailable(f'Connection error: {str(e)}')
             except ApiError:
                 raise
             except Exception as e:
