@@ -134,7 +134,7 @@ class UniversalLicenseCenter:
             LiveLog.log("License valid", "Launching application directly")
             return {'action': 'launch', 'status': self._status.to_dict(), 'unlocked': True}
 
-        self._trial_consumed = self.cache.is_onboarding_complete()
+        self._trial_consumed = self.cache.peek_onboarding_complete()
 
         self._log("SDK", "INFO", "Opening Universal License Center",
                   f"Status: {status}, trial_consumed={self._trial_consumed}")
@@ -550,8 +550,9 @@ class UniversalLicenseCenter:
             fg = self._error
         elif self._status.status == 'trial':
             lines.append("Status: TRIAL ACTIVE")
-            if self._product_name:
-                lines.append(f"Product: {self._product_name}")
+            display_product = self._status.product_name or self._product_name
+            if display_product:
+                lines.append(f"Product: {display_product}")
             if self._status.plan:
                 lines.append(f"Plan: {self._status.plan}")
             if self._status.customer_name:
@@ -569,8 +570,9 @@ class UniversalLicenseCenter:
             fg = self._success
         elif self._status.status in ('active', 'licensed'):
             lines.append("Status: ACTIVE")
-            if self._product_name:
-                lines.append(f"Product: {self._product_name}")
+            display_product = self._status.product_name or self._product_name
+            if display_product:
+                lines.append(f"Product: {display_product}")
             if self._status.plan:
                 lines.append(f"Plan: {self._status.plan}")
             if self._status.customer_name:

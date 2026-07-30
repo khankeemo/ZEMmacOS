@@ -29,6 +29,7 @@ class LicenseStatus:
         self.customer_email = kwargs.get('customer_email')
         self.customer_phone = kwargs.get('customer_phone')
         self.customer_mobile = kwargs.get('customer_mobile')
+        self.product_name = kwargs.get('product_name')
         self.max_devices = kwargs.get('max_devices', 999)
         self.device_count = kwargs.get('device_count', 0)
 
@@ -47,6 +48,7 @@ class LicenseStatus:
             'customer_email': self.customer_email,
             'customer_phone': self.customer_phone,
             'customer_mobile': self.customer_mobile,
+            'product_name': self.product_name,
             'max_devices': self.max_devices,
             'device_count': self.device_count,
         }
@@ -67,6 +69,7 @@ class LicenseStatus:
             customer_email=data.get('customer_email'),
             customer_phone=data.get('customer_phone'),
             customer_mobile=data.get('customer_mobile'),
+            product_name=data.get('product_name'),
             max_devices=data.get('max_devices', 999),
             device_count=data.get('device_count', 0),
         )
@@ -150,8 +153,6 @@ class LicenseEngine:
         if not status:
             return False
         if status.status == 'trial':
-            if status.days_left is not None and status.days_left <= 0:
-                return False
             if status.expiry_date:
                 try:
                     expiry = datetime.fromisoformat(status.expiry_date.replace('Z', '+00:00'))
@@ -206,9 +207,10 @@ class LicenseEngine:
                         status=api_status,
                         expiry_date=lic.get('expiry_date'),
                         days_left=lic.get('days_remaining', 0),
-                        plan=plan.get('name', 'Trial' if api_status == 'trial' else ''),
+                        plan=plan.get('name'),
                         hardware_id=hardware_id,
                         license_key=lic.get('license_key', ''),
+                        product_name=product.get('name'),
                         customer_name=cust.get('name'),
                         customer_email=cust.get('email'),
                         customer_mobile=cust.get('mobile'),
@@ -293,6 +295,7 @@ class LicenseEngine:
                 plan=lic.get('plan'),
                 hardware_id=hardware_id,
                 license_key=lic.get('license_key'),
+                product_name=self.config.get('product', {}).get('name'),
                 customer_name=cust.get('name'),
                 customer_email=cust.get('email'),
                 customer_phone=cust.get('phone'),
@@ -319,6 +322,7 @@ class LicenseEngine:
                 plan=lic.get('plan'),
                 hardware_id=self._hardware.get_fingerprint(),
                 license_key=license_key,
+                product_name=self.config.get('product', {}).get('name'),
                 customer_name=cust.get('name'),
                 customer_email=cust.get('email'),
                 customer_phone=cust.get('phone'),
@@ -347,6 +351,7 @@ class LicenseEngine:
                 plan=lic.get('plan'),
                 hardware_id=hardware_id,
                 license_key=lic.get('license_key'),
+                product_name=self.config.get('product', {}).get('name'),
                 customer_name=cust.get('name'),
                 customer_email=cust.get('email'),
                 customer_phone=cust.get('phone'),
@@ -374,17 +379,19 @@ class LicenseEngine:
         result = self._client.start_trial(email, customer_name=customer_name, customer_data=customer_data)
         if result.get('success'):
             trial_data = result.get('trial', {}) if isinstance(result.get('trial'), dict) else result
+            customer_data = customer_data or {}
             self._status = LicenseStatus(
                 valid=True,
                 status='trial',
                 expiry_date=trial_data.get('expiry_date'),
                 days_left=trial_data.get('days_left', trial_data.get('duration_days', 0)),
-                plan=trial_data.get('plan', 'Trial'),
+                plan=trial_data.get('plan'),
                 hardware_id=self._hardware.get_fingerprint(),
+                product_name=self.config.get('product', {}).get('name'),
                 customer_name=trial_data.get('customer_name') or customer_name,
                 customer_email=trial_data.get('customer_email') or email,
                 customer_phone=trial_data.get('customer_phone'),
-                customer_mobile=trial_data.get('customer_mobile')
+                customer_mobile=trial_data.get('customer_mobile') or customer_data.get('mobile')
             )
             if self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
@@ -409,6 +416,7 @@ class LicenseEngine:
                 plan=lic.get('plan'),
                 hardware_id=hardware_id,
                 license_key=lic.get('license_key'),
+                product_name=self.config.get('product', {}).get('name'),
                 customer_name=result.get('customer', {}).get('name'),
                 customer_email=result.get('customer', {}).get('email'),
                 customer_phone=result.get('customer', {}).get('phone'),
@@ -438,6 +446,7 @@ class LicenseEngine:
                 plan=lic.get('plan'),
                 hardware_id=hardware_id,
                 license_key=self._license_key,
+                product_name=self.config.get('product', {}).get('name'),
                 customer_name=result.get('customer', {}).get('name'),
                 customer_email=result.get('customer', {}).get('email'),
                 customer_phone=result.get('customer', {}).get('phone'),
@@ -486,6 +495,7 @@ class LicenseEngine:
                 plan=lic.get('plan'),
                 hardware_id=hardware_id,
                 license_key=key,
+                product_name=self.config.get('product', {}).get('name'),
                 customer_name=result.get('customer', {}).get('name'),
                 customer_email=result.get('customer', {}).get('email'),
                 customer_phone=result.get('customer', {}).get('phone'),

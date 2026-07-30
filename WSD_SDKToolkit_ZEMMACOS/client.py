@@ -225,8 +225,11 @@ class ApiClient:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
         url = f"{self.base_url}/internal/backend/license/status?hardware_id={hardware_id}"
+        api_path = f"/internal/backend/license/status"
+        headers = self._sign_request({}, method='GET', path=api_path, query=f"hardware_id={hardware_id}")
+        headers['Content-Type'] = 'application/json'
         try:
-            resp = requests.get(url, timeout=self.timeout)
+            resp = requests.get(url, headers=headers, timeout=self.timeout)
             if resp.status_code == 200:
                 return resp.json()
             return {'success': False, 'status': 'no_license', 'error': f'HTTP {resp.status_code}'}
