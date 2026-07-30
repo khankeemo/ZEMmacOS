@@ -153,6 +153,8 @@ class LicenseEngine:
         if not status:
             return False
         if status.status == 'trial':
+            if status.days_left is not None and status.days_left <= 0:
+                return False
             if status.expiry_date:
                 try:
                     expiry = datetime.fromisoformat(status.expiry_date.replace('Z', '+00:00'))
