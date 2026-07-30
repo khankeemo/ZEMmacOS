@@ -417,6 +417,25 @@ class ZEMmacOSApp(ZEMmacOSUI):
     # -----------------------------------------------------------------
     # LICENSE REFRESH — re-reads cached client-side state
     # -----------------------------------------------------------------
+    def _on_contact_support(self):
+        self.log_live("SUPPORT", "INFO", "Opening universal support dialog")
+        if hasattr(self, "_inactive_license_dialog") and getattr(self, "_inactive_license_dialog_open", False):
+            self._inactive_license_dialog_open = False
+            try:
+                if self._inactive_license_dialog and self._inactive_license_dialog.winfo_exists():
+                    self._inactive_license_dialog.destroy()
+            except Exception:
+                pass
+            self._inactive_license_dialog = None
+        from WSD_SDKToolkit_ZEMMACOS.universal_license_center import UniversalLicenseCenter
+        center = UniversalLicenseCenter(
+            config_path=_get_sdk_config_path(),
+            log_fn=self.log_live,
+            initial_status=self.license_status,
+            reentry=True,
+        )
+        center._show_request_dialog("Support", "support", parent=self.root)
+
     def refresh_license(self):
         if not self.license_engine:
             return

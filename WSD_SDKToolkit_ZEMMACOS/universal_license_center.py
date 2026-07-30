@@ -849,8 +849,8 @@ class UniversalLicenseCenter:
         LiveLog.log("Opening sales enquiry", "Showing sales dialog")
         self._show_request_dialog("Sales Enquiry", "sales")
 
-    def _show_request_dialog(self, title: str, category: str):
-        dialog = tk.Toplevel(self._root)
+    def _show_request_dialog(self, title: str, category: str, parent: Optional[tk.Widget] = None):
+        dialog = tk.Toplevel(parent or self._root)
         dialog.title(title)
         dialog.geometry("580x600")
         dialog.configure(bg=self._bg)
