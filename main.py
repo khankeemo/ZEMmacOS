@@ -1224,32 +1224,42 @@ class ZEMmacOSApp(ZEMmacOSUI):
 
     def on_clean_temp(self):
         self.log("Cleaning temporary files...", "info")
+        # Show confirmation dialog first
+        self.show_clean_temp_dialog(self._do_clean_temp)
+
+    def _do_clean_temp(self):
         pycache_count = self.cleaner.clear_pycache()
         pyc_count = self.cleaner.clear_pyc_files()
         self.cleaner.clear_gibmacos_temp()
-        self.log(f"Cleanup complete ({pycache_count + pyc_count} items)", "success")
-        messagebox.showinfo("Cleanup Complete", f"Removed {pycache_count + pyc_count} temporary items")
+        total = pycache_count + pyc_count
+        self.log(f"Cleanup complete ({total} items)", "success")
+        # Show completion dialog
+        self.show_clean_temp_complete(total)
 
     def on_clean_logs(self):
-        if messagebox.askyesno("Delete All Logs", "WARNING: This will delete ALL log files.\n\nContinue?"):
-            self.log("Deleting ALL log files...", "warning")
-            logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-            count = 0
-            current_log = self.logger.get_log_file_path() if hasattr(self, 'logger') else None
+        # Show confirmation dialog first
+        self.show_clean_logs_dialog(self._do_clean_logs)
 
-            if os.path.exists(logs_dir):
-                for f in os.listdir(logs_dir):
-                    if f.endswith(".log"):
-                        file_path = os.path.join(logs_dir, f)
-                        if current_log and os.path.abspath(file_path) == os.path.abspath(current_log):
-                            continue
-                        try:
-                            os.remove(file_path)
-                            count += 1
-                        except OSError:
-                            pass
-            self.log(f"Deleted {count} log file(s)", "success")
-            messagebox.showinfo("Logs Deleted", f"Deleted {count} log files")
+    def _do_clean_logs(self):
+        self.log("Deleting ALL log files...", "warning")
+        logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+        count = 0
+        current_log = self.logger.get_log_file_path() if hasattr(self, 'logger') else None
+
+        if os.path.exists(logs_dir):
+            for f in os.listdir(logs_dir):
+                if f.endswith(".log"):
+                    file_path = os.path.join(logs_dir, f)
+                    if current_log and os.path.abspath(file_path) == os.path.abspath(current_log):
+                        continue
+                    try:
+                        os.remove(file_path)
+                        count += 1
+                    except OSError:
+                        pass
+        self.log(f"Deleted {count} log file(s)", "success")
+        # Show completion dialog
+        self.show_clean_logs_complete(count)
 
     def toggle_theme(self):
         self.settings_service.toggle_and_save_theme()

@@ -325,6 +325,237 @@ class ZEMmacOSUI:
         return btn
 
     # -----------------------------------------------------------------
+    # CLEAN TEMP FILES DIALOG
+    # -----------------------------------------------------------------
+    def show_clean_temp_dialog(self, on_confirm_callback):
+        """Show Clean Temp Files confirmation dialog"""
+        c = self.colors
+        W, H = 380, 280
+
+        def cleanup():
+            if hasattr(self, "_clean_temp_dialog") and self._clean_temp_dialog:
+                try:
+                    self._clean_temp_dialog.destroy()
+                except Exception:
+                    pass
+                self._clean_temp_dialog = None
+
+        d, canvas = self._make_modal_dialog(W, H, close_cb=cleanup)
+        self._clean_temp_dialog = d
+        cx = W // 2
+
+        # Warning icon (circular with exclamation)
+        canvas.create_oval(cx - 24, 32, cx + 24, 80,
+                           fill=c["warning_bg"], outline=c["warning"], width=2)
+        canvas.create_text(cx, 56, text="!",
+                           font=("SF Pro Display", 24, "bold"),
+                           fill=c["warning"], anchor="center")
+
+        # Title
+        canvas.create_text(cx, 112, text="Clean Temporary Files",
+                           font=("SF Pro Display", 16, "bold"),
+                           fill=c["text"], anchor="center")
+
+        # Description
+        canvas.create_text(cx, 144,
+                           text="This will remove __pycache__ folders,\n.pyc/.pyo files, and gibMacOS temp files.",
+                           font=("SF Pro Text", 11),
+                           fill=c["text_secondary"], anchor="center", justify="center")
+
+        # Separator
+        canvas.create_line(40, 188, W - 40, 188, fill=c["border"], width=1)
+
+        # Status/Progress area (initially hidden, shown during operation)
+        status_text_id = canvas.create_text(cx, 208,
+                                            text="",
+                                            font=("SF Pro Text", 10),
+                                            fill=c["accent"], anchor="center")
+
+        # Buttons
+        bw, bh = 110, 34
+        by = 230
+
+        def on_yes():
+            canvas.itemconfig(status_text_id, text="Cleaning...", fill=c["accent"])
+            d.update_idletasks()
+            on_confirm_callback()
+            cleanup()
+
+        self._make_dialog_button(d, "Cancel", c["btn_secondary_bg"], c["text"],
+                                  cleanup,
+                                  cx - bw - 8, by, bw, bh)
+        self._make_dialog_button(d, "Clean", c["warning"], "white",
+                                  on_yes,
+                                  cx + 8, by, bw, bh)
+
+    def show_clean_temp_complete(self, count, on_ok_callback=None):
+        """Show Clean Temp Files completion dialog"""
+        c = self.colors
+        W, H = 340, 220
+
+        def cleanup():
+            if hasattr(self, "_clean_temp_complete_dialog") and self._clean_temp_complete_dialog:
+                try:
+                    self._clean_temp_complete_dialog.destroy()
+                except Exception:
+                    pass
+                self._clean_temp_complete_dialog = None
+            if on_ok_callback:
+                on_ok_callback()
+
+        d, canvas = self._make_modal_dialog(W, H, close_cb=cleanup)
+        self._clean_temp_complete_dialog = d
+        cx = W // 2
+
+        # Success icon
+        canvas.create_oval(cx - 24, 28, cx + 24, 76,
+                           fill=c["success_bg"], outline=c["success"], width=2)
+        canvas.create_text(cx, 52, text="✓",
+                           font=("SF Pro Display", 22, "bold"),
+                           fill=c["success"], anchor="center")
+
+        # Title
+        canvas.create_text(cx, 96, text="Cleanup Complete",
+                           font=("SF Pro Display", 16, "bold"),
+                           fill=c["text"], anchor="center")
+
+        # Message
+        canvas.create_text(cx, 132,
+                           text=f"Removed {count} temporary item(s)",
+                           font=("SF Pro Text", 11),
+                           fill=c["text_secondary"], anchor="center")
+
+        # OK button
+        bw, bh = 100, 34
+        by = 170
+
+        def on_ok():
+            cleanup()
+
+        self._make_dialog_button(d, "OK", c["success"], "white",
+                                  on_ok,
+                                  cx - bw // 2, by, bw, bh)
+
+    # -----------------------------------------------------------------
+    # CLEAN LOG FILES DIALOG
+    # -----------------------------------------------------------------
+    def show_clean_logs_dialog(self, on_confirm_callback):
+        """Show Clean Log Files confirmation dialog"""
+        c = self.colors
+        W, H = 380, 300
+
+        def cleanup():
+            if hasattr(self, "_clean_logs_dialog") and self._clean_logs_dialog:
+                try:
+                    self._clean_logs_dialog.destroy()
+                except Exception:
+                    pass
+                self._clean_logs_dialog = None
+
+        d, canvas = self._make_modal_dialog(W, H, close_cb=cleanup)
+        self._clean_logs_dialog = d
+        cx = W // 2
+
+        # Warning icon (triangle with exclamation)
+        tri_y = 50
+        tri_size = 16
+        canvas.create_polygon(cx, tri_y - tri_size,
+                              cx - tri_size, tri_y + tri_size,
+                              cx + tri_size, tri_y + tri_size,
+                              fill=c["error"], outline="")
+        canvas.create_rectangle(cx - 2, tri_y - 8,
+                                cx + 2, tri_y + 2,
+                                fill="white", outline="")
+        canvas.create_rectangle(cx - 2, tri_y + 4,
+                                cx + 2, tri_y + 8,
+                                fill="white", outline="")
+
+        # Title
+        canvas.create_text(cx, 96, text="Delete All Log Files",
+                           font=("SF Pro Display", 16, "bold"),
+                           fill=c["text"], anchor="center")
+
+        # Warning text
+        canvas.create_text(cx, 130,
+                           text="⚠ This will permanently delete ALL log files.\n\nThis action cannot be undone.",
+                           font=("SF Pro Text", 11),
+                           fill=c["text_secondary"], anchor="center", justify="center")
+
+        # Separator
+        canvas.create_line(40, 184, W - 40, 184, fill=c["border"], width=1)
+
+        # Status area
+        status_text_id = canvas.create_text(cx, 204,
+                                            text="",
+                                            font=("SF Pro Text", 10),
+                                            fill=c["accent"], anchor="center")
+
+        # Buttons
+        bw, bh = 110, 34
+        by = 240
+
+        def on_yes():
+            canvas.itemconfig(status_text_id, text="Deleting...", fill=c["accent"])
+            d.update_idletasks()
+            on_confirm_callback()
+            cleanup()
+
+        self._make_dialog_button(d, "Cancel", c["btn_secondary_bg"], c["text"],
+                                  cleanup,
+                                  cx - bw - 8, by, bw, bh)
+        self._make_dialog_button(d, "Delete All", c["error"], "white",
+                                  on_yes,
+                                  cx + 8, by, bw, bh)
+
+    def show_clean_logs_complete(self, count, on_ok_callback=None):
+        """Show Clean Log Files completion dialog"""
+        c = self.colors
+        W, H = 340, 220
+
+        def cleanup():
+            if hasattr(self, "_clean_logs_complete_dialog") and self._clean_logs_complete_dialog:
+                try:
+                    self._clean_logs_complete_dialog.destroy()
+                except Exception:
+                    pass
+                self._clean_logs_complete_dialog = None
+            if on_ok_callback:
+                on_ok_callback()
+
+        d, canvas = self._make_modal_dialog(W, H, close_cb=cleanup)
+        self._clean_logs_complete_dialog = d
+        cx = W // 2
+
+        # Success icon
+        canvas.create_oval(cx - 24, 28, cx + 24, 76,
+                           fill=c["success_bg"], outline=c["success"], width=2)
+        canvas.create_text(cx, 52, text="✓",
+                           font=("SF Pro Display", 22, "bold"),
+                           fill=c["success"], anchor="center")
+
+        # Title
+        canvas.create_text(cx, 96, text="Logs Deleted",
+                           font=("SF Pro Display", 16, "bold"),
+                           fill=c["text"], anchor="center")
+
+        # Message
+        canvas.create_text(cx, 132,
+                           text=f"Deleted {count} log file(s)",
+                           font=("SF Pro Text", 11),
+                           fill=c["text_secondary"], anchor="center")
+
+        # OK button
+        bw, bh = 100, 34
+        by = 170
+
+        def on_ok():
+            cleanup()
+
+        self._make_dialog_button(d, "OK", c["success"], "white",
+                                  on_ok,
+                                  cx - bw // 2, by, bw, bh)
+
+    # -----------------------------------------------------------------
     # NETWORK LOSS DIALOG
     # -----------------------------------------------------------------
     def _show_network_dialog(self, retry_count, on_pause_callback=None):
