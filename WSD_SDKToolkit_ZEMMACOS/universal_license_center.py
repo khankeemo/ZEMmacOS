@@ -192,7 +192,7 @@ class UniversalLicenseCenter:
         self._trial_consumed = trial_consumed
         self._root = tk.Toplevel()
         self._root.title("Universal License Center")
-        self._root.geometry("600x760")
+        self._root.geometry("600x820")
         self._root.minsize(520, 660)
         self._root.resizable(True, True)
         self._root.configure(bg=self._bg)
@@ -514,7 +514,8 @@ class UniversalLicenseCenter:
             self._root.destroy()
         except Exception:
             pass
-        if self._reentry:
+        # Exit behaviour decided dynamically at close time based on actual license validity
+        if self._status and self._status.valid:
             return
         if not self._app_unlocked:
             LiveLog.log("ULC closed", "Application locked - exiting process")

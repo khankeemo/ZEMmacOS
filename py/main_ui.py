@@ -587,7 +587,7 @@ class ZEMmacOSUI:
         if engine and engine.config and engine.config.get('branding', {}).get('support_email'):
             support_email = engine.config['branding']['support_email']
         if not support_email:
-            support_email = "support@example.com"
+            support_email = ''
         self.root.clipboard_append(support_email)
         self.show_toast("Support email copied to clipboard", "info", 2000)
 
@@ -710,8 +710,13 @@ class ZEMmacOSUI:
 
     def _build_dashboard_license_card(self, parent):
         colors = self.colors
+        engine = getattr(self, 'license_engine', None)
+        product_name = ''
+        if engine and engine.config:
+            product_name = engine.config.get("product", {}).get("name", "")
+        subtitle_text = f"{product_name} license status" if product_name else "License status"
         card = ModernCard(parent, colors, title="License Overview",
-                          subtitle="ZEM MAC OS license status", padding=18)
+                          subtitle=subtitle_text, padding=18)
         card.pack(fill=tk.X, pady=12)
         body = card.get_body()
         rows = [
