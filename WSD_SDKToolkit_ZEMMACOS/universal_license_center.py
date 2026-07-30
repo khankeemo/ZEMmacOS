@@ -852,7 +852,7 @@ class UniversalLicenseCenter:
     def _show_request_dialog(self, title: str, category: str, parent: Optional[tk.Widget] = None):
         dialog = tk.Toplevel(parent or self._root)
         dialog.title(title)
-        dialog.geometry("580x633")
+        dialog.geometry("580x535")
         dialog.configure(bg=self._bg)
         dialog.transient(self._root)
         dialog.grab_set()
