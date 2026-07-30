@@ -204,7 +204,10 @@ class ZEMmacOSUI:
         from pathlib import Path
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_path = Path(base) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        center = UniversalLicenseCenter(config_path=str(config_path))
+        status = getattr(self, 'license_status', None)
+        center = UniversalLicenseCenter(config_path=str(config_path),
+                                        initial_status=status,
+                                        reentry=True)
         center.show()
 
     def _nav_click(self, key):
@@ -544,9 +547,18 @@ class ZEMmacOSUI:
         canvas.create_text(cx, 178, text="Please contact administrator:",
                            font=("SF Pro Text", 10),
                            fill=c["muted"], anchor="center")
-        canvas.create_text(cx, 196, text="support@websmithdigital.com",
-                           font=("SF Pro Text", 10, "bold"),
-                           fill=c["accent"], anchor="center")
+        engine = getattr(self, 'license_engine', None)
+        support_email = ''
+        if engine and engine.config and engine.config.get('branding', {}).get('support_email'):
+            support_email = engine.config['branding']['support_email']
+        if support_email:
+            canvas.create_text(cx, 196, text=support_email,
+                               font=("SF Pro Text", 10, "bold"),
+                               fill=c["accent"], anchor="center")
+        else:
+            canvas.create_text(cx, 196, text="Contact Support in Settings",
+                               font=("SF Pro Text", 10, "bold"),
+                               fill=c["accent"], anchor="center")
 
         canvas.create_line(50, 214, W - 50, 214, fill=c["border"], width=1)
 
@@ -570,7 +582,13 @@ class ZEMmacOSUI:
 
     def _on_contact_support(self):
         self.root.clipboard_clear()
-        self.root.clipboard_append("support@websmithdigital.com")
+        engine = getattr(self, 'license_engine', None)
+        support_email = ''
+        if engine and engine.config and engine.config.get('branding', {}).get('support_email'):
+            support_email = engine.config['branding']['support_email']
+        if not support_email:
+            support_email = "support@example.com"
+        self.root.clipboard_append(support_email)
         self.show_toast("Support email copied to clipboard", "info", 2000)
 
     def _on_activate_from_inactive(self):

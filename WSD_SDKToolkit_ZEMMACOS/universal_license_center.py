@@ -38,7 +38,8 @@ class UniversalLicenseCenter:
     def __init__(self, config_path: Optional[str] = None,
                  on_license_ready: Optional[Callable[[bool], None]] = None,
                  log_fn: Optional[Callable[[str, str, str, Optional[str]], None]] = None,
-                 initial_status: Optional[LicenseStatus] = None):
+                 initial_status: Optional[LicenseStatus] = None,
+                 reentry: bool = False):
         self.config = _load_api_config() if config_path is None else self._load_config(config_path)
         self.hardware = HardwareDetector()
         self.cache = CacheManager(self.config)
@@ -55,6 +56,7 @@ class UniversalLicenseCenter:
         self._root: Optional[tk.Toplevel] = None
         self._app_unlocked = False
         self._trial_consumed = False
+        self._reentry = reentry
 
         branding = self.config.get("branding", {})
         self._primary = branding.get("primary_color", "#6366f1")
@@ -110,7 +112,8 @@ class UniversalLicenseCenter:
         self._instance_lock = SingleInstance('UniversalLicenseCenter')
         self._log("SDK", "INFO", "License Center started", "Application lock engaged")
         LiveLog.log("License Center started", "Application lock engaged")
-        self._lock_application()
+        if not self._reentry:
+            self._lock_application()
 
         # ULC must never run the Decision Engine.
         # Decision Engine runs once during LicenseEngine.initialize() in main.py.
@@ -128,7 +131,7 @@ class UniversalLicenseCenter:
         self._log("SDK", "INFO", f"Using pre-initialised status: {status}")
         LiveLog.log("ULC using status", f"Status: {status}")
 
-        if self._status and self._status.valid:
+        if self._status and self._status.valid and not self._reentry:
             self._unlock_application()
             self._log("SDK", "INFO", "Valid license detected — launching application directly")
             LiveLog.log("License valid", "Launching application directly")
@@ -189,8 +192,8 @@ class UniversalLicenseCenter:
         self._trial_consumed = trial_consumed
         self._root = tk.Toplevel()
         self._root.title("Universal License Center")
-        self._root.geometry("600x700")
-        self._root.minsize(520, 620)
+        self._root.geometry("600x760")
+        self._root.minsize(520, 660)
         self._root.resizable(True, True)
         self._root.configure(bg=self._bg)
         self._root.transient()
@@ -288,6 +291,8 @@ class UniversalLicenseCenter:
         refresh_btn = ("Refresh", self._refresh_ui, self._text_secondary)
         close_btn = ("Close", self._on_ulc_close, "#e5e7eb")
         exit_btn = ("Exit", self._on_ulc_close, "#e5e7eb")
+        if self._reentry:
+            exit_btn = close_btn
 
         if is_trial:
             buttons = [
@@ -418,6 +423,8 @@ class UniversalLicenseCenter:
         refresh_btn = ("Refresh", self._refresh_ui, self._text_secondary)
         close_btn = ("Close", self._on_ulc_close, "#e5e7eb")
         exit_btn = ("Exit", self._on_ulc_close, "#e5e7eb")
+        if self._reentry:
+            exit_btn = close_btn
 
         if is_trial:
             buttons = [
@@ -507,6 +514,8 @@ class UniversalLicenseCenter:
             self._root.destroy()
         except Exception:
             pass
+        if self._reentry:
+            return
         if not self._app_unlocked:
             LiveLog.log("ULC closed", "Application locked - exiting process")
             try:

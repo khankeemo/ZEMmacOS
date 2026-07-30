@@ -6905,3 +6905,100 @@ ULC displays the EXACT status from LicenseEngine.initialize()
 3. **The initialized status is passed to ULC** — `initial_status` parameter in constructor
 4. **ULC never makes a second API call** — uses the pre-initialized status directly
 5. **Dashboard and ULC consume the same normalized response** — both use `LicenseStatus` from `initialize()`
+
+---
+
+## Session Summary — 2026-07-30 (AWS-01 Remaining Local SDK — ULC Reentry Mode, Dashboard Synchronization, Exit Behaviour)
+
+### Root Cause Analysis
+
+Five independent issues were identified in the local SDK runtime:
+
+| # | Issue | Root Cause |
+|---|-------|------------|
+| 1 | Activation Flow shows Trial when trial exists | `open_activation()` and `open_renew_license()` in `main.py` created `UniversalLicenseCenter` WITHOUT `initial_status`, causing ULC to default to `no_license` and show "Start Free Trial" even when the user already has an active trial/license |
+| 2 | Exit button kills whole app from Dashboard | `_on_ulc_close()` always called `sys.exit(0)` when `_app_unlocked` was False — but when opened from Dashboard (where the app IS already unlocked and running), ULC should only close itself, not terminate the application |
+| 3 | License Status panel shows warning instead of live data | When ULC was opened without `initial_status`, it defaulted to `no_license` and displayed warning text instead of the actual live license details from the backend |
+| 4 | Dashboard and ULC out of sync | Both consumed the same backend data independently but the ULC re-created its own status without receiving the one that the Dashboard already had, causing divergent displays |
+| 5 | ULC window clips the Exit button | Window height (600x700) was insufficient to display all controls when in certain states |
+
+### Fix Applied — `reentry` Mode
+
+A new `reentry` parameter was added to `UniversalLicenseCenter`. When `True`, the ULC operates as a **dialog-only** window instead of a **startup gate**:
+
+**`universal_license_center.py`:**
+- Added `reentry: bool = False` parameter to `__init__`
+- `show()`: skips `_lock_application()` when in reentry mode (Dashboard is already running, no need to lock)
+- `show()`: skips early return for valid status when in reentry mode (still shows the ULC window)
+- `_on_ulc_close()`: returns early without `sys.exit(0)` when in reentry mode — only closes the ULC dialog
+- `_build_ui()` and `_rebuild_buttons()`: replaces `exit_btn` with `close_btn` when in reentry mode (shows "Close" instead of "Exit")
+- Window height increased from 700 to 760 to fit all controls
+
+**`main.py`:**
+- `open_activation()`: passes `initial_status=self.license_status` and `reentry=True`
+- `open_renew_license()`: passes `initial_status=self.license_status` and `reentry=True`
+
+**`main_ui.py`:**
+- `_on_about_clicked()`: passes `initial_status` and `reentry=True` to ULC
+- `_on_contact_support()`: reads support email from `engine.config.branding` instead of hardcoded value
+- `_show_inactive_license_dialog()`: reads support email from engine config, no hardcoded email
+
+**`settings_ui.py`:**
+- `_show_about_dialog()`: passes `initial_status` and `reentry=True` to ULC
+- `_build_license()`: removed hardcoded product name fallback 'ZEM MAC OS' -> '--'
+
+### Runtime Behaviour After Fix
+
+**Scenario A — Dashboard NOT running (startup gate):**
+- `_open_ulc()` creates ULC without `reentry` (default False)
+- No `initial_status` (or invalid status) -> ULC shows license options
+- User clicks Exit -> `_on_ulc_close()` -> `_reentry` is False, `_app_unlocked` is False -> `sys.exit(0)` -> app closes
+
+**Scenario B — Dashboard IS running (dialog mode):**
+- `open_activation()` creates ULC with `initial_status=self.license_status` and `reentry=True`
+- ULC shows the current license info (trial/licensed) with Activate License / Renew options
+- User clicks Close -> `_on_ulc_close()` -> `_reentry` is True -> returns early -> only ULC dialog closes
+- Dashboard continues running normally
+
+### Activation Flow Fix
+
+When a user with an active trial clicks "Activate License" from the Dashboard:
+1. `open_activation()` passes `initial_status=self.license_status` (which has `status='trial'`, `valid=True`)
+2. ULC `show()` sees valid status but `_reentry=True`, so does NOT return early
+3. ULC displays with trial info and "Activate License" button
+4. No "Start Free Trial" option is shown because status is `trial`, not `no_license`
+
+### Dashboard-ULC Synchronization
+
+Both now use the same `LicenseStatus` object:
+```
+LicenseEngine.initialize() -> LicenseStatus
+    |
+    +--> Dashboard (license_status attribute)
+    |
+    +--> UniversalLicenseCenter (initial_status parameter)
+           |
+           +--> Same LicenseStatus -> same display
+```
+
+### Files Modified
+
+| File | Change | Reason |
+|------|--------|--------|
+| `WSD_SDKToolkit_ZEMMACOS/universal_license_center.py` | Added `reentry` parameter; modified `show()`, `_on_ulc_close()`, `_build_ui()`, `_rebuild_buttons()`; increased height 700->760 | Fix Issues 1, 2, 4, 5 — make ULC support dialog-only mode when opened from Dashboard |
+| `main.py` | Pass `initial_status` and `reentry=True` to ULC in `open_activation()` and `open_renew_license()` | Fix Issues 1, 2, 4 — Dashboard-initiated ULC must know current license state and not kill the app on close |
+| `py/main_ui.py` | Pass `initial_status` and `reentry=True` in `_on_about_clicked()`; read support email from config in `_on_contact_support()` and `_show_inactive_license_dialog()` | Fix Issue 3 — About dialog must not kill app; remove hardcoded business data |
+| `py/settings_ui.py` | Pass `initial_status` and `reentry=True` in `_show_about_dialog()`; replaced product name fallback 'ZEM MAC OS' -> '--' | Fix Issue 3 — About dialog must not kill app; remove hardcoded business data |
+
+### Verification
+
+- Active Trial survives application restart (engine caches + re-fetches from unified endpoint)
+- Dashboard displays correct live Trial information from `license_status`
+- Universal License Center displays the same live license information (via `initial_status`)
+- Activate License never shows Trial once Trial is active (status is `trial`, not `no_license`)
+- Exit button behaves correctly:
+  - Dashboard NOT running -> Exit closes entire app (`_reentry=False`, `_app_unlocked=False`)
+  - Dashboard running -> Close closes only ULC dialog (`_reentry=True`)
+- License Status panel displays live customer/license information
+- Dashboard and ULC stay synchronized (same `LicenseStatus` object)
+- No hardcoded business data remains in SDK source code

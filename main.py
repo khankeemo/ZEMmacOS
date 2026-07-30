@@ -388,6 +388,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
         center = UniversalLicenseCenter(
             config_path=_get_sdk_config_path(),
             log_fn=self.log_live,
+            initial_status=self.license_status,
+            reentry=True,
         )
         result = center.show()
         if result and result.get('status') and result['status'].get('valid'):
@@ -401,6 +403,8 @@ class ZEMmacOSApp(ZEMmacOSUI):
         center = UniversalLicenseCenter(
             config_path=_get_sdk_config_path(),
             log_fn=self.log_live,
+            initial_status=self.license_status,
+            reentry=True,
         )
         result = center.show()
         if result and result.get('status') and result['status'].get('valid'):

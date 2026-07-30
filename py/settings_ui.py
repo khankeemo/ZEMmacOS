@@ -300,7 +300,10 @@ class SettingsUI:
         from pathlib import Path
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_path = Path(base) / 'WSD_SDKToolkit_ZEMMACOS' / 'config' / 'api-config.json'
-        center = UniversalLicenseCenter(config_path=str(config_path))
+        status_obj = getattr(self.app, 'license_status', None)
+        center = UniversalLicenseCenter(config_path=str(config_path),
+                                        initial_status=status_obj,
+                                        reentry=True)
         center.show()
 
     def _build_license(self):
@@ -317,7 +320,7 @@ class SettingsUI:
 
         info_rows = [
             ("Status", status_obj.status.upper() if status_obj else "--"),
-            ("Product", prod.get('name', 'ZEM MAC OS')),
+            ("Product", prod.get('name', '--')),
             ("Plan", (status_obj.plan or '--') if status_obj else "--"),
             ("Expiry", (status_obj.expiry_date or '--') if status_obj else "--"),
             ("Days Remaining", str(getattr(status_obj, 'days_left', 0)) if status_obj else "--"),
