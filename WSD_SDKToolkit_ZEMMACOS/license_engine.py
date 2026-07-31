@@ -233,7 +233,11 @@ class LicenseEngine:
         except Exception as e:
             print(f"{time.strftime('%H:%M:%S')} LiveLog: Warning — unified license status check failed: {e}")
 
-        # Final decision: server confirmed no active state exists
+        # Server returned no active licensed/trial state. Invalidate any cached valid status.
+        # If backend says license is deleted/revoked/expired/inactive, we must NOT fall back to cached valid data.
+        self._cache.invalidate_license_status()
+        self._cache.set('license_key', None)
+
         onboarding_complete = self._cache.is_onboarding_complete()
         if not onboarding_complete:
             onboarding_complete = self._cache.peek_onboarding_complete()
