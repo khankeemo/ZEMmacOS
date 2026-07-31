@@ -1,6 +1,7 @@
 """Welcome Dialog - Customer onboarding with OTP verification and trial generation"""
 import json
 import os
+import re
 import time as _time
 import traceback
 import tkinter as tk
@@ -121,6 +122,10 @@ class WelcomeDialog:
         self._mobile_entry = tk.Entry(mobile_frame, font=('Segoe UI', 12), relief='solid',
                                        bd=1, highlightbackground=self._border)
         self._mobile_entry.pack(side='left', fill='x', expand=True, padx=(8, 0))
+        self._mobile_indicator = tk.Label(mobile_frame, text='', font=('Segoe UI', 12, 'bold'),
+                                          bg=self._card_bg, fg=self._success)
+        self._mobile_indicator.pack(side='left', padx=(6, 0))
+        self._mobile_entry.bind('<KeyRelease>', self._update_mobile_indicator)
         tk.Label(frame, text='Company (optional)', font=('Segoe UI', 11),
                  fg=self._text_secondary, bg=self._card_bg).pack(anchor='w', **padding)
         self._company_entry = tk.Entry(frame, font=('Segoe UI', 12), relief='solid',
@@ -185,8 +190,28 @@ class WelcomeDialog:
             idx = self._country_menu.current()
             if 0 <= idx < len(countries):
                 self._selected_country = countries[idx]
+                self._update_mobile_indicator()
 
         self._country_menu.bind('<<ComboboxSelected>>', on_select)
+
+    def _update_mobile_indicator(self, event=None):
+        if not hasattr(self, '_mobile_indicator'):
+            return
+        mobile = self._mobile_entry.get().strip()
+        if not mobile:
+            self._mobile_indicator.config(text='', fg=self._success)
+            return
+        if not re.fullmatch(r'\d+', mobile):
+            self._mobile_indicator.config(text='\u2716', fg=self._error)
+            return
+        dial = (self._selected_country or {}).get('dial', '') if self._selected_country else ''
+        full = f'{dial}{mobile}'
+        if len(full) < 8:
+            self._mobile_indicator.config(text='', fg=self._success)
+        elif len(full) > 16:
+            self._mobile_indicator.config(text='\u2716', fg=self._error)
+        else:
+            self._mobile_indicator.config(text='\u2713', fg=self._success)
 
     def _on_closing(self):
         self._result = {'skipped': True, 'closed': True}
