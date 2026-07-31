@@ -6829,3 +6829,88 @@ initialize() / refresh_license()
 - Copy the 2 modified SDK files (`client.py`, `license_engine.py`) into `D:\websmith\app\internal\publisher\template\python\` after this session's verification (per AWS-01 workflow).
 
 ---
+
+## Session Summary — 2026-07-31 (AWS-01 Final Universal SDK Validation, Activation & Runtime Verification)
+
+### Objective
+
+Final validation of the LOCAL Python SDK (`D:\ZEMmacOS\WSD_SDKToolkit_ZEMMACOS`) and the ZEMmacOS app layer against the AWS-01 spec: mandatory **Validate → Send OTP → Verify OTP → Enable Activate/Renew** flows, Refresh must fetch the latest backend state, license removal must clear everything and show the **Inactive License** dialog (Activate License / Generate Request), remaining days strictly from backend, universality preserved (no ZEMmacOS-specific logic in the SDK), runtime verification with `python main.py`, then copy verified files to the Websmith Python template.
+
+### Audit Findings (code vs. documented claims)
+
+The docs claimed several AWS-01 fixes were already applied. The audit confirmed the engine-side work (server-first `initialize()`, `_sync_status_from_server()`, `days_remaining` sourcing, cache/key clearing on removal) was real, but found the workflow layer did NOT match the documented spec:
+
+| # | Gap | Evidence |
+|---|-----|----------|
+| 1 | `UniversalLicenseCenter._activate_license()` called `engine.activate(key)` directly — no Validate License API call, no OTP, no Verify step. Direct contradiction of Rule 0A-4 and of the master doc's own claim (line 4629: "Rewrote `_activate_license()` with 3-phase flow") | `universal_license_center.py` |
+| 2 | `_renew_license_flow()` called `engine.renew()` directly after setting the private `self.engine._license_key = key`; no validate/OTP/verify; no "You're a new customer. Please activate your license first." handling | `universal_license_center.py` |
+| 3 | ULC Refresh (`_refresh_ui`) only rebuilt the UI from the pre-initialised status — it never re-fetched the backend, so a deleted/inactive/revoked license stayed visible while the ULC was open | `universal_license_center.py` |
+| 4 | "Inactive License" dialog existed in `py/main_ui.py` but was never invoked; message/buttons did not match the spec (no "Generate Request" button); `main.py:_handle_license_revoked()` showed a plain `messagebox` instead | `py/main_ui.py`, `main.py` |
+| 5 | Debug leftover: ULC `show()` deleted a hardcoded `UniversalLicenseCenter.opencode.lock` temp file on every open | `universal_license_center.py` |
+| 6 | `main.py:_open_ulc()` created the ULC WITHOUT `initial_status`, so the startup ULC defaulted to `no_license` and hid the engine's real decision (e.g. `inactive`) — found by the live runtime test | `main.py` |
+
+### Root Cause
+
+The mandatory activation/renewal flows were spec'd and documented but never implemented in the Python ULC runtime — the buttons invoked the engine's raw API methods directly. Refresh was treated as a pure re-render instead of a re-sync with the single source of truth (backend). The Inactive dialog existed in the app shell but had no caller.
+
+### Fixes Applied (local only — no Websmith template modifications during the session)
+
+| File | Change | Reason |
+|------|--------|--------|
+| `WSD_SDKToolkit_ZEMMACOS/license_engine.py` | Added public `refresh()` → `_sync_status_from_server()` (None only when offline); `renew()` accepts explicit `license_key` | Refresh must re-sync with the backend; renewal must not depend on a private-key hack |
+| `WSD_SDKToolkit_ZEMMACOS/universal_license_center.py` | Replaced both dialogs with one mandatory flow `_show_key_flow_dialog(mode)` for **activation and renewal**: Enter Key → **Validate License API** (fail → exact backend message, OTP + final action stay disabled; pass → read-only details: customer, email, product, plan, expiry, days) → **Send OTP** (to the license's registered email, with countdown) → **Verify OTP** → **enable Activate/Renew**. Renewal with no customer/license → "You're a new customer. Please activate your license first." + only Activate License enabled. `already_activated` → info dialog + engine refresh. `_refresh_ui()` now calls `_refresh_from_server()` first; server-confirmed removal clears stale values. Added SDK-side `_show_inactive_license_dialog()` (required message + **Activate License / Generate Request** buttons) shown on `inactive` status at ULC open and on every refresh. Removed the opencode lock unlink hack and unused `tempfile` import | Mandatory Rule 0A-4 workflow; spec-exact Inactive dialog; refresh never shows stale values |
+| `main.py` | `_open_ulc()` now passes `initial_status=self.license_status`. `_handle_license_revoked()` clears displayed values and calls `_show_inactive_license_dialog()`. Added `_on_generate_request()` (opens the ULC "Generate Request" dialog) | Startup ULC must display the engine's decision; revocation must show the spec dialog |
+| `py/main_ui.py` | `_show_inactive_license_dialog()` message → "This license is inactive or no longer exists. Please contact your administrator or activate using a valid license."; buttons → **Activate License / Generate Request** | Spec-exact dialog |
+
+### Architecture (after fix)
+
+```
+Activation / Renewal (ULC _show_key_flow_dialog)
+  Enter License Key
+    → POST /api/v1/license?action=validate (key + hardware_id)
+        → fail (expired/revoked/inactive/deleted/not found/no license data)
+            → show EXACT backend message; OTP + final action DISABLED
+        → renewal + no customer/license → "You're a new customer. Please
+          activate your license first." (only Activate License enabled)
+        → pass → read-only customer/license details shown
+    → POST /api/v1/auth/otp/send (license's registered email)
+    → POST /api/v1/auth/otp/verify → enable Activate/Renew
+    → POST /api/v1/license?action=activate (or renew)
+    → engine re-syncs from GET /internal/backend/license/status
+    → SuccessDialog (backend days) → Restart Now / Close
+
+Refresh (ULC _refresh_ui / app refresh_license)
+  → engine.refresh() → GET /internal/backend/license/status
+      → licensed | trial → rebuild display (backend values only)
+      → deleted/inactive/revoked/not found → stale values cleared,
+        Inactive License dialog (Activate License / Generate Request)
+
+Startup (app _open_ulc)
+  → LicenseEngine.initialize() → initial_status passed into ULC
+  → status 'inactive' → ULC + Inactive License dialog
+```
+
+- Remaining days are NEVER calculated locally: only `days_remaining` (unified endpoint) or `days_remaining`/`days_left` from raw responses are stored and displayed (Dashboard, header badge, Settings panel, ULC, SuccessDialog all read the same `LicenseStatus`).
+- No hardcoded business data in the SDK: product/customer/license/plan/email/mobile all come from `api-config.json` or backend responses.
+
+### Verification (this session)
+
+- `python -m py_compile` — clean on all SDK modules, `main.py`, `py/main_ui.py`, `py/settings_ui.py`
+- Mock-API logic suite — 15/15 PASS:
+  - `refresh()` offline → keeps current status (safe fallback)
+  - server `no_license` → `inactive` decision, cached status deleted, `license.key` file deleted, in-memory key cleared
+  - server `licensed` (`days_remaining: 365`) → valid, `days_left = 365`, plan/key/customer from backend
+  - `renew(license_key=...)` → key passed to API, re-syncs days from unified endpoint
+  - inactive decision message contains required text ("Please contact your administrator … activate a valid license")
+  - `validate()` failure surfaces backend error (`LICENSE_EXPIRED`)
+- Live runtime `python main.py` against the real backend (`https://websmith-z.vercel.app`):
+  - Decision engine → `inactive` (server confirmed no active license for this hardware)
+  - ULC opened with pre-initialised `inactive` status (after the `initial_status` fix)
+  - Inactive License dialog displayed; clicking "Activate License" opened the new Validate → OTP flow dialog without any exception (stderr empty across runs)
+- Debug leftovers removed; no STAGE/TEMP/mock markers remain in SDK source
+
+### Next Step
+
+- Copy the verified SDK files into `D:\websmith\app\internal\publisher\template\python\` (per AWS-01 workflow) and update the published template copies so future generated SDKs carry the same mandatory flows.
+
+---

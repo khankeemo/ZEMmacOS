@@ -303,6 +303,20 @@ class LicenseEngine:
     def get_status(self) -> Optional[LicenseStatus]:
         return self._status
 
+    def refresh(self) -> Optional[LicenseStatus]:
+        """Re-fetch authoritative license status from the backend.
+
+        Called by Refresh / Dashboard / ULC to guarantee the latest backend
+        state. The backend is the single source of truth: a server-confirmed
+        no-license state clears all cached license data and local state.
+        Returns None only when the backend is unreachable (offline) — the
+        caller keeps the current status in that case.
+        """
+        status = self._sync_status_from_server()
+        if status is not None:
+            self._status = status
+        return self._status
+
     def get_license_key(self) -> Optional[str]:
         return self._license_key
 
@@ -484,11 +498,14 @@ class LicenseEngine:
     def get_plans(self) -> Dict[str, Any]:
         return self._client.get_products()
 
-    def renew(self, extra_days: Optional[int] = None) -> Dict[str, Any]:
-        if not self._license_key:
+    def renew(self, extra_days: Optional[int] = None,
+              license_key: Optional[str] = None) -> Dict[str, Any]:
+        key = license_key or self._license_key
+        if not key:
             raise ValueError("License key unavailable. Please activate first.")
-        result = self._client.renew_license(self._license_key, extra_days)
+        result = self._client.renew_license(key, extra_days)
         if result.get('success'):
+            self._license_key = key
             lic = result.get('license', {})
             hardware_id = self._hardware.get_fingerprint()
             # Backend normalized status is authoritative (single source of truth).

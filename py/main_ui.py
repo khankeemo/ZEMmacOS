@@ -767,17 +767,16 @@ class ZEMmacOSUI:
         canvas.create_text(cx, 88, text="License Inactive",
                            font=("SF Pro Display", 16, "bold"),
                            fill=c["text"], anchor="center")
-        canvas.create_text(cx, 110, text="Device Not Registered",
-                           font=("SF Pro Text", 11),
-                           fill=c["text_secondary"], anchor="center")
-
-        canvas.create_text(cx, 148, text="License inactive or device not registered.",
+        canvas.create_text(cx, 118, text="This license is inactive or no longer exists.",
+                           font=("SF Pro Text", 10),
+                           fill=c["text"], anchor="center")
+        canvas.create_text(cx, 140, text="Please contact your administrator or activate",
+                           font=("SF Pro Text", 10),
+                           fill=c["text"], anchor="center")
+        canvas.create_text(cx, 160, text="using a valid license.",
                            font=("SF Pro Text", 10),
                            fill=c["text"], anchor="center")
 
-        canvas.create_text(cx, 178, text="Please contact administrator:",
-                           font=("SF Pro Text", 10),
-                           fill=c["muted"], anchor="center")
         engine = getattr(self, 'license_engine', None)
         support_email = ''
         if engine and engine.config and engine.config.get('branding', {}).get('support_email'):
@@ -797,15 +796,15 @@ class ZEMmacOSUI:
                            font=("SF Pro Text", 10, "bold"),
                            fill=c["muted"], anchor="center")
 
-        canvas.create_text(cx, 252, text="Activate using another registered license.",
+        canvas.create_text(cx, 252, text="Generate a request to the administrator.",
                            font=("SF Pro Text", 10),
                            fill=c["text"], anchor="center")
 
         bw, bh = 140, 34
         by = 276
 
-        self._make_dialog_button(d, "Contact Support", c["accent"], "white",
-                                  lambda: self._on_contact_support(),
+        self._make_dialog_button(d, "Generate Request", c["accent"], "white",
+                                  lambda: self._on_generate_request(),
                                   cx - bw - 6, by, bw, bh)
         self._make_dialog_button(d, "Activate License", c["success"], "white",
                                   lambda: self._on_activate_from_inactive(),

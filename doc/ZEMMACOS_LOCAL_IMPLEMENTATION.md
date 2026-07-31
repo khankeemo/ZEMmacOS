@@ -412,3 +412,35 @@ Dashboard (`_update_dashboard_license`), header badge, Settings license panel, U
 - 20/20 mock-API checks PASS (licensed days=365, deletion → cache cleared + inactive + required message, offline cache fallback, activate/renew sync days, trial days=14)
 - `py_compile` clean on all modified files
 - Grep confirms no hardcoded license values remain in `main.py` / `py/main_ui.py` / `py/settings_ui.py`; no `lic.get('days_left', 0)` patterns left in the SDK
+
+---
+
+## Session Summary — 2026-07-31 (AWS-01 Final Universal SDK Validation — Mandatory Validate → OTP → Verify Flows, Refresh Sync, Inactive License Dialog)
+
+### Audit findings (code vs. documented claims)
+
+The previous session (2026-07-31 Local SDK Validation) fixed engine-side staleness, days sourcing and the remaining-days bug. This session audited the remaining workflow code and found four gaps where the code did not match the AWS-01 spec:
+
+| # | Gap | Evidence |
+|---|-----|----------|
+| 1 | `UniversalLicenseCenter._activate_license()` bypassed the mandatory flow — it called `engine.activate(key)` directly on button click. No Validate License API call, no OTP, no Verify step (docs at master line 4629 claimed the 3-phase rewrite, but the code did not have it) | `universal_license_center.py` old `_activate_license()` |
+| 2 | `_renew_license_flow()` called `engine.renew()` directly after hacking `self.engine._license_key = key`; no validate/OTP/verify; no "You're a new customer. Please activate your license first." handling | old `_renew_license_flow()` |
+| 3 | ULC Refresh (`_refresh_ui`) only rebuilt the UI from the pre-initialised status — it never re-fetched the latest backend state, so a removed license could remain visible while the ULC was open | `_refresh_ui()` |
+| 4 | The "Inactive License" dialog existed in `py/main_ui.py` but was never invoked; message/buttons did not match spec (no "Generate Request" button anywhere); `_handle_license_revoked()` only showed a `messagebox` | `py/main_ui.py:740`, `main.py:_handle_license_revoked` |
+| 5 | Debug leftover: `show()` unlinked a hardcoded `UniversalLicenseCenter.opencode.lock` file in the temp dir on every ULC open | `universal_license_center.py` old `show()` |
+
+### Fixes applied (local only)
+
+| File | Change | Reason |
+|------|--------|--------|
+| `WSD_SDKToolkit_ZEMMACOS/license_engine.py` | Added public `refresh()` (re-syncs from `GET /internal/backend/license/status`, returns None only offline); `renew()` accepts explicit `license_key` param | Refresh must fetch latest backend state; renewal flow must not depend on a private `_license_key` hack |
+| `WSD_SDKToolkit_ZEMMACOS/universal_license_center.py` | Rewrote activation + renewal as one mandatory flow dialog `_show_key_flow_dialog(mode)`: **Validate License API → fail: exact backend message, NO OTP, NO final action → pass: Send OTP (to license's registered email) → Verify OTP → enable final action → Activate/Renew**. New-customer renewal: "You're a new customer. Please activate your license first." with only Activate License enabled. `_refresh_ui()` now calls `_refresh_from_server()` (engine.refresh()) before rebuilding; server-confirmed removal clears stale values. Added SDK `_show_inactive_license_dialog()` (required message + Activate License / Generate Request buttons). Removed the opencode lock unlink hack + unused `tempfile` import | Mandatory Rule 0A-4 workflow; refresh must never show stale values; license removal must surface the Inactive dialog |
+| `main.py` | `_open_ulc()` now passes `initial_status=self.license_status` to the ULC (previously omitted — ULC defaulted to `no_license` and hid the real `inactive` decision). `_handle_license_revoked()` now clears displayed values and calls `_show_inactive_license_dialog()`; added `_on_generate_request()` (opens ULC "Generate Request" dialog) | ULC must display the engine's decision; revocation must show the Inactive dialog with Generate Request |
+| `py/main_ui.py` | `_show_inactive_license_dialog()` message replaced with the required text ("This license is inactive or no longer exists. Please contact your administrator or activate using a valid license.") and buttons changed to **Activate License / Generate Request** | Spec-exact dialog |
+
+### Verification
+
+- `py_compile` clean on all SDK modules + `main.py` + `py/main_ui.py` + `py/settings_ui.py`
+- Mock-API logic suite: 15/15 PASS (offline refresh keeps status; server `no_license` → `inactive` decision + cache/key cleared; `licensed` → days/plan/key/customer from backend; `renew(license_key=...)` passes key and re-syncs days; inactive message text; validate failure error surfaced)
+- Live runtime `python main.py` (real backend `https://websmith-z.vercel.app`): decision engine → `inactive` (server confirmed removal), ULC opened with pre-initialised `inactive` status, Inactive License dialog displayed, "Activate License" opened the new Validate → OTP flow dialog — no exceptions (stderr empty)
+- No debug leftovers: `UniversalLicenseCenter.opencode.lock` unlink hack removed; no STAGE/TEMP/mock markers in SDK source

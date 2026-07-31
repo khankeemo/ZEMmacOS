@@ -293,6 +293,7 @@ class ZEMmacOSApp(ZEMmacOSUI):
             config_path=_get_sdk_config_path(),
             on_license_ready=on_ready,
             log_fn=self.log_live,
+            initial_status=self.license_status,
         )
         result = center.show()
 
@@ -463,15 +464,30 @@ class ZEMmacOSApp(ZEMmacOSUI):
     def _handle_license_revoked(self, status):
         """Backend no longer has an active license for this device (deleted,
         inactive, revoked or expired). Remove all displayed license info,
-        lock premium access and notify the user."""
+        lock premium access and show the Inactive License dialog."""
         try:
             message = (getattr(status, 'message', None) or
                        'License not found or inactive. Please contact your administrator or activate a valid license.')
             self.log_live("SDK", "WARNING", f"License no longer active — {message}")
             self._lock_ui()
-            self.root.after(0, lambda: messagebox.showwarning("License Not Active", message))
+            self._update_all_license_ui()
+            self.root.after(0, self._show_inactive_license_dialog)
         except Exception as e:
             self.log_live("SDK", "ERROR", f"License revoked handling failed: {e}")
+
+    def _on_generate_request(self):
+        self.log_live("REQUEST", "INFO", "Opening generate request dialog")
+        try:
+            from WSD_SDKToolkit_ZEMMACOS.universal_license_center import UniversalLicenseCenter
+            center = UniversalLicenseCenter(
+                config_path=_get_sdk_config_path(),
+                log_fn=self.log_live,
+                initial_status=self.license_status,
+                reentry=True,
+            )
+            center._show_request_dialog("Generate Request", "request", parent=self.root)
+        except Exception as e:
+            self.log_live("REQUEST", "ERROR", f"Generate request dialog failed: {e}")
 
     def _update_all_license_ui(self):
         try:
