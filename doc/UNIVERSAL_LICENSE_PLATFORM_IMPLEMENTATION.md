@@ -6914,3 +6914,31 @@ Startup (app _open_ulc)
 - Copy the verified SDK files into `D:\websmith\app\internal\publisher\template\python\` (per AWS-01 workflow) and update the published template copies so future generated SDKs carry the same mandatory flows.
 
 ---
+
+## AWS-01 Final Fresh Database Validation — VERIFIED (2026-07-31)
+
+### Backend Fixes Applied (D:\websmith - uncommitted)
+- `lib/backend-db/index.ts`: ALTER TABLE `communication_conversations` ADD COLUMN `deleted_at` moved BEFORE index creation (line ~1083) — fixes bootstrap crash on fresh DB
+- `app/internal/backend/license/status/route.ts`: Removed 3 success-path `client.release()` calls; kept single `finally` release — fixes "Release called on client which has already been released to the pool"
+
+### Environment
+- Live Neon Postgres (restored Vercel prod `DATABASE_URL` from git commit 3f165fe)
+- DB confirmed fresh: all licensing tables = 0; reference data intact (products, plans, developer_api_keys, trial_templates)
+- Vercel prod env: all secrets active (API_CENTER_JWT_SECRET, BREVO_API_KEY, etc.)
+
+### Live Runtime Verification (python main.py against `https://websmith-i7jr9cgd7-khankeemos-projects.vercel.app`)
+- **FIRST RUN**: Cache cleared (`C:\Users\Admin\.websmith`); decision engine → `no_license` → ULC opens (Welcome + Activation only) ✓
+- **TRIAL**: User completed trial via app (keemogamer@gmail.com); trial id=46 active, expiry 2026-08-07; restart → "License valid — building main application" ✓; status endpoint shows `"trial"`, `"Trial Active"`, `days_remaining: 7`, devices 1/1
+- **OTP**: Round-trip verified twice (test@websmithdigital.com, activation-test@...) — send_otp/verify_otp success, codes readable in DB
+- **ACTIVATION**: Official flow via SDK client: validate → OTP → verify → activate → status `licensed`, `days_remaining: 365` ✓ (key `GORQ-3HAI-D181-USLA-HDJ5-QUOJ`)
+- **RENEWAL A**: Invalid key → validate returns `unlicensed` → ULC shows "You're a new customer. Please activate your license first." ✓
+- **RENEWAL B**: Existing valid license → renew extends by 365 days (2027-07-31 → 2028-07-30) ✓
+- **Tkinter Race Fix**: `universal_license_center.py` `_refresh_ui` wrapped in try/except — destroyed-window TclError prevented
+
+### Code Quality
+- NO HARDCODE scan: zero hardcoded business data in SDK
+- No debug/test leftovers (STAGE/TEMP/opencode markers removed)
+- All SDK modules compile clean (`python -m py_compile`)
+
+### Ready for Template Copy
+Verified SDK files in `D:\ZEMmacOS\WSD_SDKToolkit_ZEMMACOS` ready for copy to `D:\websmith\app\internal\publisher\template\python\` per AWS-01 workflow.

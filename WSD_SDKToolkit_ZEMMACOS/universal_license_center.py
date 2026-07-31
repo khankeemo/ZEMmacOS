@@ -495,16 +495,22 @@ class UniversalLicenseCenter:
         return new_status
 
     def _refresh_ui(self):
-        if not self._root or not self._root.winfo_exists():
+        try:
+            if not self._root or not self._root.winfo_exists():
+                return
+        except Exception:
             return
         # Refresh always re-syncs with the backend first so stale cached
         # license values (plan / key / validity / days) can never survive a
         # license removal. ULC never runs the Decision Engine — it only
         # re-reads the authoritative status via the engine.
-        self._refresh_from_server()
-        if self._btn_frame and self._btn_frame.winfo_exists():
-            for child in self._btn_frame.winfo_children():
-                child.destroy()
+        try:
+            self._refresh_from_server()
+            if self._btn_frame and self._btn_frame.winfo_exists():
+                for child in self._btn_frame.winfo_children():
+                    child.destroy()
+        except Exception:
+            return
         self._rebuild_buttons()
         self._refresh_display()
         self._refresh_hardware_display()
