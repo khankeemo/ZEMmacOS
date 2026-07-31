@@ -394,10 +394,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
             reentry=True,
         )
         result = center.show()
-        if result and result.get('status') and result['status'].get('valid'):
-            self.log_live("ACTIVATION", "SUCCESS", "Activation completed")
+        if result and result.get('status'):
             self.license_status = LicenseStatus.from_dict(result['status'])
             self._update_all_license_ui()
+            if result['status'].get('status') == 'licensed':
+                self.log_live("ACTIVATION", "SUCCESS", "Activation completed")
         return result
 
     def open_renew_license(self):
@@ -409,10 +410,11 @@ class ZEMmacOSApp(ZEMmacOSUI):
             reentry=True,
         )
         result = center.show()
-        if result and result.get('status') and result['status'].get('valid'):
-            self.log_live("RENEWAL", "SUCCESS", "Renewal completed")
+        if result and result.get('status'):
             self.license_status = LicenseStatus.from_dict(result['status'])
             self._update_all_license_ui()
+            if result['status'].get('status') == 'licensed':
+                self.log_live("RENEWAL", "SUCCESS", "Renewal completed")
         return result
 
     # -----------------------------------------------------------------
