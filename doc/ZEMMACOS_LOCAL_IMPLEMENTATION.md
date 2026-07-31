@@ -374,3 +374,41 @@ open_activation() / open_renew_license()
 - Run the application to verify full startup flow end-to-end
 - Test all ULC workflows: trial, activation, renewal, reactivation, support, sales, communication
 - Test UI lock/unlock behavior during startup
+
+---
+
+## Session Summary — 2026-07-31 (AWS-01 Local SDK Validation)
+
+### Changes in this session (local only — no Websmith template modifications)
+
+| File | Change | Reason |
+|------|--------|--------|
+| `WSD_SDKToolkit_ZEMMACOS/client.py` | `get_license_status()` raises `ConnectionUnavailable` on timeout/connection errors instead of swallowing them | Engine must distinguish "offline" (→ safe cache fallback) from "backend answered" (→ backend is truth) |
+| `WSD_SDKToolkit_ZEMMACOS/license_engine.py` | Server-first `initialize()`; new `_sync_status_from_server()`, `_build_status_from_unified()`, `_build_no_license_decision()`; `activate/validate/validate_hardware/start_trial/convert_trial/renew/bind_device` re-sync from `GET /internal/backend/license/status` after success; days read via `days_remaining` first; decision flags peek-first | Removes stale cached license data when the backend reports no active license; remaining days always from backend; fixes returning customers misclassified as new (TTL-aware `get()` was deleting `onboarding_complete` / `has_ever_activated_paid_license` when `cache_days: 0`) |
+| `main.py` | `refresh_license()` detects valid→invalid transition → `_handle_license_revoked()` locks UI + messagebox with the backend message (fallback: "License not found or inactive. Please contact your administrator or activate a valid license.") | "Immediately remove all displayed license info and lock premium access, show message" |
+| `py/main_ui.py` | Plan fallback `'Active'` → `'--'` | No hardcoded license values (plan always from backend) |
+
+### Startup / refresh flow (after fix)
+
+```
+initialize() / refresh_license()
+  → _sync_status_from_server()          # backend is single source of truth
+      → licensed | trial                # build from normalized response, cache, valid
+      → no_license | inactive | revoked | deleted | expired | ...
+                                        # DELETE cached status + license.key, clear key,
+                                        # decision: inactive / trial_consumed / no_license
+      → ConnectionUnavailable (offline) # fall back to cached valid status only
+  → valid → _launch_main_app()
+  → invalid → _open_ulc()               # startup
+  → invalid after refresh (was valid)   # _lock_ui() + messagebox (main.py)
+```
+
+### Synchronization invariant
+
+Dashboard (`_update_dashboard_license`), header badge, Settings license panel, ULC status panel and SuccessDialog all read the SAME `LicenseStatus` instance held by `main.py`. Since the engine now always populates that object from the normalized backend response (`days_remaining`, plan, key, customer, expiry), every surface displays identical values. Nothing is computed locally.
+
+### Verification
+
+- 20/20 mock-API checks PASS (licensed days=365, deletion → cache cleared + inactive + required message, offline cache fallback, activate/renew sync days, trial days=14)
+- `py_compile` clean on all modified files
+- Grep confirms no hardcoded license values remain in `main.py` / `py/main_ui.py` / `py/settings_ui.py`; no `lic.get('days_left', 0)` patterns left in the SDK

@@ -444,9 +444,12 @@ class ZEMmacOSApp(ZEMmacOSUI):
             try:
                 new_status = self.license_engine.initialize()
                 if new_status is not None:
+                    prev_valid = bool(self.license_status and self.license_status.valid)
                     self.license_status = new_status
                     self.root.after(0, self._update_all_license_ui)
                     self.log_live("SDK", "SUCCESS", "License refresh completed")
+                    if prev_valid and not new_status.valid:
+                        self.root.after(0, lambda: self._handle_license_revoked(new_status))
                 else:
                     self.log_live("SDK", "WARNING", "License refresh returned None - keeping previous data")
             except Exception as e:
@@ -456,6 +459,19 @@ class ZEMmacOSApp(ZEMmacOSUI):
                 for _tb_line in _tb_detail.strip().split("\n"):
                     self.log_live("SDK", "ERROR", _tb_line)
         threading.Thread(target=do, daemon=True).start()
+
+    def _handle_license_revoked(self, status):
+        """Backend no longer has an active license for this device (deleted,
+        inactive, revoked or expired). Remove all displayed license info,
+        lock premium access and notify the user."""
+        try:
+            message = (getattr(status, 'message', None) or
+                       'License not found or inactive. Please contact your administrator or activate a valid license.')
+            self.log_live("SDK", "WARNING", f"License no longer active — {message}")
+            self._lock_ui()
+            self.root.after(0, lambda: messagebox.showwarning("License Not Active", message))
+        except Exception as e:
+            self.log_live("SDK", "ERROR", f"License revoked handling failed: {e}")
 
     def _update_all_license_ui(self):
         try:

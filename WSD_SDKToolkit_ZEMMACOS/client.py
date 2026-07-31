@@ -239,6 +239,10 @@ class ApiClient:
             if resp.status_code == 200:
                 return resp.json()
             return {'success': False, 'status': 'no_license', 'error': f'HTTP {resp.status_code}'}
+        except requests.exceptions.Timeout:
+            raise ConnectionUnavailable(f'Request timeout after {self.timeout}s')
+        except requests.exceptions.ConnectionError as e:
+            raise ConnectionUnavailable(f'Connection error: {str(e)}')
         except Exception as e:
             return {'success': False, 'status': 'no_license', 'error': str(e)}
 

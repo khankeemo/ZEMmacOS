@@ -1018,7 +1018,7 @@ class ZEMmacOSUI:
                 is_trial = getattr(status_obj, 'trial_active', False)
                 status_text = status_obj.status.upper()
                 fg = colors["warning"] if is_trial else colors["success"]
-                plan_text = status_obj.plan or ('Trial' if is_trial else 'Active')
+                plan_text = status_obj.plan or ('Trial' if is_trial else '--')
                 lic_key = getattr(status_obj, 'license_key', '') or ''
                 if lic_key and len(lic_key) > 12:
                     formatted = ''

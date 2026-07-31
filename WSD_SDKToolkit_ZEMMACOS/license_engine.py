@@ -164,12 +164,124 @@ class LicenseEngine:
                     pass
         return status.status in ('licensed', 'trial')
 
+    def _build_status_from_unified(self, status_response: Dict[str, Any],
+                                   hardware_id: str) -> LicenseStatus:
+        """Build a LicenseStatus from the backend's normalized status response.
+        All license values come from the backend — nothing is calculated or
+        defaulted locally except absent-optional fallbacks."""
+        cust = status_response.get('customer', {}) or {}
+        lic = status_response.get('license', {}) or {}
+        plan = status_response.get('plan', {}) or {}
+        product = status_response.get('product', {}) or {}
+        devices = status_response.get('devices', {}) or {}
+        api_status = status_response.get('status', 'no_license')
+        return LicenseStatus(
+            valid=True,
+            status=api_status,
+            expiry_date=lic.get('expiry_date'),
+            days_left=lic.get('days_remaining', lic.get('days_left', 0)),
+            plan=plan.get('name') or lic.get('plan'),
+            hardware_id=hardware_id,
+            license_key=lic.get('license_key', ''),
+            product_name=product.get('name'),
+            customer_name=cust.get('name'),
+            customer_email=cust.get('email'),
+            customer_mobile=cust.get('mobile'),
+            max_devices=devices.get('maximum', 999),
+            device_count=devices.get('current', 0),
+            trial_active=(api_status == 'trial'),
+        )
+
+    def _build_no_license_decision(self, hardware_id: str) -> LicenseStatus:
+        """Local customer-state decision used only when the backend is
+        unreachable or has confirmed there is no active license."""
+        # peek (raw read) first: TTL-aware get() would DELETE the flag on
+        # expiry (cache_days=0), making returning customers look new.
+        onboarding_complete = self._cache.peek_onboarding_complete()
+        if not onboarding_complete:
+            onboarding_complete = self._cache.is_onboarding_complete()
+        has_paid = self._cache.peek_has_ever_activated_paid_license()
+        if not has_paid:
+            has_paid = self._cache.has_ever_activated_paid_license()
+
+        if onboarding_complete:
+            if has_paid:
+                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — inactive (existing customer with paid history)")
+                return LicenseStatus(
+                    valid=False, status='inactive',
+                    hardware_id=hardware_id,
+                    message='License not found or inactive. Please contact your administrator or activate a valid license.'
+                )
+            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — trial_consumed (onboarding complete, no paid license)")
+            return LicenseStatus(
+                valid=False, status='trial_consumed',
+                hardware_id=hardware_id,
+                message='Your trial has ended. Please activate a paid license or renew an existing license.'
+            )
+        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no_license (new customer)")
+        return LicenseStatus(
+            valid=False, status='no_license',
+            hardware_id=hardware_id,
+            message='No license or trial was found. Start a Free Trial or activate your license.'
+        )
+
+    def _sync_status_from_server(self) -> Optional[LicenseStatus]:
+        """Fetch authoritative license status from the unified backend endpoint.
+
+        The backend (database) is the single source of truth. When the server
+        responds, its status is authoritative: a valid licensed/trial status is
+        cached, and any 'no active license' status (not found / inactive /
+        revoked / deleted / expired) immediately removes all cached license
+        data and local license state.
+
+        Returns:
+            LicenseStatus — authoritative server status (valid or not),
+            None when the backend is unreachable (offline).
+        """
+        hardware_id = self._hardware.get_fingerprint()
+        try:
+            status_response = self._client.get_license_status(hardware_id)
+        except ConnectionUnavailable as e:
+            print(f"{time.strftime('%H:%M:%S')} LiveLog: Warning — backend unreachable: {e}")
+            return None
+        if not status_response.get('success'):
+            print(f"{time.strftime('%H:%M:%S')} LiveLog: Warning — license status endpoint error, using local state")
+            return None
+
+        api_status = status_response.get('status', 'no_license')
+        if api_status in ('licensed', 'trial'):
+            status = self._build_status_from_unified(status_response, hardware_id)
+            self._status = status
+            self._cache.set_license_status(status.to_dict())
+            if not self._license_key and status.license_key:
+                self._license_key = status.license_key
+            if api_status == 'licensed':
+                self._cache.mark_has_ever_activated_paid_license()
+            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — {api_status} on server (unified API)")
+            return status
+
+        # Server confirmed no active license — never fall back to cached business values.
+        self._cache.invalidate_license_status()
+        self._cache.clear_license_key()
+        self._license_key = None
+        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no active state on server (status={api_status})")
+        decision = self._build_no_license_decision(hardware_id)
+        self._status = decision
+        return decision
+
     def initialize(self) -> LicenseStatus:
         hardware_id = self._hardware.get_fingerprint()
         self._cache.invalidate_if_hardware_mismatch(hardware_id)
         self._process_message_queue()
         print(f"[{time.strftime('%H:%M:%S')}] License Engine initialize — hardware: {hardware_id[:16]}...")
 
+        # Server-first: the backend is the single source of truth while online.
+        server_status = self._sync_status_from_server()
+        if server_status is not None:
+            self._notify_ready(server_status.valid)
+            return server_status
+
+        # Backend unreachable — offline fallback to cached local state only.
         saved = self._cache.peek_license_status()
         if saved:
             self._status = LicenseStatus.from_dict(saved)
@@ -181,92 +293,7 @@ class LicenseEngine:
                 return self._status
             print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cached state found but not valid ({self._status.status})")
 
-        if self._cache.is_valid():
-            cached = self._cache.get_license_status()
-            if cached:
-                self._status = LicenseStatus.from_dict(cached)
-                if not self._license_key and self._status.license_key:
-                    self._license_key = self._status.license_key
-                if self._is_valid_status(self._status):
-                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status})")
-                    self._notify_ready(True)
-                    return self._status
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cache hit (status: {self._status.status}), not valid, falling through")
-
-        # Cache missed — ask server via unified license status endpoint
-        try:
-            status_response = self._client.get_license_status(hardware_id)
-            if status_response.get('success'):
-                api_status = status_response.get('status', 'no_license')
-                if api_status in ('licensed', 'trial'):
-                    cust = status_response.get('customer', {})
-                    lic = status_response.get('license', {})
-                    plan = status_response.get('plan', {})
-                    product = status_response.get('product', {})
-                    devices = status_response.get('devices', {})
-                    self._status = LicenseStatus(
-                        valid=True,
-                        status=api_status,
-                        expiry_date=lic.get('expiry_date'),
-                        days_left=lic.get('days_remaining', 0),
-                        plan=plan.get('name'),
-                        hardware_id=hardware_id,
-                        license_key=lic.get('license_key', ''),
-                        product_name=product.get('name'),
-                        customer_name=cust.get('name'),
-                        customer_email=cust.get('email'),
-                        customer_mobile=cust.get('mobile'),
-                        max_devices=devices.get('maximum', 999),
-                        device_count=devices.get('current', 0),
-                        trial_active=(api_status == 'trial'),
-                    )
-                    self._cache.set_license_status(self._status.to_dict())
-                    if api_status == 'licensed' and self._status.license_key:
-                        self._license_key = self._status.license_key
-                        self._cache.mark_has_ever_activated_paid_license()
-                    print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — {api_status} on server (unified API)")
-                    self._notify_ready(True)
-                    return self._status
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no active state on server (status={api_status})")
-            else:
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — server returned error, falling through")
-        except Exception as e:
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Warning — unified license status check failed: {e}")
-
-        # Server returned no active licensed/trial state. Invalidate any cached valid status.
-        # If backend says license is deleted/revoked/expired/inactive, we must NOT fall back to cached valid data.
-        self._cache.invalidate_license_status()
-        self._cache.set('license_key', None)
-
-        onboarding_complete = self._cache.is_onboarding_complete()
-        if not onboarding_complete:
-            onboarding_complete = self._cache.peek_onboarding_complete()
-        has_paid = self._cache.has_ever_activated_paid_license()
-        if not has_paid and onboarding_complete:
-            has_paid = self._cache.peek_has_ever_activated_paid_license()
-
-        if onboarding_complete:
-            if has_paid:
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — inactive (existing customer with paid history)")
-                self._status = LicenseStatus(
-                    valid=False, status='inactive',
-                    hardware_id=hardware_id,
-                    message='Your license is inactive. Activate a new license or contact support.'
-                )
-            else:
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — trial_consumed (onboarding complete, no paid license)")
-                self._status = LicenseStatus(
-                    valid=False, status='trial_consumed',
-                    hardware_id=hardware_id,
-                    message='Your trial has ended. Please activate a paid license or renew an existing license.'
-                )
-        else:
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no_license (new customer)")
-            self._status = LicenseStatus(
-                valid=False, status='no_license',
-                hardware_id=hardware_id,
-                message='No license or trial was found. Start a Free Trial or activate your license.'
-            )
+        self._status = self._build_no_license_decision(hardware_id)
         self._notify_ready(False)
         return self._status
 
@@ -293,23 +320,27 @@ class LicenseEngine:
             cust = result.get('customer', {})
             if lic.get('license_key'):
                 self._license_key = lic['license_key']
-            self._status = LicenseStatus(
-                valid=True,
-                status='licensed',
-                expiry_date=lic.get('expiry_date'),
-                days_left=lic.get('days_left', 0),
-                plan=lic.get('plan'),
-                hardware_id=hardware_id,
-                license_key=lic.get('license_key'),
-                product_name=self.config.get('product', {}).get('name'),
-                customer_name=cust.get('name'),
-                customer_email=cust.get('email'),
-                customer_phone=cust.get('phone'),
-                customer_mobile=cust.get('mobile'),
-                max_devices=lic.get('max_devices', 999),
-                device_count=lic.get('device_count', 0),
-            )
-            if self._status.valid:
+            # Backend normalized status is authoritative (single source of truth).
+            server_status = self._sync_status_from_server()
+            if server_status is None:
+                # Offline fallback — keep raw response values only.
+                self._status = LicenseStatus(
+                    valid=True,
+                    status='licensed',
+                    expiry_date=lic.get('expiry_date'),
+                    days_left=lic.get('days_remaining', lic.get('days_left', 0)),
+                    plan=lic.get('plan'),
+                    hardware_id=hardware_id,
+                    license_key=lic.get('license_key'),
+                    product_name=self.config.get('product', {}).get('name'),
+                    customer_name=cust.get('name'),
+                    customer_email=cust.get('email'),
+                    customer_phone=cust.get('phone'),
+                    customer_mobile=cust.get('mobile'),
+                    max_devices=lic.get('max_devices', 999),
+                    device_count=lic.get('device_count', 0),
+                )
+            if self._status and self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
         return result
 
@@ -320,27 +351,31 @@ class LicenseEngine:
             self._cache.save_license_key(license_key)
             lic = result.get('license', {})
             cust = result.get('customer', {})
-            self._status = LicenseStatus(
-                valid=True,
-                status=result.get('status', 'licensed'),
-                expiry_date=lic.get('expiry_date'),
-                days_left=lic.get('days_left', 0),
-                plan=lic.get('plan'),
-                hardware_id=self._hardware.get_fingerprint(),
-                license_key=license_key,
-                product_name=self.config.get('product', {}).get('name'),
-                customer_name=cust.get('name'),
-                customer_email=cust.get('email'),
-                customer_phone=cust.get('phone'),
-                customer_mobile=cust.get('mobile'),
-                max_devices=lic.get('max_devices', 999),
-                device_count=lic.get('device_count', 0),
-            )
-            if self._status.valid:
+            # Backend normalized status is authoritative (single source of truth).
+            server_status = self._sync_status_from_server()
+            if server_status is None:
+                # Offline fallback — keep raw response values only.
+                self._status = LicenseStatus(
+                    valid=True,
+                    status=result.get('status', 'licensed'),
+                    expiry_date=lic.get('expiry_date'),
+                    days_left=lic.get('days_remaining', lic.get('days_left', 0)),
+                    plan=lic.get('plan'),
+                    hardware_id=self._hardware.get_fingerprint(),
+                    license_key=license_key,
+                    product_name=self.config.get('product', {}).get('name'),
+                    customer_name=cust.get('name'),
+                    customer_email=cust.get('email'),
+                    customer_phone=cust.get('phone'),
+                    customer_mobile=cust.get('mobile'),
+                    max_devices=lic.get('max_devices', 999),
+                    device_count=lic.get('device_count', 0),
+                )
+            if self._status and self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
                 self._cache.mark_has_ever_activated_paid_license()
                 self._cache.set_onboarding_complete()
-            self._notify_ready(True)
+            self._notify_ready(bool(self._status and self._status.valid))
         return result
 
     def validate_hardware(self) -> Dict[str, Any]:
@@ -349,28 +384,32 @@ class LicenseEngine:
         if result.get('status') in ('licensed', 'force_reactivation'):
             lic = result.get('license', {})
             cust = result.get('customer', {})
-            self._status = LicenseStatus(
-                valid=result.get('status') == 'licensed',
-                status=result.get('status', 'licensed'),
-                expiry_date=lic.get('expiry_date'),
-                days_left=lic.get('days_left', 0),
-                plan=lic.get('plan'),
-                hardware_id=hardware_id,
-                license_key=lic.get('license_key'),
-                product_name=self.config.get('product', {}).get('name'),
-                customer_name=cust.get('name'),
-                customer_email=cust.get('email'),
-                customer_phone=cust.get('phone'),
-                customer_mobile=cust.get('mobile'),
-                max_devices=lic.get('max_devices', 999),
-                device_count=lic.get('device_count', 0),
-            )
-            if self._status.status == 'licensed':
+            # Backend normalized status is authoritative (single source of truth).
+            server_status = self._sync_status_from_server()
+            if server_status is None:
+                # Offline fallback — keep raw response values only.
+                self._status = LicenseStatus(
+                    valid=result.get('status') == 'licensed',
+                    status=result.get('status', 'licensed'),
+                    expiry_date=lic.get('expiry_date'),
+                    days_left=lic.get('days_remaining', lic.get('days_left', 0)),
+                    plan=lic.get('plan'),
+                    hardware_id=hardware_id,
+                    license_key=lic.get('license_key'),
+                    product_name=self.config.get('product', {}).get('name'),
+                    customer_name=cust.get('name'),
+                    customer_email=cust.get('email'),
+                    customer_phone=cust.get('phone'),
+                    customer_mobile=cust.get('mobile'),
+                    max_devices=lic.get('max_devices', 999),
+                    device_count=lic.get('device_count', 0),
+                )
+            if self._status and self._status.status == 'licensed':
                 self._cache.set_license_status(self._status.to_dict())
                 self._cache.mark_has_ever_activated_paid_license()
                 self._notify_ready(True)
                 return {'success': True, 'status': self._status.status, 'data': self._status.to_dict()}
-            return {'success': True, 'status': 'force_reactivation', 'message': 'License requires reactivation. Contact support.', 'data': self._status.to_dict()}
+            return {'success': True, 'status': 'force_reactivation', 'message': 'License requires reactivation. Contact support.', 'data': self._status.to_dict() if self._status else {}}
         elif result.get('error'):
             err = result.get('error', {})
             err_code = err.get('code', '')
@@ -386,22 +425,26 @@ class LicenseEngine:
         if result.get('success'):
             trial_data = result.get('trial', {}) if isinstance(result.get('trial'), dict) else result
             customer_data = customer_data or {}
-            self._status = LicenseStatus(
-                valid=True,
-                status='trial',
-                expiry_date=trial_data.get('expiry_date'),
-                days_left=trial_data.get('days_left', trial_data.get('duration_days', 0)),
-                plan=trial_data.get('plan'),
-                hardware_id=self._hardware.get_fingerprint(),
-                product_name=self.config.get('product', {}).get('name'),
-                customer_name=trial_data.get('customer_name') or customer_name,
-                customer_email=trial_data.get('customer_email') or email,
-                customer_phone=trial_data.get('customer_phone'),
-                customer_mobile=trial_data.get('customer_mobile') or customer_data.get('mobile')
-            )
-            if self._status.valid:
+            # Backend normalized status is authoritative (single source of truth).
+            server_status = self._sync_status_from_server()
+            if server_status is None:
+                # Offline fallback — keep raw response values only.
+                self._status = LicenseStatus(
+                    valid=True,
+                    status='trial',
+                    expiry_date=trial_data.get('expiry_date'),
+                    days_left=trial_data.get('days_remaining', trial_data.get('days_left', trial_data.get('duration_days', 0))),
+                    plan=trial_data.get('plan'),
+                    hardware_id=self._hardware.get_fingerprint(),
+                    product_name=self.config.get('product', {}).get('name'),
+                    customer_name=trial_data.get('customer_name') or customer_name,
+                    customer_email=trial_data.get('customer_email') or email,
+                    customer_phone=trial_data.get('customer_phone'),
+                    customer_mobile=trial_data.get('customer_mobile') or customer_data.get('mobile')
+                )
+            if self._status and self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
-            self._notify_ready(self._is_valid_status(self._status))
+            self._notify_ready(self._is_valid_status(self._status) if self._status else False)
         return result
 
     def convert_trial(self, plan: Optional[str] = None, customer_name: str = '', customer_email: str = '') -> Dict[str, Any]:
@@ -414,24 +457,28 @@ class LicenseEngine:
             lic = result.get('license', {})
             if 'license_key' in lic:
                 self._license_key = lic.get('license_key')
-            self._status = LicenseStatus(
-                valid=True,
-                status=result.get('status', 'licensed'),
-                expiry_date=lic.get('expiry_date'),
-                days_left=lic.get('days_left', 0),
-                plan=lic.get('plan'),
-                hardware_id=hardware_id,
-                license_key=lic.get('license_key'),
-                product_name=self.config.get('product', {}).get('name'),
-                customer_name=result.get('customer', {}).get('name'),
-                customer_email=result.get('customer', {}).get('email'),
-                customer_phone=result.get('customer', {}).get('phone'),
-                customer_mobile=result.get('customer', {}).get('mobile')
-            )
-            if self._status.valid:
+            # Backend normalized status is authoritative (single source of truth).
+            server_status = self._sync_status_from_server()
+            if server_status is None:
+                # Offline fallback — keep raw response values only.
+                self._status = LicenseStatus(
+                    valid=True,
+                    status=result.get('status', 'licensed'),
+                    expiry_date=lic.get('expiry_date'),
+                    days_left=lic.get('days_remaining', lic.get('days_left', 0)),
+                    plan=lic.get('plan'),
+                    hardware_id=hardware_id,
+                    license_key=lic.get('license_key'),
+                    product_name=self.config.get('product', {}).get('name'),
+                    customer_name=result.get('customer', {}).get('name'),
+                    customer_email=result.get('customer', {}).get('email'),
+                    customer_phone=result.get('customer', {}).get('phone'),
+                    customer_mobile=result.get('customer', {}).get('mobile')
+                )
+            if self._status and self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
                 self._cache.mark_has_ever_activated_paid_license()
-            self._notify_ready(self._is_valid_status(self._status))
+            self._notify_ready(self._is_valid_status(self._status) if self._status else False)
         return result
 
     def get_plans(self) -> Dict[str, Any]:
@@ -444,24 +491,28 @@ class LicenseEngine:
         if result.get('success'):
             lic = result.get('license', {})
             hardware_id = self._hardware.get_fingerprint()
-            self._status = LicenseStatus(
-                valid=True,
-                status='licensed',
-                expiry_date=lic.get('new_expiry_date') or lic.get('expiry_date'),
-                days_left=lic.get('days_left', 0),
-                plan=lic.get('plan'),
-                hardware_id=hardware_id,
-                license_key=self._license_key,
-                product_name=self.config.get('product', {}).get('name'),
-                customer_name=result.get('customer', {}).get('name'),
-                customer_email=result.get('customer', {}).get('email'),
-                customer_phone=result.get('customer', {}).get('phone'),
-                customer_mobile=result.get('customer', {}).get('mobile')
-            )
-            if self._status.valid:
+            # Backend normalized status is authoritative (single source of truth).
+            server_status = self._sync_status_from_server()
+            if server_status is None:
+                # Offline fallback — keep raw response values only.
+                self._status = LicenseStatus(
+                    valid=True,
+                    status='licensed',
+                    expiry_date=lic.get('new_expiry_date') or lic.get('expiry_date'),
+                    days_left=lic.get('days_remaining', lic.get('days_left', 0)),
+                    plan=lic.get('plan'),
+                    hardware_id=hardware_id,
+                    license_key=self._license_key,
+                    product_name=self.config.get('product', {}).get('name'),
+                    customer_name=result.get('customer', {}).get('name'),
+                    customer_email=result.get('customer', {}).get('email'),
+                    customer_phone=result.get('customer', {}).get('phone'),
+                    customer_mobile=result.get('customer', {}).get('mobile')
+                )
+            if self._status and self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
             self._cache.mark_has_ever_activated_paid_license()
-            self._notify_ready(self._is_valid_status(self._status))
+            self._notify_ready(self._is_valid_status(self._status) if self._status else False)
         return result
 
     def deactivate(self, license_key: Optional[str] = None) -> Dict[str, Any]:
@@ -493,25 +544,29 @@ class LicenseEngine:
             self._license_key = key
             lic = result.get('license', {})
             hardware_id = self._hardware.get_fingerprint()
-            self._status = LicenseStatus(
-                valid=True,
-                status='licensed',
-                expiry_date=lic.get('expiry_date'),
-                days_left=lic.get('days_left', 0),
-                plan=lic.get('plan'),
-                hardware_id=hardware_id,
-                license_key=key,
-                product_name=self.config.get('product', {}).get('name'),
-                customer_name=result.get('customer', {}).get('name'),
-                customer_email=result.get('customer', {}).get('email'),
-                customer_phone=result.get('customer', {}).get('phone'),
-                customer_mobile=result.get('customer', {}).get('mobile'),
-                message='Device bound'
-            )
-            if self._status.valid:
+            # Backend normalized status is authoritative (single source of truth).
+            server_status = self._sync_status_from_server()
+            if server_status is None:
+                # Offline fallback — keep raw response values only.
+                self._status = LicenseStatus(
+                    valid=True,
+                    status='licensed',
+                    expiry_date=lic.get('expiry_date'),
+                    days_left=lic.get('days_remaining', lic.get('days_left', 0)),
+                    plan=lic.get('plan'),
+                    hardware_id=hardware_id,
+                    license_key=key,
+                    product_name=self.config.get('product', {}).get('name'),
+                    customer_name=result.get('customer', {}).get('name'),
+                    customer_email=result.get('customer', {}).get('email'),
+                    customer_phone=result.get('customer', {}).get('phone'),
+                    customer_mobile=result.get('customer', {}).get('mobile'),
+                    message='Device bound'
+                )
+            if self._status and self._status.valid:
                 self._cache.set_license_status(self._status.to_dict())
                 self._cache.mark_has_ever_activated_paid_license()
-            self._notify_ready(self._is_valid_status(self._status))
+            self._notify_ready(self._is_valid_status(self._status) if self._status else False)
         return result
 
     def verify_license_for_renewal(self, license_key: str) -> Dict[str, Any]:
