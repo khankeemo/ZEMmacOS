@@ -444,3 +444,38 @@ The previous session (2026-07-31 Local SDK Validation) fixed engine-side stalene
 - Mock-API logic suite: 15/15 PASS (offline refresh keeps status; server `no_license` → `inactive` decision + cache/key cleared; `licensed` → days/plan/key/customer from backend; `renew(license_key=...)` passes key and re-syncs days; inactive message text; validate failure error surfaced)
 - Live runtime `python main.py` (real backend `https://websmith-z.vercel.app`): decision engine → `inactive` (server confirmed removal), ULC opened with pre-initialised `inactive` status, Inactive License dialog displayed, "Activate License" opened the new Validate → OTP flow dialog — no exceptions (stderr empty)
 - No debug leftovers: `UniversalLicenseCenter.opencode.lock` unlink hack removed; no STAGE/TEMP/mock markers in SDK source
+
+---
+
+## Session 2026-08-01 — AWS-01 Continuation: SDK Regeneration, Pre-Activation Dialog, Renewal UX
+
+### SDK Regenerated (websmith template fixes propagated)
+
+The websmith template + generators were fixed this session:
+
+| Change | Effect on ZEMmacOS SDK |
+|--------|------------------------|
+| 	emplate/python/manifest.json now uses the {{GENERATED_AT}} placeholder; 
+untimes/python.ts + scripts/generate-sdk.mjs gained the placeholder and an isDocumentationFile() guard | manifest.json.generated_at is now a real ISO-8601 timestamp; docs/ files are copied verbatim (placeholder reference tokens such as {{PRODUCT_NAME}} are documentation text, no longer substituted) |
+
+WSD_SDKToolkit_ZEMMACOS was deleted and regenerated fresh (36 files). Verified: 22/22 py_compile clean; hash comparison template vs generated — **only manifest.json differs** (timestamp substitution), all 35 other files byte-identical; no __pycache__ in the delivered SDK; all package imports load (ApiClient, LicenseEngine, UniversalLicenseCenter, ...).
+
+### ULC Pre-Activation / Pre-Renewal Dialog (new)
+
+UniversalLicenseCenter._activate_license() and _renew_license_flow() now open a choice dialog before the key/OTP workflow:
+
+- **[ Buy License ]** → opens the software store in the default browser. URL derived at runtime from the configured API config (client.app_url + /software-store) — **no hardcoded URLs**.
+- **[ Existing License ]** → proceeds to the mandatory Validate → OTP → Activate/Renew flow.
+
+### Renewal UX Improvement
+
+In renewal mode, after validation the ULC now calls the dedicated erify_license_for_renewal() endpoint and shows renewal details in the dialog: expiry status (EXPIRED — eligible for renewal), current days left, and available renewal plan options (name, duration, current-plan marker). The success dialog then shows the new expiry and days remaining.
+
+### Test Infrastructure
+
+- 	ests/sdk-generation/validator.test.mjs (websmith repo): generation validator — **6/6 PASS**.
+- 	ests/e2e/license-api.e2e.mjs (websmith repo): live E2E suite — **ready, blocked on DB credentials** (production DATABASE_URL is a protected Vercel secret, unpullable).
+
+### Verification
+
+- Regenerated SDK compiles clean and imports load; hash-verified in sync with the template.

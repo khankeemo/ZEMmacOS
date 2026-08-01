@@ -4,6 +4,7 @@ import os
 import platform
 import sys
 import tkinter as tk
+import webbrowser
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, Optional
 
@@ -741,12 +742,80 @@ class UniversalLicenseCenter:
     # ====================================================================
 
     def _activate_license(self):
-        LiveLog.log("Activation started", "Opening license entry dialog")
-        self._show_key_flow_dialog("activate")
+        LiveLog.log("Activation started", "Opening pre-activation dialog")
+        self._show_pre_activation_dialog("activate")
 
     def _renew_license_flow(self):
-        LiveLog.log("Renewal started", "Opening license entry dialog")
-        self._show_key_flow_dialog("renew")
+        LiveLog.log("Renewal started", "Opening pre-renewal dialog")
+        self._show_pre_activation_dialog("renew")
+
+    def _show_pre_activation_dialog(self, mode: str):
+        """Pre-activation / pre-renewal choice dialog (commercial standard):
+
+        [ Buy License ]      → opens the software store (URL derived from config)
+        [ Existing License ] → continues with activation / renewal workflow
+        """
+        is_activate = mode == 'activate'
+        title = "Activate License" if is_activate else "Renew License"
+
+        dialog = tk.Toplevel(self._root)
+        dialog.title(title)
+        dialog.geometry("440x300")
+        dialog.configure(bg=self._bg)
+        dialog.transient(self._root)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        header = tk.Frame(dialog, bg=self._primary, height=56)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(header, text=title,
+                 font=("Segoe UI", 16, "bold"),
+                 fg="white", bg=self._primary).pack(expand=True)
+
+        main = tk.Frame(dialog, bg=self._card_bg, padx=24, pady=18)
+        main.pack(fill="both", expand=True)
+
+        tk.Label(main,
+                 text="How would you like to continue?",
+                 font=("Segoe UI", 12, "bold"),
+                 bg=self._card_bg, fg=self._text_primary).pack(pady=(0, 6))
+        tk.Label(main,
+                 text="Buy a new license from the software store,\n"
+                      "or continue with an existing license.",
+                 font=("Segoe UI", 10),
+                 bg=self._card_bg, fg=self._text_secondary,
+                 justify="center", wraplength=360).pack(pady=(0, 14))
+
+        def do_buy():
+            self._open_store()
+
+        def do_existing():
+            dialog.destroy()
+            self._show_key_flow_dialog(mode)
+
+        tk.Button(main, text="Buy License", command=do_buy,
+                  font=("Segoe UI", 12, "bold"),
+                  bg=self._primary, fg="white", relief="flat",
+                  padx=18, pady=9, cursor="hand2").pack(fill="x", pady=(0, 8))
+        tk.Button(main, text="Existing License", command=do_existing,
+                  font=("Segoe UI", 12, "bold"),
+                  bg=self._success, fg="white", relief="flat",
+                  padx=18, pady=9, cursor="hand2").pack(fill="x")
+
+        dialog.wait_window()
+
+    def _open_store(self):
+        """Open the software store in the default browser.
+
+        The store URL is derived from the configured API/App URL —
+        no hardcoded URLs."""
+        url = self.client.app_url.rstrip('/') + '/software-store'
+        LiveLog.log("Opening software store", url)
+        try:
+            webbrowser.open(url)
+        except Exception as e:
+            LiveLog.log("Failed to open store", str(e))
 
     def _show_key_flow_dialog(self, mode: str):
         """Mandatory activation/renewal workflow (Rule 0A-4):
@@ -961,6 +1030,24 @@ class UniversalLicenseCenter:
                 lines.append(f"Days remaining: {lic['days_remaining']}")
             elif lic.get('days_left') is not None:
                 lines.append(f"Days remaining: {lic['days_left']}")
+            if not is_activate:
+                try:
+                    renewal_info = self.client.verify_license_for_renewal(key)
+                    if renewal_info.get('success') and renewal_info.get('valid'):
+                        lines.append("")
+                        lines.append("RENEWAL DETAILS")
+                        if renewal_info.get('is_expired'):
+                            lines.append("Status: EXPIRED — eligible for renewal")
+                        if renewal_info.get('days_left') is not None:
+                            lines.append(f"Current days left: {renewal_info['days_left']}")
+                        available = renewal_info.get('available_plans') or []
+                        if available:
+                            lines.append("Available renewal options:")
+                            for p in available:
+                                mark = " (current)" if p.get('is_current_plan') else ""
+                                lines.append(f"  - {p.get('name', '')} — {p.get('duration', '')}{mark}")
+                except Exception:
+                    pass
             if not lines:
                 lines.append("License validated successfully.")
             details_label.config(text="\n".join(lines))
