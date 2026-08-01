@@ -1,7 +1,6 @@
 """Welcome Dialog - Customer onboarding with OTP verification and trial generation"""
 import json
 import os
-import re
 import time as _time
 import traceback
 import tkinter as tk
@@ -11,6 +10,8 @@ from typing import Any, Callable, Dict, Optional
 from .client import ApiClient, ApiError
 from .hardware import HardwareDetector
 from .cache import CacheManager
+from .validation import (FieldIndicator, OTP_INVALID_MESSAGE,
+                         is_valid_email, is_valid_mobile, mobile_digits_error)
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -108,9 +109,18 @@ class WelcomeDialog:
         self._name_entry.focus()
         tk.Label(frame, text='Email *', font=('Segoe UI', 11),
                  fg=self._text_primary, bg=self._card_bg).pack(anchor='w', **padding)
-        self._email_entry = tk.Entry(frame, font=('Segoe UI', 12), relief='solid',
+        email_row = tk.Frame(frame, bg=self._card_bg)
+        email_row.pack(fill='x', padx=20, pady=(0, 10))
+        self._email_entry = tk.Entry(email_row, font=('Segoe UI', 12), relief='solid',
                                       bd=1, highlightbackground=self._border)
-        self._email_entry.pack(fill='x', padx=20, pady=(0, 10))
+        self._email_entry.pack(side='left', fill='x', expand=True)
+        self._email_indicator_label = tk.Label(email_row, text='', font=('Segoe UI', 12, 'bold'),
+                                               bg=self._card_bg, fg=self._success)
+        self._email_indicator_label.pack(side='left', padx=(6, 0))
+        self._email_indicator = FieldIndicator(self._email_indicator_label,
+                                               success_color=self._success,
+                                               error_color=self._error)
+        self._email_entry.bind('<KeyRelease>', self._update_email_indicator)
         tk.Label(frame, text='Mobile Number *', font=('Segoe UI', 11),
                  fg=self._text_primary, bg=self._card_bg).pack(anchor='w', **padding)
         mobile_frame = tk.Frame(frame, bg=self._card_bg)
@@ -122,9 +132,12 @@ class WelcomeDialog:
         self._mobile_entry = tk.Entry(mobile_frame, font=('Segoe UI', 12), relief='solid',
                                        bd=1, highlightbackground=self._border)
         self._mobile_entry.pack(side='left', fill='x', expand=True, padx=(8, 0))
-        self._mobile_indicator = tk.Label(mobile_frame, text='', font=('Segoe UI', 12, 'bold'),
-                                          bg=self._card_bg, fg=self._success)
-        self._mobile_indicator.pack(side='left', padx=(6, 0))
+        self._mobile_indicator_label = tk.Label(mobile_frame, text='', font=('Segoe UI', 12, 'bold'),
+                                                bg=self._card_bg, fg=self._success)
+        self._mobile_indicator_label.pack(side='left', padx=(6, 0))
+        self._mobile_indicator = FieldIndicator(self._mobile_indicator_label,
+                                                success_color=self._success,
+                                                error_color=self._error)
         self._mobile_entry.bind('<KeyRelease>', self._update_mobile_indicator)
         tk.Label(frame, text='Company (optional)', font=('Segoe UI', 11),
                  fg=self._text_secondary, bg=self._card_bg).pack(anchor='w', **padding)
@@ -194,24 +207,27 @@ class WelcomeDialog:
 
         self._country_menu.bind('<<ComboboxSelected>>', on_select)
 
+    def _update_email_indicator(self, event=None):
+        if not hasattr(self, '_email_indicator'):
+            return
+        email = self._email_entry.get().strip()
+        if not email:
+            self._email_indicator.clear()
+        elif is_valid_email(email):
+            self._email_indicator.set_valid()
+        else:
+            self._email_indicator.set_invalid()
+
     def _update_mobile_indicator(self, event=None):
         if not hasattr(self, '_mobile_indicator'):
             return
         mobile = self._mobile_entry.get().strip()
         if not mobile:
-            self._mobile_indicator.config(text='', fg=self._success)
-            return
-        if not re.fullmatch(r'\d+', mobile):
-            self._mobile_indicator.config(text='\u2716', fg=self._error)
-            return
-        dial = (self._selected_country or {}).get('dial', '') if self._selected_country else ''
-        full = f'{dial}{mobile}'
-        if len(full) < 8:
-            self._mobile_indicator.config(text='', fg=self._success)
-        elif len(full) > 16:
-            self._mobile_indicator.config(text='\u2716', fg=self._error)
+            self._mobile_indicator.clear()
+        elif is_valid_mobile(mobile, self._selected_country):
+            self._mobile_indicator.set_valid()
         else:
-            self._mobile_indicator.config(text='\u2713', fg=self._success)
+            self._mobile_indicator.set_invalid()
 
     def _on_closing(self):
         self._result = {'skipped': True, 'closed': True}
@@ -227,11 +243,14 @@ class WelcomeDialog:
         if not name:
             self._show_error('Name is required')
             return
-        if not email or '@' not in email:
+        if not is_valid_email(email):
             self._show_error('Valid email is required')
+            self._update_email_indicator()
             return
-        if not mobile or len(mobile) < 4:
-            self._show_error('Valid mobile number is required')
+        mobile_error = mobile_digits_error(mobile, self._selected_country)
+        if not mobile or mobile_error:
+            self._show_error(mobile_error or 'Valid mobile number is required')
+            self._update_mobile_indicator()
             return
         if not self._selected_country:
             self._show_error('Please select a country code')
@@ -280,7 +299,7 @@ class WelcomeDialog:
                 self._otp_entry.delete(0, 'end')
                 err_detail = result.get('error', result.get('message', 'Invalid OTP'))
                 self._log("OTP", "ERROR", "OTP verification failed", str(err_detail))
-                self._show_error('OTP verification failed. Please check the OTP and try again.')
+                self._show_error(OTP_INVALID_MESSAGE)
                 self._verify_btn.config(state='normal', text='Verify')
                 self._otp_entry.focus()
         except ApiError as e:
@@ -289,7 +308,7 @@ class WelcomeDialog:
                 err_data = e.data if isinstance(e.data, dict) else {}
                 err_msg = err_data.get('message', err_data.get('error', e.message))
                 self._log("OTP", "ERROR", "OTP verification failed", str(err_msg))
-                self._show_error('OTP verification failed. Please check the OTP and try again.')
+                self._show_error(OTP_INVALID_MESSAGE)
                 self._verify_btn.config(state='normal', text='Verify')
                 self._otp_entry.focus()
             else:

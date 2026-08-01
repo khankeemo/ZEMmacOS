@@ -1,0 +1,84 @@
+Downloading Catalog
+Currently downloading publicrelease catalog from:
+
+https://swscan.apple.com/content/catalogs/others/index-15-14-13-12-10.16-10.15-10.14-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog
+
+Exception in Tkinter callback
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\tkinter\__init__.py", line 2082, in __call__
+    return self.func(*args)
+           ~~~~~~~~~^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\tkinter\__init__.py", line 876, in callit
+    func(*args, **kw)
+    ~~~~^^^^^^^^^^^^^
+  File "D:\ZEMmacOS\main.py", line 303, in _open_ulc
+    self._launch_main_app()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\ZEMmacOS\main.py", line 245, in _launch_main_app
+    self._finalize_startup()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\ZEMmacOS\main.py", line 250, in _finalize_startup
+    self.settings_service.apply_saved_theme()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\ZEMmacOS\py\settings.py", line 151, in apply_saved_theme
+    apply_theme(self.app, mode)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "D:\ZEMmacOS\py\themes.py", line 200, in apply_theme
+    _update_widget_colors(app.root, new_colors)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\ZEMmacOS\py\themes.py", line 263, in _update_widget_colors
+    for child in widget.winfo_children():
+                 ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\tkinter\__init__.py", line 1215, in winfo_children
+    self.tk.call('winfo', 'children', self._w)):
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_tkinter.TclError: can't invoke "winfo" command: application has been destroyed
+Downloading Catalog
+Currently downloading publicrelease catalog from:
+
+https://swscan.apple.com/content/catalogs/others/index-15-14-13-12-10.16-10.15-10.14-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog
+
+
+Parsing Data
+Scanning products after catalog download...
+
+ -->  2. macOS Mojave (18F2059)
+ -->  3. macOS Mojave (18G103)
+ -->  4. macOS High Sierra (17G66)
+ -->  5. macOS Mojave (18E2034)
+ -->  6. Install macOS High Sierra Beta (17F66a)
+ -->  7. macOS Catalina (19D2064)
+ -->  8. macOS Catalina (19E2269)
+ -->  9. macOS Catalina (19F2200)
+ --> 10. macOS Catalina (19G2006)
+ --> 11. macOS Catalina (19G2021)
+ --> 12. macOS Catalina (19H2)
+ --> 13. macOS Catalina (19H4)
+ --> 14. macOS Catalina (19H15)
+ --> 15. macOS Big Sur (20G1427)
+ --> 16. macOS Monterey (21H1123)
+ --> 17. macOS Ventura (22H730)
+ --> 18. macOS Tahoe (25B78)
+ --> 19. macOS Sequoia (24G325)
+ --> 20. macOS Sonoma (23J126)
+ --> 21. macOS Tahoe (25C56)
+ --> 22. macOS Sequoia (24G419)
+ --> 23. macOS Sonoma (23J220)
+ --> 24. macOS Big Sur (20G1443)
+ --> 25. macOS Monterey (21H1320)
+ --> 26. macOS Sequoia (24G517)
+ --> 27. macOS Sonoma (23J319)
+ --> 28. macOS Tahoe (25D2128)
+ --> 29. macOS Tahoe (25D2140)
+ --> 30. macOS Tahoe (25E246)
+ --> 31. macOS Sequoia (24G624)
+ --> 32. macOS Sonoma (23J423)
+ --> 33. macOS Tahoe (25E253)
+ --> 34. macOS Tahoe (25F71)
+ --> 35. macOS Sequoia (24G720)
+ --> 36. macOS Sonoma (23J520)
+ --> 37. macOS Tahoe (25F80)
+ --> 38. macOS Tahoe (25F84)
+ --> 39. macOS Tahoe (25G72)
+ --> 40. macOS Sequoia (24G824)
+ --> 41. macOS Sonoma (23J620)

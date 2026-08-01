@@ -16,6 +16,8 @@ from .welcome import WelcomeDialog
 from .universal_success_dialog import SuccessDialog
 from .live_log import LiveLog
 from .single_instance import SingleInstance
+from .validation import (FieldIndicator, OTP_INVALID_MESSAGE,
+                         is_valid_email, mobile_digits_error)
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -808,9 +810,13 @@ class UniversalLicenseCenter:
     def _open_store(self):
         """Open the software store in the default browser.
 
-        The store URL is derived from the configured API/App URL —
-        no hardcoded URLs."""
-        url = self.client.app_url.rstrip('/') + '/software-store'
+        The store URL comes from one central configuration location
+        (config/api-config.json → store.url)."""
+        from .config import get_store_url
+        url = get_store_url(self.config)
+        if not url:
+            LiveLog.log("Software store URL not configured", "store.url is empty in api-config.json")
+            return
         LiveLog.log("Opening software store", url)
         try:
             webbrowser.open(url)
@@ -1095,7 +1101,10 @@ class UniversalLicenseCenter:
             try:
                 result = self.client.verify_otp(state["email"], otp)
             except ApiError as e:
-                _set_status(e.message or f"OTP verification failed (HTTP {e.status_code})", self._error)
+                if e.status_code and 400 <= e.status_code < 500:
+                    _set_status(OTP_INVALID_MESSAGE, self._error)
+                else:
+                    _set_status(e.message or f"OTP verification failed (HTTP {e.status_code})", self._error)
                 verify_btn.config(state='normal', text='Verify OTP')
                 return
             except Exception as e:
@@ -1110,8 +1119,7 @@ class UniversalLicenseCenter:
                 _set_status("OTP verified. Proceed with the final step.", self._success)
             else:
                 otp_entry.delete(0, 'end')
-                msg = result.get('message') or result.get('error') or 'OTP verification failed'
-                _set_status(str(msg), self._error)
+                _set_status(OTP_INVALID_MESSAGE, self._error)
                 verify_btn.config(state='normal', text='Verify OTP')
                 otp_entry.focus()
 
@@ -1246,8 +1254,35 @@ class UniversalLicenseCenter:
 
         _add_field_row(main, "Name", customer_name_var,
                        status.customer_name if status else "")
-        _add_field_row(main, "Email", customer_email_var,
-                       status.customer_email if status else "")
+
+        email_row = tk.Frame(main, bg=self._card_bg)
+        email_row.pack(fill="x", pady=2)
+        tk.Label(email_row, text="Email:", font=("Segoe UI", 10),
+                 fg=self._text_secondary, bg=self._card_bg, width=14, anchor="w").pack(side="left")
+        email_entry = tk.Entry(email_row, font=("Segoe UI", 10), relief="solid", bd=1,
+                               textvariable=customer_email_var)
+        email_entry.pack(side="left", fill="x", expand=True)
+        email_indicator_label = tk.Label(email_row, text="", font=("Segoe UI", 11, "bold"),
+                                         bg=self._card_bg, fg=self._success)
+        email_indicator_label.pack(side="left", padx=(6, 0))
+        email_indicator = FieldIndicator(email_indicator_label,
+                                         success_color=self._success,
+                                         error_color=self._error)
+        default_email = status.customer_email if status else ""
+        if default_email:
+            customer_email_var.set(default_email)
+
+        def _update_email_indicator(event=None):
+            value = customer_email_var.get().strip()
+            if not value:
+                email_indicator.clear()
+            elif is_valid_email(value):
+                email_indicator.set_valid()
+            else:
+                email_indicator.set_invalid()
+
+        email_entry.bind("<KeyRelease>", _update_email_indicator)
+        _update_email_indicator()
         _add_label_row(main, "Product", self._product_name)
         if status and status.plan:
             _add_label_row(main, "Plan", status.plan)
@@ -1280,8 +1315,9 @@ class UniversalLicenseCenter:
             if not name:
                 status_label.config(text="Please enter your name", fg=self._error)
                 return
-            if not email or "@" not in email:
+            if not is_valid_email(email):
                 status_label.config(text="Please enter a valid email address", fg=self._error)
+                _update_email_indicator()
                 return
             try:
                 LiveLog.log(f"Sending {category} request", f"Category: {category}")

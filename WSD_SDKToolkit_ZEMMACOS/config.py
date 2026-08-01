@@ -30,3 +30,8 @@ def get_branding(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def get_product_info(config: Dict[str, Any]) -> Dict[str, Any]:
     return config.get("product", {})
+
+
+def get_store_url(config: Dict[str, Any]) -> str:
+    """Central location for the software store URL used by every Buy License button."""
+    return (config.get("store", {}).get("url") or "").strip()

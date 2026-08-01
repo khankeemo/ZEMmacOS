@@ -12,6 +12,9 @@
     "timeout": 30000,
     "retry_count": 3
   },
+  "store": {
+    "url": "https://www.websmithdigital.com/software-store"
+  },
   "trial": {
     "enabled": true,
     "days": 7,
