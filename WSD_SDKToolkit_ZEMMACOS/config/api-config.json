@@ -12,9 +12,6 @@
     "timeout": 30000,
     "retry_count": 3
   },
-  "store": {
-    "url": "https://www.websmithdigital.com/software-store"
-  },
   "trial": {
     "enabled": true,
     "days": 7,
@@ -65,8 +62,7 @@
     "primary_color": "#6366f1",
     "secondary_color": "#4f46e5",
     "accent_color": "#8b5cf6",
-    "support_email": "support@websmithdigital.com",
-    "sales_email": "sales@websmithdigital.com",
+    "support_email": "support@example.com",
     "support_url": "",
     "labels": {
       "activation_title": "Activate License",
