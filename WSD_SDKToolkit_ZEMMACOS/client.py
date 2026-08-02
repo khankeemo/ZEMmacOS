@@ -1,4 +1,5 @@
 """API Client for Universal License Platform"""
+import os
 import time
 from typing import Any, Dict, Optional
 
@@ -388,6 +389,39 @@ class ApiClient:
             'runtime_type': runtime_type or RUNTIME_TYPE,
         }
         return self._request('communication/create', payload)
+
+    def upload_attachment(self, conversation_id: str, file_path: str) -> Dict[str, Any]:
+        """Upload a file to an existing conversation (multipart).
+
+        Uses the same HMAC-signed headers as every other request; the payload
+        is the conversation id (files are sent as multipart form data).
+        """
+        endpoint = f"communication/{conversation_id}/attach"
+        url = f"{self.base_url}/api/{self.api_version}/{endpoint}"
+        payload = {'conversation_id': conversation_id}
+        headers = self._sign_request(payload, method='POST',
+                                     path=f"/api/{self.api_version}/{endpoint}",
+                                     query='')
+        try:
+            with open(file_path, 'rb') as f:
+                response = requests.post(
+                    url, files={'file': (os.path.basename(file_path), f)},
+                    headers=headers, timeout=self.timeout
+                )
+        except FileNotFoundError:
+            return {'success': False, 'message': 'Attachment file not found'}
+        except OSError as e:
+            return {'success': False, 'message': f'Failed to read attachment: {e}'}
+        data = {}
+        try:
+            data = response.json()
+        except Exception:
+            if response.text:
+                data = {'message': response.text}
+        if 200 <= response.status_code < 300:
+            return data
+        message = data.get('message', data.get('error', f'HTTP {response.status_code}'))
+        return {'success': False, 'message': message, 'error': data}
 
     def get_conversation(self, conversation_id: str) -> Dict[str, Any]:
         url = f"{self.base_url}/api/{self.api_version}/communication/{conversation_id}"

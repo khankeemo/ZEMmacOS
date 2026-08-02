@@ -14,10 +14,10 @@ from .hardware import HardwareDetector
 from .cache import CacheManager
 from .welcome import WelcomeDialog
 from .universal_success_dialog import SuccessDialog
+from .universal_email_dialog import UniversalEmailDialog
 from .live_log import LiveLog
 from .single_instance import SingleInstance
-from .validation import (FieldIndicator, OTP_INVALID_MESSAGE,
-                         is_valid_email, mobile_digits_error)
+from .validation import OTP_INVALID_MESSAGE
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -231,8 +231,7 @@ class UniversalLicenseCenter:
 
         def do_generate_request():
             cleanup()
-            self._show_request_dialog("Generate Request", "request",
-                                      parent=self._root if (self._root and self._root.winfo_exists()) else None)
+            UniversalEmailDialog(self, "Generate Request", "general").show()
 
         tk.Button(btn_frame, text="Activate License", command=do_activate,
                   font=("Segoe UI", 12, "bold"),
@@ -1203,163 +1202,12 @@ class UniversalLicenseCenter:
 
     def _contact_support(self):
         LiveLog.log("Opening support request", "Showing support dialog")
-        self._show_request_dialog("Support", "support")
+        UniversalEmailDialog(self, "Contact Support", "support").show()
 
     def _sales_enquiry(self):
         LiveLog.log("Opening sales enquiry", "Showing sales dialog")
-        self._show_request_dialog("Sales Enquiry", "sales")
+        UniversalEmailDialog(self, "Sales Enquiry", "sales").show()
 
-    def _show_request_dialog(self, title: str, category: str, parent: Optional[tk.Widget] = None):
-        dialog = tk.Toplevel(parent or self._root)
-        dialog.title(title)
-        dialog.geometry("580x535")
-        dialog.configure(bg=self._bg)
-        dialog.transient(self._root)
-        dialog.grab_set()
-
-        header = tk.Frame(dialog, bg=self._primary, height=64)
-        header.pack(fill="x")
-        header.pack_propagate(False)
-        tk.Label(header, text=title,
-                 font=("Segoe UI", 18, "bold"),
-                 fg="white", bg=self._primary).pack(expand=True)
-
-        main = tk.Frame(dialog, bg=self._card_bg, padx=24, pady=16)
-        main.pack(fill="both", expand=True)
-
-        status = self._status
-
-        def _add_field_row(parent_frame, label_text, entry_var, default_value):
-            row = tk.Frame(parent_frame, bg=self._card_bg)
-            row.pack(fill="x", pady=2)
-            tk.Label(row, text=f"{label_text}:", font=("Segoe UI", 10),
-                     fg=self._text_secondary, bg=self._card_bg, width=14, anchor="w").pack(side="left")
-            entry = tk.Entry(row, font=("Segoe UI", 10), relief="solid", bd=1,
-                             textvariable=entry_var)
-            entry.pack(side="left", fill="x", expand=True)
-            if default_value:
-                entry_var.set(default_value)
-            return entry
-
-        def _add_label_row(parent_frame, label_text, value_text):
-            row = tk.Frame(parent_frame, bg=self._card_bg)
-            row.pack(fill="x", pady=2)
-            tk.Label(row, text=f"{label_text}:", font=("Segoe UI", 10),
-                     fg=self._text_secondary, bg=self._card_bg, width=14, anchor="w").pack(side="left")
-            tk.Label(row, text=value_text, font=("Segoe UI", 10, "bold"),
-                     fg=self._text_primary, bg=self._card_bg, anchor="w").pack(side="left", fill="x", expand=True)
-
-        customer_name_var = tk.StringVar()
-        customer_email_var = tk.StringVar()
-
-        _add_field_row(main, "Name", customer_name_var,
-                       status.customer_name if status else "")
-
-        email_row = tk.Frame(main, bg=self._card_bg)
-        email_row.pack(fill="x", pady=2)
-        tk.Label(email_row, text="Email:", font=("Segoe UI", 10),
-                 fg=self._text_secondary, bg=self._card_bg, width=14, anchor="w").pack(side="left")
-        email_entry = tk.Entry(email_row, font=("Segoe UI", 10), relief="solid", bd=1,
-                               textvariable=customer_email_var)
-        email_entry.pack(side="left", fill="x", expand=True)
-        email_indicator_label = tk.Label(email_row, text="", font=("Segoe UI", 11, "bold"),
-                                         bg=self._card_bg, fg=self._success)
-        email_indicator_label.pack(side="left", padx=(6, 0))
-        email_indicator = FieldIndicator(email_indicator_label,
-                                         success_color=self._success,
-                                         error_color=self._error)
-        default_email = status.customer_email if status else ""
-        if default_email:
-            customer_email_var.set(default_email)
-
-        def _update_email_indicator(event=None):
-            value = customer_email_var.get().strip()
-            if not value:
-                email_indicator.clear()
-            elif is_valid_email(value):
-                email_indicator.set_valid()
-            else:
-                email_indicator.set_invalid()
-
-        email_entry.bind("<KeyRelease>", _update_email_indicator)
-        _update_email_indicator()
-        _add_label_row(main, "Product", self._product_name)
-        if status and status.plan:
-            _add_label_row(main, "Plan", status.plan)
-        if status and status.license_key:
-            display_key = status.license_key[:8] + "..." if len(status.license_key) > 8 else status.license_key
-            _add_label_row(main, "License Key", display_key)
-
-        sep = tk.Frame(main, bg=self._border, height=1)
-        sep.pack(fill="x", pady=12)
-
-        tk.Label(main, text="Message:",
-                 font=("Segoe UI", 11),
-                 bg=self._card_bg, fg=self._text_primary).pack(anchor="w", pady=(0, 6))
-        msg_text = tk.Text(main, font=("Segoe UI", 11), height=6,
-                           relief="solid", bd=1)
-        msg_text.pack(fill="x", pady=(0, 10))
-        msg_text.focus()
-
-        status_label = tk.Label(main, text="", font=("Segoe UI", 10),
-                                bg=self._card_bg, fg=self._success)
-        status_label.pack(pady=(0, 5))
-
-        def do_send():
-            message = msg_text.get("1.0", "end-1c").strip()
-            name = customer_name_var.get().strip()
-            email = customer_email_var.get().strip()
-            if not message:
-                status_label.config(text="Please enter a message", fg=self._error)
-                return
-            if not name:
-                status_label.config(text="Please enter your name", fg=self._error)
-                return
-            if not is_valid_email(email):
-                status_label.config(text="Please enter a valid email address", fg=self._error)
-                _update_email_indicator()
-                return
-            try:
-                LiveLog.log(f"Sending {category} request", f"Category: {category}")
-                result = self.engine.create_communication(
-                    category=category,
-                    customer_email=email,
-                    customer_name=name,
-                    message=message,
-                    license_key=status.license_key if status else '',
-                    hardware_id=self.hardware.get_fingerprint(),
-                    sdk_version=SDK_VERSION,
-                    runtime_type=RUNTIME_TYPE,
-                )
-                if result.get('success'):
-                    status_label.config(text="Message sent successfully!", fg=self._success)
-                    LiveLog.log(f"{category} request sent", "Success")
-                    dialog.after(1500, dialog.destroy)
-                else:
-                    if result.get('queued'):
-                        status_label.config(text="Message queued - will send when online.", fg=self._warning)
-                    else:
-                        err = result.get('message', 'Failed to send message')
-                        status_label.config(text=str(err), fg=self._error)
-            except ApiError as e:
-                LiveLog.log(f"{category} request error", f"{e.status_code}: {e.message}")
-                status_label.config(text=e.message, fg=self._error)
-            except Exception as e:
-                LiveLog.log(f"{category} request error", str(e))
-                status_label.config(text=str(e), fg=self._error)
-
-        btn_frame = tk.Frame(main, bg=self._card_bg)
-        btn_frame.pack(fill="x", pady=(8, 0))
-        tk.Button(btn_frame, text="Send", command=do_send,
-                  font=("Segoe UI", 12, "bold"),
-                  bg=self._primary, fg="white", relief="flat",
-                  padx=20, pady=8, cursor="hand2").pack(fill="x", pady=(0, 6))
-        tk.Button(btn_frame, text="Cancel",
-                  font=("Segoe UI", 11),
-                  bg="#e5e7eb", fg=self._text_primary, relief="flat",
-                  command=dialog.destroy, cursor="hand2",
-                  padx=12, pady=4).pack(fill="x")
-        dialog.wait_window()
 
     def _view_hardware_status(self):
         LiveLog.log("Viewing hardware status")
