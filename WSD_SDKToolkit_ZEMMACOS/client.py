@@ -369,6 +369,27 @@ class ApiClient:
         }
         return self._request('support', payload)
 
+    def send_renewal_request(self, license_key: str, customer_name: str = '',
+                           customer_email: str = '', customer_mobile: str = '',
+                           message: str = '', request_type: str = 'renew',
+                           current_plan_id: str = '', current_plan_name: str = '',
+                           requested_plan_id: str = '', requested_plan_name: str = '') -> Dict[str, Any]:
+        return self._request(
+            'requests',
+            {
+                'request_type': request_type,
+                'license_key': license_key,
+                'customer_name': customer_name,
+                'customer_email': customer_email,
+                'customer_mobile': customer_mobile,
+                'message': message,
+                'current_plan_id': current_plan_id,
+                'current_plan_name': current_plan_name,
+                'requested_plan_id': requested_plan_id,
+                'requested_plan_name': requested_plan_name,
+            },
+        )
+
     def create_communication(self, category: str = 'general',
                              customer_email: str = '',
                              customer_name: str = '',

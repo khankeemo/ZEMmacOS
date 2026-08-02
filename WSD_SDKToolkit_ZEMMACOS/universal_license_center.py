@@ -14,7 +14,6 @@ from .hardware import HardwareDetector
 from .cache import CacheManager
 from .welcome import WelcomeDialog
 from .universal_success_dialog import SuccessDialog
-from .universal_email_dialog import UniversalEmailDialog
 from .live_log import LiveLog
 from .single_instance import SingleInstance
 from .validation import OTP_INVALID_MESSAGE
@@ -1207,6 +1206,22 @@ class UniversalLicenseCenter:
     def _sales_enquiry(self):
         LiveLog.log("Opening sales enquiry", "Showing sales dialog")
         UniversalEmailDialog(self, "Sales Enquiry", "sales").show()
+
+    def _renewal_request(self):
+        LiveLog.log("Opening renewal request", "Showing renewal dialog")
+        UniversalEmailDialog(self, "Renewal Request", "renewal").show()
+
+    def _activation_request(self):
+        LiveLog.log("Opening activation request", "Showing activation dialog")
+        UniversalEmailDialog(self, "Activation Request", "activation").show()
+
+    def _reactivation_request(self):
+        LiveLog.log("Opening reactivation request", "Showing reactivation dialog")
+        UniversalEmailDialog(self, "Reactivation Request", "reactivation").show()
+
+    def _license_request(self):
+        LiveLog.log("Opening license request", "Showing license dialog")
+        UniversalEmailDialog(self, "License Request", "license").show()
 
 
     def _view_hardware_status(self):
