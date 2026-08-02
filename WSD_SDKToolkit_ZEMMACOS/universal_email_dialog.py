@@ -72,6 +72,8 @@ class UniversalEmailDialog:
 
         self._files: List[_AttachedFile] = []
         self._dialog: Optional[tk.Toplevel] = None
+        self._status_dot: Optional[tk.Canvas] = None
+        self._status_text_label: Optional[tk.Label] = None
 
     # ------------------------------------------------------------------
     # Logging helpers (reuse the center's logger)
@@ -97,6 +99,7 @@ class UniversalEmailDialog:
         return {
             "customer_name": status.customer_name if status else "",
             "customer_email": status.customer_email if status else "",
+            "customer_company": getattr(status, 'customer_company', '') if status else "",
             "product": self._product_name or (status.product_name if status else ""),
             "plan": status.plan if status else "",
             "license_key": display_key,
@@ -109,8 +112,8 @@ class UniversalEmailDialog:
     def show(self) -> None:
         dialog = tk.Toplevel(self._parent)
         dialog.title(self._title)
-        dialog.geometry("680x720")
-        dialog.minsize(620, 640)
+        dialog.geometry("1100x820")
+        dialog.minsize(980, 720)
         dialog.configure(bg=self._bg)
         dialog.resizable(True, True)
         if self._parent is not None:
@@ -120,114 +123,259 @@ class UniversalEmailDialog:
 
         auto = self._auto_values()
 
-        header = tk.Frame(dialog, bg=self._primary, height=64)
-        header.pack(fill="x")
-        header.pack_propagate(False)
-        tk.Label(header, text=self._title,
-                 font=("Segoe UI", 18, "bold"),
-                 fg="white", bg=self._primary).pack(expand=True)
+        # ---- Title Bar ----
+        title_frame = tk.Frame(dialog, bg=self._primary, height=52)
+        title_frame.pack(fill="x", side="top")
+        title_frame.pack_propagate(False)
 
-        main = tk.Frame(dialog, bg=self._card_bg, padx=22, pady=14)
-        main.pack(fill="both", expand=True)
+        title_inner = tk.Frame(title_frame, bg=self._primary)
+        title_inner.pack(fill="both", padx=20, pady=10)
 
-        # ---------------- Customer info section ----------------
-        info = tk.LabelFrame(main, text="Customer Information",
-                             font=("Segoe UI", 10, "bold"),
-                             bg=self._card_bg, fg=self._text_secondary,
-                             bd=0, highlightthickness=1,
-                             highlightbackground=self._border,
-                             padx=12, pady=8)
-        info.pack(fill="x")
+        # Title left
+        tk.Label(title_inner, text="📧 " + self._title,
+                 font=("Segoe UI", 14, "bold"),
+                 fg="white", bg=self._primary).pack(side="left")
+
+        # Status indicator (center-right)
+        status_frame = tk.Frame(title_inner, bg=self._primary)
+        status_frame.pack(side="right", padx=(0, 10))
+
+        self._status_dot = tk.Canvas(status_frame, width=10, height=10,
+                                     bg=self._primary, highlightthickness=0)
+        self._status_dot.pack(side="left", padx=(0, 6))
+        self._status_dot.create_oval(2, 2, 8, 8, fill=self._success, outline="")
+
+        self._status_text_label = tk.Label(status_frame, text="Ready",
+                                           font=("Segoe UI", 10),
+                                           fg="white", bg=self._primary)
+        self._status_text_label.pack(side="left")
+
+        # Close button
+        close_btn = tk.Label(title_inner, text="✕", font=("Segoe UI", 16, "bold"),
+                             fg="white", bg=self._primary, cursor="hand2")
+        close_btn.pack(side="right")
+        close_btn.bind("<Button-1>", lambda e: self._close())
+        close_btn.bind("<Enter>", lambda e: close_btn.config(fg="#ff6b6b"))
+        close_btn.bind("<Leave>", lambda e: close_btn.config(fg="white"))
+
+        # ---- Main Container (2-column) ----
+        main_container = tk.Frame(dialog, bg=self._bg)
+        main_container.pack(fill="both", expand=True, padx=16, pady=(12, 0))
+
+        # Left column (Customer Info + Attachments)
+        left_col = tk.Frame(main_container, bg=self._bg)
+        left_col.pack(side="left", fill="both", expand=False, padx=(0, 10))
+
+        # Right column (Subject + Editor)
+        right_col = tk.Frame(main_container, bg=self._bg)
+        right_col.pack(side="left", fill="both", expand=True)
+
+        # ---- Left Column: Customer Information Card ----
+        info_card = tk.Frame(left_col, bg=self._card_bg,
+                             highlightthickness=1, highlightbackground=self._border,
+                             relief="flat")
+        info_card.pack(fill="x", pady=(0, 10))
+
+        # Card header
+        info_header = tk.Frame(info_card, bg=self._card_bg, height=34)
+        info_header.pack(fill="x", padx=14, pady=(6, 0))
+        info_header.pack_propagate(False)
+
+        tk.Label(info_header, text="Customer Information",
+                 font=("Segoe UI", 10, "bold"),
+                 fg=self._text_primary, bg=self._card_bg).pack(side="left")
+
+        # Info grid
+        info_grid = tk.Frame(info_card, bg=self._card_bg)
+        info_grid.pack(fill="x", padx=14, pady=(4, 12))
 
         self._name_var = tk.StringVar(value=auto["customer_name"])
         self._email_var = tk.StringVar(value=auto["customer_email"])
+        self._company_var = tk.StringVar(value=auto["customer_company"])
 
-        name_row = tk.Frame(info, bg=self._card_bg)
-        name_row.pack(fill="x", pady=2)
-        tk.Label(name_row, text="Name:", font=("Segoe UI", 10),
-                 fg=self._text_secondary, bg=self._card_bg,
-                 width=14, anchor="w").pack(side="left")
-        tk.Entry(name_row, font=("Segoe UI", 10), relief="solid", bd=1,
-                 textvariable=self._name_var).pack(side="left", fill="x", expand=True)
+        # Field definitions: (label, icon, variable, readonly)
+        info_fields = [
+            ("Name", "👤", self._name_var, False),
+            ("Email", "✉", self._email_var, False),
+            ("Company", "🏢", self._company_var, False),
+            ("Product", "📦", tk.StringVar(value=auto["product"]), True),
+            ("Plan", "📋", tk.StringVar(value=auto["plan"]), True),
+            ("License", "🔑", tk.StringVar(value=auto["license_key"]), True),
+        ]
 
-        email_row = tk.Frame(info, bg=self._card_bg)
-        email_row.pack(fill="x", pady=2)
-        tk.Label(email_row, text="Email:", font=("Segoe UI", 10),
-                 fg=self._text_secondary, bg=self._card_bg,
-                 width=14, anchor="w").pack(side="left")
-        email_entry = tk.Entry(email_row, font=("Segoe UI", 10), relief="solid", bd=1,
-                               textvariable=self._email_var)
-        email_entry.pack(side="left", fill="x", expand=True)
-        indicator_label = tk.Label(email_row, text="", font=("Segoe UI", 11, "bold"),
-                                   bg=self._card_bg, fg=self._success)
-        indicator_label.pack(side="left", padx=(6, 0))
-        self._email_indicator = FieldIndicator(indicator_label,
-                                               success_color=self._success,
-                                               error_color=self._error)
+        for i, (label, icon, var, readonly) in enumerate(info_fields):
+            row = tk.Frame(info_grid, bg=self._card_bg)
+            row.pack(fill="x", pady=2)
 
-        def _update_email_indicator(_event=None):
-            value = self._email_var.get().strip()
-            if not value:
-                self._email_indicator.clear()
-            elif is_valid_email(value):
-                self._email_indicator.set_valid()
+            # Icon + Label
+            label_w = tk.Label(row, text=f"{icon} {label}:",
+                               font=("Segoe UI", 9),
+                               fg=self._text_secondary, bg=self._card_bg,
+                               width=12, anchor="e")
+            label_w.pack(side="left", padx=(0, 6))
+
+            if readonly:
+                entry = tk.Entry(row, font=("Segoe UI", 9),
+                                 relief="solid", bd=1,
+                                 bg="#f3f4f6", fg=self._text_primary,
+                                 state="readonly", readonlybackground="#f3f4f6")
+                entry.configure(textvariable=var)
+                entry.pack(side="left", fill="x", expand=True)
             else:
-                self._email_indicator.set_invalid()
+                entry = tk.Entry(row, font=("Segoe UI", 9),
+                                 relief="solid", bd=1,
+                                 bg="white", fg=self._text_primary,
+                                 textvariable=var)
+                entry.pack(side="left", fill="x", expand=True)
 
-        email_entry.bind("<KeyRelease>", _update_email_indicator)
-        _update_email_indicator()
+                if label == "Email":
+                    indicator_label = tk.Label(row, text="", font=("Segoe UI", 9, "bold"),
+                                               bg=self._card_bg, fg=self._success)
+                    indicator_label.pack(side="left", padx=(4, 0))
+                    self._email_indicator = FieldIndicator(indicator_label,
+                                                           success_color=self._success,
+                                                           error_color=self._error)
 
-        for label, value in (("Product", auto["product"]),
-                             ("Plan", auto["plan"]),
-                             ("License Key", auto["license_key"])):
-            row = tk.Frame(info, bg=self._card_bg)
-            row.pack(fill="x", pady=1)
-            tk.Label(row, text=f"{label}:", font=("Segoe UI", 10),
-                     fg=self._text_secondary, bg=self._card_bg,
-                     width=14, anchor="w").pack(side="left")
-            tk.Label(row, text=value or "—", font=("Segoe UI", 10, "bold"),
-                     fg=self._text_primary, bg=self._card_bg,
-                     anchor="w").pack(side="left", fill="x", expand=True)
+                    def _update_email_indicator(_event=None):
+                        value = self._email_var.get().strip()
+                        if not value:
+                            self._email_indicator.clear()
+                            self._email_indicator._label.config(text="")
+                        elif is_valid_email(value):
+                            self._email_indicator.set_valid()
+                            self._email_indicator._label.config(text="✓")
+                        else:
+                            self._email_indicator.set_invalid()
+                            self._email_indicator._label.config(text="✗")
 
-        hw_row = tk.Frame(info, bg=self._card_bg)
-        hw_row.pack(fill="x", pady=1)
-        tk.Label(hw_row, text="Hardware ID:", font=("Segoe UI", 10),
+                    entry.bind("<KeyRelease>", _update_email_indicator)
+                    _update_email_indicator()
+
+        # Hardware ID (special case - truncated display)
+        hw_row = tk.Frame(info_grid, bg=self._card_bg)
+        hw_row.pack(fill="x", pady=2)
+        tk.Label(hw_row, text="🖥 Hardware ID:",
+                 font=("Segoe UI", 9),
                  fg=self._text_secondary, bg=self._card_bg,
-                 width=14, anchor="w").pack(side="left")
+                 width=12, anchor="e").pack(side="left", padx=(0, 6))
         hw_value = auto["hardware_id"]
-        tk.Label(hw_row, text=(hw_value[:16] + "..." if len(hw_value) > 16 else hw_value),
+        hw_display = hw_value[:14] + "..." if len(hw_value) > 14 else hw_value
+        tk.Label(hw_row, text=hw_display,
+                 font=("Segoe UI", 9),
+                 fg=self._text_primary, bg="#f3f4f6",
+                 relief="solid", bd=1, anchor="w",
+                 padx=4, pady=3).pack(side="left", fill="x", expand=True)
+
+        # ---- Left Column: Attachments Card ----
+        attach_card = tk.Frame(left_col, bg=self._card_bg,
+                               highlightthickness=1, highlightbackground=self._border,
+                               relief="flat")
+        attach_card.pack(fill="both", expand=True)
+
+        attach_inner = tk.Frame(attach_card, bg=self._card_bg)
+        attach_inner.pack(fill="both", expand=True, padx=14, pady=10)
+
+        attach_header = tk.Frame(attach_inner, bg=self._card_bg)
+        attach_header.pack(fill="x", pady=(0, 6))
+
+        tk.Label(attach_header, text="📎 Attachments",
                  font=("Segoe UI", 10, "bold"),
+                 fg=self._text_primary, bg=self._card_bg).pack(side="left")
+
+        add_btn = tk.Button(attach_header, text="+ Add",
+                            font=("Segoe UI", 8, "bold"),
+                            bg=self._primary, fg="white",
+                            relief="flat", padx=10, pady=2,
+                            cursor="hand2",
+                            command=self._pick_files)
+        add_btn.pack(side="right")
+        add_btn.bind("<Enter>", lambda e, b=add_btn: b.config(bg=self._text_primary))
+        add_btn.bind("<Leave>", lambda e, b=add_btn: b.config(bg=self._primary))
+
+        self._attach_count = tk.Label(attach_header,
+                                      text="0/5",
+                                      font=("Segoe UI", 8),
+                                      fg=self._text_secondary, bg=self._card_bg)
+        self._attach_count.pack(side="right", padx=(0, 8))
+
+        # Attachments list (scrollable)
+        attach_scroll = tk.Frame(attach_inner, bg=self._card_bg)
+        attach_scroll.pack(fill="both", expand=True)
+
+        self._attach_list = tk.Frame(attach_scroll, bg=self._card_bg)
+        self._attach_list.pack(fill="both", expand=True)
+        
+        self._render_attachments()
+
+        # ---- Right Column: Subject ----
+        subject_frame = tk.Frame(right_col, bg=self._card_bg,
+                                 highlightthickness=1, highlightbackground=self._border,
+                                 relief="flat")
+        subject_frame.pack(fill="x", pady=(0, 8))
+
+        subject_inner = tk.Frame(subject_frame, bg=self._card_bg)
+        subject_inner.pack(fill="x", padx=14, pady=8)
+
+        tk.Label(subject_inner, text="Subject",
+                 font=("Segoe UI", 9, "bold"),
                  fg=self._text_primary, bg=self._card_bg,
-                 anchor="w").pack(side="left", fill="x", expand=True)
+                 anchor="w").pack(fill="x", pady=(0, 2))
 
-        # ---------------- Subject ----------------
-        tk.Label(main, text="Subject:", font=("Segoe UI", 10),
-                 fg=self._text_primary, bg=self._card_bg).pack(anchor="w", pady=(10, 3))
         self._subject_var = tk.StringVar()
-        tk.Entry(main, font=("Segoe UI", 10), relief="solid", bd=1,
-                 textvariable=self._subject_var).pack(fill="x")
+        subject_entry = tk.Entry(subject_inner, font=("Segoe UI", 10),
+                                 relief="solid", bd=1,
+                                 bg="white", fg=self._text_primary,
+                                 textvariable=self._subject_var)
+        subject_entry.pack(fill="x", ipady=4)
 
-        # ---------------- Message (rich editor) ----------------
-        tk.Label(main, text="Message:", font=("Segoe UI", 10),
-                 fg=self._text_primary, bg=self._card_bg).pack(anchor="w", pady=(10, 3))
+        # ---- Right Column: Editor (scrollable) ----
+        editor_card = tk.Frame(right_col, bg=self._card_bg,
+                               highlightthickness=1, highlightbackground=self._border,
+                               relief="flat")
+        editor_card.pack(fill="both", expand=True)
 
-        editor_frame = tk.Frame(main, bg=self._card_bg)
-        editor_frame.pack(fill="both", expand=True)
+        editor_inner = tk.Frame(editor_card, bg=self._card_bg)
+        editor_inner.pack(fill="both", expand=True, padx=14, pady=8)
 
-        toolbar = tk.Frame(editor_frame, bg=self._card_bg)
+        # Editor header with char count
+        editor_header = tk.Frame(editor_inner, bg=self._card_bg)
+        editor_header.pack(fill="x", pady=(0, 4))
+
+        tk.Label(editor_header, text="Message",
+                 font=("Segoe UI", 9, "bold"),
+                 fg=self._text_primary, bg=self._card_bg).pack(side="left")
+
+        self._char_label = tk.Label(editor_header, text="0 / 5000",
+                                    font=("Segoe UI", 8),
+                                    fg=self._text_secondary, bg=self._card_bg)
+        self._char_label.pack(side="right")
+
+        # Toolbar
+        toolbar = tk.Frame(editor_inner, bg=self._card_bg, height=30)
         toolbar.pack(fill="x", pady=(0, 4))
+        toolbar.pack_propagate(False)
 
-        self._msg_text = tk.Text(editor_frame, font=("Segoe UI", 11),
+        # Editor text area (with scrollbar)
+        editor_text_frame = tk.Frame(editor_inner, bg=self._card_bg)
+        editor_text_frame.pack(fill="both", expand=True)
+
+        scrollbar = tk.Scrollbar(editor_text_frame)
+        scrollbar.pack(side="right", fill="y")
+
+        self._msg_text = tk.Text(editor_text_frame, font=("Segoe UI", 10),
                                  relief="solid", bd=1, wrap="word",
-                                 height=9, undo=True)
+                                 yscrollcommand=scrollbar.set,
+                                 bg="white", fg=self._text_primary)
         self._msg_text.pack(fill="both", expand=True)
+        scrollbar.config(command=self._msg_text.yview)
 
-        rich_font = tkfont.Font(font=("Segoe UI", 11))
-        self._msg_text.tag_configure("bold", font=rich_font.copy() ** {"weight": "bold"})
-        self._msg_text.tag_configure("italic", font=rich_font.copy() ** {"slant": "italic"})
+        # Rich text tags
+        self._msg_text.tag_configure("bold", font=tkfont.Font(font=("Segoe UI", 10, "bold")))
+        self._msg_text.tag_configure("italic", font=tkfont.Font(font=("Segoe UI", 10, "italic")))
         self._msg_text.tag_configure("underline",
-                                     font=rich_font.copy() ** {"underline": True})
+                                     font=tkfont.Font(font=("Segoe UI", 10, "underline")))
 
+        # Toolbar buttons
         self._bold_on = tk.BooleanVar(value=False)
         self._italic_on = tk.BooleanVar(value=False)
         self._underline_on = tk.BooleanVar(value=False)
@@ -242,72 +390,160 @@ class UniversalEmailDialog:
             except tk.TclError:
                 pass
 
-        tk.Checkbutton(toolbar, text="B", variable=self._bold_on, width=3,
-                       command=lambda: _toggle_style("bold", self._bold_on),
-                       font=("Segoe UI", 11, "bold"),
-                       bg=self._card_bg, fg=self._text_primary,
-                       activebackground=self._card_bg).pack(side="left", padx=(0, 4))
-        tk.Checkbutton(toolbar, text="I", variable=self._italic_on, width=3,
-                       command=lambda: _toggle_style("italic", self._italic_on),
-                       font=("Segoe UI", 11, "italic"),
-                       bg=self._card_bg, fg=self._text_primary,
-                       activebackground=self._card_bg).pack(side="left", padx=(0, 4))
-        tk.Checkbutton(toolbar, text="U", variable=self._underline_on, width=3,
-                       command=lambda: _toggle_style("underline", self._underline_on),
-                       font=("Segoe UI", 11, "underline"),
-                       bg=self._card_bg, fg=self._text_primary,
-                       activebackground=self._card_bg).pack(side="left", padx=(0, 4))
+        def _apply_bullet():
+            try:
+                sel_start = self._msg_text.index("sel.first")
+                sel_end = self._msg_text.index("sel.last")
+                lines = self._msg_text.get(sel_start, sel_end).split('\n')
+                if lines:
+                    line_start = sel_start.split('.')[0] + ".0"
+                    current_text = self._msg_text.get(line_start, sel_end)
+                    lines = current_text.split('\n')
+                    bulleted = ['• ' + line if line.strip() else line for line in lines]
+                    self._msg_text.delete(line_start, sel_end)
+                    self._msg_text.insert(line_start, '\n'.join(bulleted))
+            except tk.TclError:
+                pass
 
-        self._char_label = tk.Label(toolbar, text="0 characters",
-                                    font=("Segoe UI", 9), fg=self._text_secondary,
-                                    bg=self._card_bg)
-        self._char_label.pack(side="right")
+        def _apply_numbered():
+            try:
+                sel_start = self._msg_text.index("sel.first")
+                sel_end = self._msg_text.index("sel.last")
+                line_start = sel_start.split('.')[0] + ".0"
+                current_text = self._msg_text.get(line_start, sel_end)
+                lines = current_text.split('\n')
+                numbered = [f"{i+1}. {line}" if line.strip() else line for i, line in enumerate(lines)]
+                self._msg_text.delete(line_start, sel_end)
+                self._msg_text.insert(line_start, '\n'.join(numbered))
+            except tk.TclError:
+                pass
+
+        def _insert_link():
+            # Future-ready: placeholder for link insertion
+            pass
+
+        # Toolbar button config
+        button_config = {
+            'font': ("Segoe UI", 9, "bold"),
+            'bg': self._card_bg,
+            'fg': self._text_secondary,
+            'relief': "flat",
+            'padx': 6,
+            'pady': 1,
+            'cursor': "hand2",
+            'width': 3
+        }
+
+        btn_bold = tk.Button(toolbar, text="B", command=lambda: _toggle_style("bold", self._bold_on),
+                            **button_config)
+        btn_bold.pack(side="left", padx=(0, 1))
+        btn_bold.bind("<Enter>", lambda e, b=btn_bold: b.config(bg="#e5e7eb"))
+        btn_bold.bind("<Leave>", lambda e, b=btn_bold: b.config(bg=self._card_bg))
+
+        btn_italic = tk.Button(toolbar, text="I", command=lambda: _toggle_style("italic", self._italic_on),
+                              font=("Segoe UI", 9, "italic"), **button_config)
+        btn_italic.pack(side="left", padx=1)
+        btn_italic.bind("<Enter>", lambda e, b=btn_italic: b.config(bg="#e5e7eb"))
+        btn_italic.bind("<Leave>", lambda e, b=btn_italic: b.config(bg=self._card_bg))
+
+        btn_underline = tk.Button(toolbar, text="U", command=lambda: _toggle_style("underline", self._underline_on),
+                                 font=("Segoe UI", 9, "underline"), **button_config)
+        btn_underline.pack(side="left", padx=1)
+        btn_underline.bind("<Enter>", lambda e, b=btn_underline: b.config(bg="#e5e7eb"))
+        btn_underline.bind("<Leave>", lambda e, b=btn_underline: b.config(bg=self._card_bg))
+
+        tk.Frame(toolbar, width=1, bg=self._border).pack(side="left", padx=4, fill="y", pady=2)
+
+        btn_bullet = tk.Button(toolbar, text="•", command=_apply_bullet,
+                              **button_config)
+        btn_bullet.pack(side="left", padx=1)
+        btn_bullet.bind("<Enter>", lambda e, b=btn_bullet: b.config(bg="#e5e7eb"))
+        btn_bullet.bind("<Leave>", lambda e, b=btn_bullet: b.config(bg=self._card_bg))
+
+        btn_numbered = tk.Button(toolbar, text="1.", command=_apply_numbered,
+                               **button_config)
+        btn_numbered.pack(side="left", padx=1)
+        btn_numbered.bind("<Enter>", lambda e, b=btn_numbered: b.config(bg="#e5e7eb"))
+        btn_numbered.bind("<Leave>", lambda e, b=btn_numbered: b.config(bg=self._card_bg))
+
+        btn_link = tk.Button(toolbar, text="🔗", command=_insert_link,
+                           **button_config)
+        btn_link.pack(side="left", padx=1)
+        btn_link.bind("<Enter>", lambda e, b=btn_link: b.config(bg="#e5e7eb"))
+        btn_link.bind("<Leave>", lambda e, b=btn_link: b.config(bg=self._card_bg))
+
+        tk.Frame(toolbar, width=1, bg=self._border).pack(side="left", padx=4, fill="y", pady=2)
+
+        btn_undo = tk.Button(toolbar, text="↩", command=lambda: self._msg_text.edit_undo(),
+                           **button_config)
+        btn_undo.pack(side="left", padx=1)
+        btn_undo.bind("<Enter>", lambda e, b=btn_undo: b.config(bg="#e5e7eb"))
+        btn_undo.bind("<Leave>", lambda e, b=btn_undo: b.config(bg=self._card_bg))
+
+        btn_redo = tk.Button(toolbar, text="↪", command=lambda: self._msg_text.edit_redo(),
+                           **button_config)
+        btn_redo.pack(side="left", padx=1)
+        btn_redo.bind("<Enter>", lambda e, b=btn_redo: b.config(bg="#e5e7eb"))
+        btn_redo.bind("<Leave>", lambda e, b=btn_redo: b.config(bg=self._card_bg))
 
         def _update_char_count(_event=None):
             length = len(self._msg_text.get("1.0", "end-1c"))
-            self._char_label.config(text=f"{length} characters")
+            remaining = max(0, 5000 - length)
+            self._char_label.config(text=f"{length}/5000")
 
         self._msg_text.bind("<KeyRelease>", _update_char_count)
 
-        # ---------------- Attachments ----------------
-        attach_frame = tk.LabelFrame(main, text="Attachments (max 5, 10 MB each)",
-                                     font=("Segoe UI", 10, "bold"),
-                                     bg=self._card_bg, fg=self._text_secondary,
-                                     bd=0, highlightthickness=1,
-                                     highlightbackground=self._border,
-                                     padx=12, pady=6)
-        attach_frame.pack(fill="x", pady=(10, 0))
+        # ---- Bottom Action Bar (fixed) ----
+        action_bar = tk.Frame(dialog, bg=self._card_bg,
+                              highlightthickness=1, highlightbackground=self._border,
+                              relief="flat")
+        action_bar.pack(fill="x", side="bottom")
 
-        attach_header = tk.Frame(attach_frame, bg=self._card_bg)
-        attach_header.pack(fill="x")
-        tk.Label(attach_header, text="No files attached", font=("Segoe UI", 9),
-                 fg=self._text_secondary, bg=self._card_bg).pack(side="left")
-        tk.Button(attach_header, text="Add files",
-                  font=("Segoe UI", 9, "bold"),
-                  bg=self._primary, fg="white", relief="flat",
-                  padx=10, pady=2, cursor="hand2",
-                  command=self._pick_files).pack(side="right")
+        action_inner = tk.Frame(action_bar, bg=self._card_bg)
+        action_inner.pack(fill="x", padx=16, pady=10)
 
-        self._attach_list = tk.Frame(attach_frame, bg=self._card_bg)
-        self._attach_list.pack(fill="x", pady=(4, 0))
+        # Status on left
+        self._status_message = tk.Label(action_inner, text="",
+                                        font=("Segoe UI", 9),
+                                        bg=self._card_bg, fg=self._success)
+        self._status_message.pack(side="left")
 
-        # ---------------- Status + actions ----------------
-        self._status_label = tk.Label(main, text="", font=("Segoe UI", 10),
-                                      bg=self._card_bg, fg=self._success,
-                                      wraplength=600, justify="left")
-        self._status_label.pack(fill="x", pady=(8, 0))
+        # Buttons on right
+        btn_frame = tk.Frame(action_inner, bg=self._card_bg)
+        btn_frame.pack(side="right")
 
-        btn_frame = tk.Frame(main, bg=self._card_bg)
-        btn_frame.pack(fill="x", pady=(8, 0))
-        tk.Button(btn_frame, text="Send", command=self._do_send,
-                  font=("Segoe UI", 12, "bold"),
-                  bg=self._primary, fg="white", relief="flat",
-                  padx=20, pady=8, cursor="hand2").pack(fill="x", pady=(0, 6))
-        tk.Button(btn_frame, text="Cancel",
-                  font=("Segoe UI", 11),
-                  bg="#e5e7eb", fg=self._text_primary, relief="flat",
-                  command=self._close, cursor="hand2",
-                  padx=12, pady=4).pack(fill="x")
+        cancel_btn = tk.Button(btn_frame, text="Cancel",
+                              font=("Segoe UI", 9),
+                              bg="#e5e7eb", fg=self._text_primary,
+                              relief="flat", padx=16, pady=4,
+                              cursor="hand2",
+                              command=self._close)
+        cancel_btn.pack(side="left", padx=(0, 6))
+        cancel_btn.bind("<Enter>", lambda e, b=cancel_btn: b.config(bg="#d1d5db"))
+        cancel_btn.bind("<Leave>", lambda e, b=cancel_btn: b.config(bg="#e5e7eb"))
+
+        preview_btn = tk.Button(btn_frame, text="Preview",
+                               font=("Segoe UI", 9),
+                               bg="#dbeafe", fg="#1e40af",
+                               relief="flat", padx=16, pady=4,
+                               cursor="hand2",
+                               command=self._preview)
+        preview_btn.pack(side="left", padx=(0, 6))
+        preview_btn.bind("<Enter>", lambda e, b=preview_btn: b.config(bg="#bfdbfe"))
+        preview_btn.bind("<Leave>", lambda e, b=preview_btn: b.config(bg="#dbeafe"))
+
+        send_btn = tk.Button(btn_frame, text="Send Email",
+                            font=("Segoe UI", 9, "bold"),
+                            bg=self._primary, fg="white",
+                            relief="flat", padx=20, pady=4,
+                            cursor="hand2",
+                            command=self._do_send)
+        send_btn.pack(side="left")
+        send_btn.bind("<Enter>", lambda e, b=send_btn: b.config(bg=self._text_primary))
+        send_btn.bind("<Leave>", lambda e, b=send_btn: b.config(bg=self._primary))
+
+        # Initial status
+        self._set_status("Ready", self._success)
 
         dialog.wait_window()
 
@@ -338,35 +574,139 @@ class UniversalEmailDialog:
     def _render_attachments(self):
         for child in self._attach_list.winfo_children():
             child.destroy()
-        header_label = self._attach_list.master
+
         if not self._files:
-            self._attach_list.pack_forget()
-            header_label.winfo_children()[0].config(text="No files attached")
+            self._attach_count.config(text="0/5")
+            empty_label = tk.Label(self._attach_list,
+                                  text="No files attached",
+                                  font=("Segoe UI", 8),
+                                  fg=self._text_secondary, bg=self._card_bg)
+            empty_label.pack(pady=10)
             return
-        header_label.winfo_children()[0].config(
-            text=f"{len(self._files)}/{MAX_ATTACHMENTS} files attached")
-        self._attach_list.pack(fill="x", pady=(4, 0))
+
+        self._attach_count.config(text=f"{len(self._files)}/5")
+
         for file_obj in self._files:
-            row = tk.Frame(self._attach_list, bg=self._card_bg)
-            row.pack(fill="x", pady=1)
-            tk.Label(row, text="📎", font=("Segoe UI", 10),
-                     bg=self._card_bg).pack(side="left")
-            tk.Label(row, text=file_obj.name, font=("Segoe UI", 9),
-                     fg=self._text_primary, bg=self._card_bg,
-                     anchor="w").pack(side="left", fill="x", expand=True)
-            tk.Label(row, text=_format_size(file_obj.size), font=("Segoe UI", 8),
-                     fg=self._text_secondary, bg=self._card_bg).pack(side="right")
-            tk.Button(row, text="×", font=("Segoe UI", 9, "bold"),
-                      bg=self._card_bg, fg=self._error, relief="flat",
-                      cursor="hand2",
-                      command=lambda f=file_obj: self._remove_file(f)).pack(side="right")
+            # File card
+            card = tk.Frame(self._attach_list, bg="white",
+                           highlightthickness=1, highlightbackground=self._border,
+                           relief="flat")
+            card.pack(fill="x", pady=2, padx=1)
+
+            # Icon
+            icon_frame = tk.Frame(card, bg="white", width=28)
+            icon_frame.pack(side="left", fill="y", padx=(6, 0))
+            icon_frame.pack_propagate(False)
+            tk.Label(icon_frame, text="📎", font=("Segoe UI", 10),
+                     bg="white", fg=self._text_secondary).pack(expand=True)
+
+            # Info
+            info_frame = tk.Frame(card, bg="white")
+            info_frame.pack(side="left", fill="both", expand=True, padx=(6, 0))
+
+            tk.Label(info_frame, text=file_obj.name, font=("Segoe UI", 9),
+                     fg=self._text_primary, bg="white",
+                     anchor="w").pack(fill="x")
+
+            tk.Label(info_frame, text=_format_size(file_obj.size), font=("Segoe UI", 7),
+                     fg=self._text_secondary, bg="white",
+                     anchor="w").pack(fill="x")
+
+            # Remove button
+            remove_btn = tk.Label(card, text="✕", font=("Segoe UI", 9, "bold"),
+                                 bg="white", fg=self._error, cursor="hand2")
+            remove_btn.pack(side="right", padx=(0, 8))
+            remove_btn.bind("<Button-1>", lambda e, f=file_obj: self._remove_file(f))
+            remove_btn.bind("<Enter>", lambda e, b=remove_btn: b.config(fg="#dc2626"))
+            remove_btn.bind("<Leave>", lambda e, b=remove_btn: b.config(fg=self._error))
+
+    # ------------------------------------------------------------------
+    # Preview
+    # ------------------------------------------------------------------
+    def _preview(self):
+        """Preview the email without sending."""
+        values = self._validate()
+        if values is None:
+            return
+
+        preview = tk.Toplevel(self._dialog)
+        preview.title("Email Preview")
+        preview.geometry("600x500")
+        preview.configure(bg=self._bg)
+        preview.transient(self._dialog)
+        preview.grab_set()
+
+        header = tk.Frame(preview, bg=self._primary, height=44)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        tk.Label(header, text="Email Preview",
+                font=("Segoe UI", 14, "bold"),
+                fg="white", bg=self._primary).pack(expand=True)
+
+        body = tk.Frame(preview, bg=self._card_bg, padx=20, pady=16)
+        body.pack(fill="both", expand=True)
+
+        # Preview content
+        tk.Label(body, text=f"To: {values['email']}",
+                font=("Segoe UI", 10), fg=self._text_secondary,
+                bg=self._card_bg, anchor="w").pack(fill="x", pady=2)
+
+        tk.Label(body, text=f"Subject: {values['subject']}",
+                font=("Segoe UI", 10), fg=self._text_secondary,
+                bg=self._card_bg, anchor="w").pack(fill="x", pady=2)
+
+        tk.Label(body, text="Message:",
+                font=("Segoe UI", 10, "bold"),
+                fg=self._text_primary, bg=self._card_bg,
+                anchor="w").pack(fill="x", pady=(8, 4))
+
+        preview_text = tk.Text(body, font=("Segoe UI", 10),
+                              bg="#f9fafb", fg=self._text_primary,
+                              relief="solid", bd=1, wrap="word",
+                              height=15)
+        preview_text.pack(fill="both", expand=True)
+        preview_text.insert("1.0", values['message'])
+        preview_text.config(state="disabled")
+
+        btn_frame = tk.Frame(body, bg=self._card_bg)
+        btn_frame.pack(fill="x", pady=(10, 0))
+
+        tk.Button(btn_frame, text="Close",
+                 font=("Segoe UI", 10),
+                 bg="#e5e7eb", fg=self._text_primary,
+                 relief="flat", padx=20, pady=6,
+                 cursor="hand2",
+                 command=preview.destroy).pack(side="right")
+
+    # ------------------------------------------------------------------
+    # Status management
+    # ------------------------------------------------------------------
+    def _set_status(self, text: str, color: str):
+        """Update status in title bar and bottom bar."""
+        # Update bottom status
+        if hasattr(self, '_status_message'):
+            self._status_message.config(text=text, fg=color)
+        
+        # Update title bar status
+        if self._status_text_label:
+            self._status_text_label.config(text=text)
+        
+        # Update dot color
+        if self._status_dot:
+            dot_colors = {
+                self._success: "#22c55e",
+                self._error: "#ef4444",
+                self._warning: "#f59e0b",
+                self._text_secondary: "#6b7280"
+            }
+            dot_color = dot_colors.get(color, "#6b7280")
+            self._status_dot.delete("all")
+            self._status_dot.create_oval(2, 2, 8, 8, fill=dot_color, outline="")
 
     # ------------------------------------------------------------------
     # Validation + send
     # ------------------------------------------------------------------
-    def _set_status(self, text: str, color: str):
-        self._status_label.config(text=text, fg=color)
-
     def _validate(self) -> Optional[Dict[str, str]]:
         name = self._name_var.get().strip()
         email = self._email_var.get().strip()
@@ -377,7 +717,9 @@ class UniversalEmailDialog:
             return None
         if not is_valid_email(email):
             self._set_status("Please enter a valid email address", self._error)
-            self._email_indicator.set_invalid()
+            if hasattr(self, '_email_indicator'):
+                self._email_indicator.set_invalid()
+                self._email_indicator._label.config(text="✗")
             return None
         if not subject:
             self._set_status("Please enter a subject", self._error)
@@ -385,6 +727,7 @@ class UniversalEmailDialog:
         if not message:
             self._set_status("Please enter a message", self._error)
             return None
+        self._set_status("Ready", self._success)
         return {"name": name, "email": email,
                 "subject": subject, "message": message}
 
@@ -395,7 +738,10 @@ class UniversalEmailDialog:
         if values is None:
             return
         status = self._status
+
+        # Update status for sending
         self._set_status("Sending...", self._text_secondary)
+
         try:
             LiveLog.log(f"Sending {self._category} request",
                         f"Category: {self._category}")
@@ -420,7 +766,9 @@ class UniversalEmailDialog:
 
             conversation_id = result.get('conversation_id', '')
             if conversation_id and self._files:
+                self._set_status("Uploading attachments...", self._warning)
                 self._upload_attachments(conversation_id)
+
             self._set_status("Message sent successfully!", self._success)
             LiveLog.log(f"{self._category} request sent",
                         f"Conversation: {conversation_id or 'n/a'}")
