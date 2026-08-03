@@ -1,0 +1,67 @@
+2026-08-03 09:14:16 | INFO     | ============================================================
+2026-08-03 09:14:16 | INFO     | ZEMmacOS Application Started
+2026-08-03 09:14:16 | INFO     | Log file: D:\ZEMmacOS\logs\ZEMmacOS_2026-08-03_09-14-16.log
+2026-08-03 09:14:16 | INFO     | ============================================================
+2026-08-03 09:14:16 | INFO     | [SDK] Initializing license engine
+2026-08-03 09:14:16 | INFO     | [UI] UI locked
+2026-08-03 09:14:17 | INFO     | ✓ [STARTUP] License valid — building main application
+2026-08-03 09:14:17 | INFO     | [STARTUP] Building UI
+2026-08-03 09:14:17 | INFO     | [STARTUP] UI built, dashboard shown
+2026-08-03 09:14:17 | INFO     | ✓ [UI] UI unlocked
+2026-08-03 09:14:17 | INFO     | ✓ [APP] Application unlocked
+2026-08-03 09:14:18 | INFO     | Auto-fetching catalogue...
+2026-08-03 09:14:18 | INFO     | ============================================================
+2026-08-03 09:14:18 | INFO     | FETCHING macOS CATALOGUE FROM APPLE
+2026-08-03 09:14:18 | INFO     | ============================================================
+2026-08-03 09:14:18 | INFO     | Initializing gibMacOS...
+2026-08-03 09:14:18 | INFO     | Using catalog: publicrelease
+2026-08-03 09:14:18 | INFO     | Max macOS version: 25
+2026-08-03 09:14:18 | INFO     | Fetching catalog from Apple...
+2026-08-03 09:14:19 | INFO     | ✓ Found 40 macOS versions
+2026-08-03 09:14:19 | INFO     |  
+2026-08-03 09:14:19 | INFO     | ============================================================
+2026-08-03 09:14:19 | INFO     | ✓ CATALOGUE FETCH COMPLETED - Found 40 versions
+2026-08-03 09:14:19 | INFO     | ============================================================
+2026-08-03 09:14:19 | INFO     |  
+2026-08-03 09:14:19 | INFO     | INSTRUCTIONS:
+2026-08-03 09:14:19 | INFO     | 1. Find the number next to the macOS version you want
+2026-08-03 09:14:19 | INFO     | 2. Enter that number in the input box above
+2026-08-03 09:14:19 | INFO     | 3. Press ENTER or click DOWNLOAD SELECTED to start downloading
+2026-08-03 09:14:19 | INFO     |  
+2026-08-03 09:14:19 | WARNING  | NOTE: Each macOS version contains MULTIPLE packages (5GB-12GB total)
+2026-08-03 09:14:19 | INFO     | The downloader will download ALL packages sequentially.
+2026-08-03 09:14:21 | WARNING  | Deleting ALL log files...
+2026-08-03 09:14:21 | INFO     | ✓ Deleted 3 log file(s)
+2026-08-03 09:14:23 | INFO     | Cleaning temporary files...
+2026-08-03 09:14:25 | INFO     | Removed: .\py\__pycache__
+2026-08-03 09:14:25 | INFO     | Removed: .\Scripts\__pycache__
+2026-08-03 09:14:25 | INFO     | Removed: .\WSD_SDKToolkit_ZEMMACOS\__pycache__
+2026-08-03 09:14:25 | INFO     | Removed 3 __pycache__ folder(s)
+2026-08-03 09:14:25 | INFO     | Removed 0 .pyc/.pyo file(s)
+2026-08-03 09:14:25 | INFO     | ✓ Cleanup complete (3 items)
+2026-08-03 09:14:31 | INFO     | [ACTIVATION] Opening Universal License Center for activation
+2026-08-03 09:14:31 | INFO     | [SDK] [SDK] [INFO] License Center started
+2026-08-03 09:14:31 | INFO     | [SDK] License Center started
+2026-08-03 09:14:31 | INFO     | [SDK] License Center started
+2026-08-03 09:14:31 | INFO     | [SDK] [SDK] [INFO] Using pre-initialised status: licensed
+2026-08-03 09:14:31 | INFO     | [SDK] Using pre-initialised status: licensed
+2026-08-03 09:14:31 | INFO     | [SDK] ULC using status
+2026-08-03 09:14:31 | INFO     | [SDK] [SDK] [INFO] Opening Universal License Center
+2026-08-03 09:14:31 | INFO     | [SDK] Opening Universal License Center
+2026-08-03 09:14:31 | INFO     | [SDK] Opening Universal License Center
+2026-08-03 09:14:31 | INFO     | [SDK] Opening Universal License Center
+2026-08-03 09:14:36 | INFO     | [SDK] Opening support request
+2026-08-03 09:16:01 | INFO     | [SDK] Sending support request
+2026-08-03 09:16:04 | INFO     | [SDK] [ATTACHMENT] [WARNING] Attachment UED.png upload failed
+2026-08-03 09:16:04 | INFO     | [SDK] [ATTACHMENT] [WARNING] Attachment UED.png upload failed
+2026-08-03 09:16:04 | WARNING  | [ATTACHMENT] Attachment UED.png upload failed
+2026-08-03 09:16:05 | INFO     | [SDK] [ATTACHMENT] [WARNING] Attachment ULC.png upload failed
+2026-08-03 09:16:05 | INFO     | [SDK] [ATTACHMENT] [WARNING] Attachment ULC.png upload failed
+2026-08-03 09:16:05 | WARNING  | [ATTACHMENT] Attachment ULC.png upload failed
+2026-08-03 09:16:05 | INFO     | [SDK] support request sent
+2026-08-03 09:16:55 | WARNING  | Deleting ALL log files...
+2026-08-03 09:16:55 | INFO     | ✓ Deleted 1 log file(s)
+2026-08-03 09:16:57 | INFO     | Cleaning temporary files...
+2026-08-03 09:16:58 | INFO     | Removed 0 __pycache__ folder(s)
+2026-08-03 09:16:58 | INFO     | Removed 0 .pyc/.pyo file(s)
+2026-08-03 09:16:58 | INFO     | ✓ Cleanup complete (0 items)
