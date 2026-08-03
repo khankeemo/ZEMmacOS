@@ -1,0 +1,31 @@
+ZEMmacOS Live Log - Started 2026-08-03T03:24:20.222471
+================================================================================
+[2026-08-03 03:24:20] [STARTUP   ] [INFO   ] LiveLog system initialized
+[2026-08-03 03:24:20] [STARTUP   ] [INFO   ] Log file: D:\ZEMmacOS\logs\ZEMmacOS_live_2026-08-03_03-24-20.log
+[2026-08-03 03:24:20] [STARTUP   ] [INFO   ] Application started
+[2026-08-03 03:24:20] [STARTUP   ] [INFO   ] Configuration loaded
+[2026-08-03 03:24:20] [STARTUP   ] [INFO   ] Theme loaded
+[2026-08-03 03:24:20] [STARTUP   ] [INFO   ] Starting SDK initialization sequence
+[2026-08-03 03:24:20] [SDK       ] [INFO   ] Initializing license engine
+[2026-08-03 03:24:20] [UI        ] [INFO   ] UI locked
+[2026-08-03 03:24:20] [SDK       ] [INFO   ] Loading SDK config
+[2026-08-03 03:24:20] [SDK       ] [INFO   ] Detecting hardware
+[2026-08-03 03:24:20] [SDK       ] [INFO   ] Running decision engine
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] Decision engine result: inactive
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] State: inactive — showing Universal License Center
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] Opening Universal License Center
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] [SDK] [INFO] License Center started | Application lock engaged
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] License Center started | Application lock engaged
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] License Center started | Application lock engaged
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] [SDK] [INFO] Using pre-initialised status: inactive
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] Using pre-initialised status: inactive
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] ULC using status | Status: inactive
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] [SDK] [INFO] Opening Universal License Center | Status: inactive, trial_consumed=True
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] Opening Universal License Center | Status: inactive, trial_consumed=True
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] Opening Universal License Center | Status: inactive, trial_consumed=True
+[2026-08-03 03:24:21] [SDK       ] [INFO   ] Opening Universal License Center | Status: inactive, trial_consumed=True
+[2026-08-03 03:24:31] [SDK       ] [INFO   ] Opening support request | Showing support dialog
+[2026-08-03 03:24:56] [SDK       ] [INFO   ] ULC closed | Application locked - exiting process
+[2026-08-03 03:24:56] [SDK       ] [WARNING] ULC closed without resolving license — exiting
+[2026-08-03 03:24:56] [STARTUP   ] [WARNING] Application shutdown due to incomplete license flow
+[2026-08-03 03:24:56] [STARTUP   ] [INFO   ] LiveLog system stopped

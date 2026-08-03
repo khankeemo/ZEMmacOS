@@ -17,6 +17,7 @@ from .universal_success_dialog import SuccessDialog
 from .live_log import LiveLog
 from .single_instance import SingleInstance
 from .validation import OTP_INVALID_MESSAGE
+from .universal_email_dialog import UniversalEmailDialog
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -409,7 +410,7 @@ class UniversalLicenseCenter:
                 close_btn,
             ]
         elif is_inactive:
-            support_label = f"Contact Support ({self._support_email})" if self._support_email else "Contact Support"
+            support_label = "Contact Support"
             buttons = [
                 ("Activate License", self._activate_license, self._primary),
                 (support_label, self._contact_support, self._text_secondary),

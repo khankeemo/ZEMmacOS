@@ -1,0 +1,21 @@
+2026-08-03 02:30:16 | INFO     | ============================================================
+2026-08-03 02:30:16 | INFO     | ZEMmacOS Application Started
+2026-08-03 02:30:16 | INFO     | Log file: D:\ZEMmacOS\logs\ZEMmacOS_2026-08-03_02-30-16.log
+2026-08-03 02:30:16 | INFO     | ============================================================
+2026-08-03 02:30:17 | INFO     | [SDK] Initializing license engine
+2026-08-03 02:30:17 | INFO     | [UI] UI locked
+2026-08-03 02:30:17 | INFO     | [SDK] Opening Universal License Center
+2026-08-03 02:30:17 | INFO     | [SDK] [SDK] [INFO] License Center started
+2026-08-03 02:30:17 | INFO     | [SDK] License Center started
+2026-08-03 02:30:17 | INFO     | [SDK] License Center started
+2026-08-03 02:30:17 | INFO     | [SDK] [SDK] [INFO] Using pre-initialised status: inactive
+2026-08-03 02:30:17 | INFO     | [SDK] Using pre-initialised status: inactive
+2026-08-03 02:30:17 | INFO     | [SDK] ULC using status
+2026-08-03 02:30:17 | INFO     | [SDK] [SDK] [INFO] Opening Universal License Center
+2026-08-03 02:30:17 | INFO     | [SDK] Opening Universal License Center
+2026-08-03 02:30:17 | INFO     | [SDK] Opening Universal License Center
+2026-08-03 02:30:17 | INFO     | [SDK] Opening Universal License Center
+2026-08-03 02:34:02 | INFO     | [SDK] ULC closed
+2026-08-03 02:34:02 | WARNING  | [SDK] ULC closed without resolving license — exiting
+2026-08-03 02:34:02 | ERROR    | License flow incomplete — shutting down
+2026-08-03 02:34:02 | INFO     | Logger stopped

@@ -481,10 +481,60 @@ class UniversalEmailDialog:
         btn_undo.bind("<Leave>", lambda e, b=btn_undo: b.config(bg=self._card_bg))
 
         btn_redo = tk.Button(toolbar, text="↪", command=lambda: self._msg_text.edit_redo(),
-                           **button_config)
+                            **button_config)
         btn_redo.pack(side="left", padx=1)
         btn_redo.bind("<Enter>", lambda e, b=btn_redo: b.config(bg="#e5e7eb"))
         btn_redo.bind("<Leave>", lambda e, b=btn_redo: b.config(bg=self._card_bg))
+
+        # Font Family dropdown
+        font_families = ["Segoe UI", "Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia"]
+        self._font_family_var = tk.StringVar(value=font_families[0])
+        font_family_menu = tk.OptionMenu(toolbar, self._font_family_var, *font_families,
+                                         command=self._apply_font_family)
+        font_family_btn = font_family_menu.nametowidget(font_family_menu.children['menu'])
+        font_family_btn.config(**button_config, text="⬇")
+        font_family_btn.pack(side="left", padx=1)
+        font_family_btn.bind("<Enter>", lambda e, b=font_family_btn: b.config(bg="#e5e7eb"))
+        font_family_btn.bind("<Leave>", lambda e, b=font_family_btn: b.config(bg=self._card_bg))
+
+        # Font Size dropdown
+        font_sizes = ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "30", "36", "48"]
+        self._font_size_var = tk.StringVar(value="10")
+        font_size_menu = tk.OptionMenu(toolbar, self._font_size_var, *font_sizes,
+                                       command=self._apply_font_size)
+        font_size_btn = font_size_menu.nametowidget(font_size_menu.children['menu'])
+        font_size_btn.config(**button_config, text="⬇")
+        font_size_btn.pack(side="left", padx=1)
+        font_size_btn.bind("<Enter>", lambda e, b=font_size_btn: b.config(bg="#e5e7eb"))
+        font_size_btn.bind("<Leave>", lambda e, b=font_size_btn: b.config(bg=self._card_bg))
+
+        # Text Color button
+        btn_color = tk.Button(toolbar, text="🎨", command=self._apply_text_color,
+                             **button_config)
+        btn_color.pack(side="left", padx=1)
+        btn_color.bind("<Enter>", lambda e, b=btn_color: b.config(bg="#e5e7eb"))
+        btn_color.bind("<Leave>", lambda e, b=btn_color: b.config(bg=self._card_bg))
+
+        # Highlight Color button
+        btn_highlight = tk.Button(toolbar, text="🔆", command=self._apply_highlight_color,
+                                 **button_config)
+        btn_highlight.pack(side="left", padx=1)
+        btn_highlight.bind("<Enter>", lambda e, b=btn_highlight: b.config(bg="#e5e7eb"))
+        btn_highlight.bind("<Leave>", lambda e, b=btn_highlight: b.config(bg=self._card_bg))
+
+        # Emoji button
+        btn_emoji = tk.Button(toolbar, text="😀", command=self._apply_emoji,
+                            **button_config)
+        btn_emoji.pack(side="left", padx=1)
+        btn_emoji.bind("<Enter>", lambda e, b=btn_emoji: b.config(bg="#e5e7eb"))
+        btn_emoji.bind("<Leave>", lambda e, b=btn_emoji: b.config(bg=self._card_bg))
+
+        # Clear Formatting button
+        btn_clear = tk.Button(toolbar, text="📄", command=self._clear_formatting,
+                            **button_config)
+        btn_clear.pack(side="left", padx=1)
+        btn_clear.bind("<Enter>", lambda e, b=btn_clear: b.config(bg="#e5e7eb"))
+        btn_clear.bind("<Leave>", lambda e, b=btn_clear: b.config(bg=self._card_bg))
 
         def _update_char_count(_event=None):
             length = len(self._msg_text.get("1.0", "end-1c"))
@@ -500,7 +550,7 @@ class UniversalEmailDialog:
         action_bar.pack(fill="x", side="bottom")
 
         action_inner = tk.Frame(action_bar, bg=self._card_bg)
-        action_inner.pack(fill="x", padx=16, pady=10)
+        action_inner.pack(fill="x", padx=16, pady=12)
 
         # Status on left
         self._status_message = tk.Label(action_inner, text="",
@@ -513,39 +563,206 @@ class UniversalEmailDialog:
         btn_frame.pack(side="right")
 
         cancel_btn = tk.Button(btn_frame, text="Cancel",
-                              font=("Segoe UI", 9),
-                              bg="#e5e7eb", fg=self._text_primary,
-                              relief="flat", padx=16, pady=4,
-                              cursor="hand2",
-                              command=self._close)
-        cancel_btn.pack(side="left", padx=(0, 6))
-        cancel_btn.bind("<Enter>", lambda e, b=cancel_btn: b.config(bg="#d1d5db"))
-        cancel_btn.bind("<Leave>", lambda e, b=cancel_btn: b.config(bg="#e5e7eb"))
+                               font=("Segoe UI", 9),
+                               bg="#f3f4f6", fg=self._text_primary,
+                               relief="flat", padx=14, pady=6,
+                               cursor="hand2", highlightthickness=0,
+                               command=self._close)
+        cancel_btn.pack(side="left", padx=(0, 8))
+        cancel_btn.bind("<Enter>", lambda e, b=cancel_btn: b.config(bg="#e5e7eb"))
+        cancel_btn.bind("<Leave>", lambda e, b=cancel_btn: b.config(bg="#f3f4f6"))
+        cancel_btn.bind("<FocusIn>", lambda e, b=cancel_btn: b.config(relief="sunken"))
+        cancel_btn.bind("<FocusOut>", lambda e, b=cancel_btn: b.config(relief="flat"))
 
         preview_btn = tk.Button(btn_frame, text="Preview",
                                font=("Segoe UI", 9),
-                               bg="#dbeafe", fg="#1e40af",
-                               relief="flat", padx=16, pady=4,
-                               cursor="hand2",
+                               bg="#e0f2fe", fg="#0369a1",
+                               relief="flat", padx=14, pady=6,
+                               cursor="hand2", highlightthickness=0,
                                command=self._preview)
-        preview_btn.pack(side="left", padx=(0, 6))
-        preview_btn.bind("<Enter>", lambda e, b=preview_btn: b.config(bg="#bfdbfe"))
-        preview_btn.bind("<Leave>", lambda e, b=preview_btn: b.config(bg="#dbeafe"))
+        preview_btn.pack(side="left", padx=(0, 8))
+        preview_btn.bind("<Enter>", lambda e, b=preview_btn: b.config(bg="#bae6fd"))
+        preview_btn.bind("<Leave>", lambda e, b=preview_btn: b.config(bg="#e0f2fe"))
+        preview_btn.bind("<FocusIn>", lambda e, b=preview_btn: b.config(relief="sunken"))
+        preview_btn.bind("<FocusOut>", lambda e, b=preview_btn: b.config(relief="flat"))
 
-        send_btn = tk.Button(btn_frame, text="Send Email",
-                            font=("Segoe UI", 9, "bold"),
-                            bg=self._primary, fg="white",
-                            relief="flat", padx=20, pady=4,
-                            cursor="hand2",
-                            command=self._do_send)
+        send_btn = tk.Button(btn_frame, text="Send",
+                             font=("Segoe UI", 9, "bold"),
+                             bg=self._primary, fg="white",
+                             relief="flat", padx=16, pady=6,
+                             cursor="hand2", highlightthickness=0,
+                             command=self._do_send)
         send_btn.pack(side="left")
         send_btn.bind("<Enter>", lambda e, b=send_btn: b.config(bg=self._text_primary))
         send_btn.bind("<Leave>", lambda e, b=send_btn: b.config(bg=self._primary))
+        send_btn.bind("<FocusIn>", lambda e, b=send_btn: b.config(relief="sunken"))
+        send_btn.bind("<FocusOut>", lambda e, b=send_btn: b.config(relief="flat"))
+        send_btn.focus_set()
 
         # Initial status
         self._set_status("Ready", self._success)
 
+        # ---- Extra Toolbar Buttons ----
+        # Separator before advanced features
+        tk.Frame(toolbar, width=1, bg=self._border).pack(side="left", padx=4, fill="y", pady=2)
+
+        # Font Family dropdown
+        font_families = ["Segoe UI", "Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia"]
+        self._font_family_var = tk.StringVar(value=font_families[0])
+        font_family_menu = tk.OptionMenu(toolbar, self._font_family_var, *font_families,
+                                         command=self._apply_font_family)
+        font_family_btn = font_family_menu.nametowidget(font_family_menu.children['menu'])
+        font_family_btn.config(**button_config, text="⬇")
+        font_family_btn.pack(side="left", padx=1)
+        font_family_btn.bind("<Enter>", lambda e, b=font_family_btn: b.config(bg="#e5e7eb"))
+        font_family_btn.bind("<Leave>", lambda e, b=font_family_btn: b.config(bg=self._card_bg))
+
+        # Font Size dropdown
+        font_sizes = ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "30", "36", "48"]
+        self._font_size_var = tk.StringVar(value="10")
+        font_size_menu = tk.OptionMenu(toolbar, self._font_size_var, *font_sizes,
+                                       command=self._apply_font_size)
+        font_size_btn = font_size_menu.nametowidget(font_size_menu.children['menu'])
+        font_size_btn.config(**button_config, text="⬇")
+        font_size_btn.pack(side="left", padx=1)
+        font_size_btn.bind("<Enter>", lambda e, b=font_size_btn: b.config(bg="#e5e7eb"))
+        font_size_btn.bind("<Leave>", lambda e, b=font_size_btn: b.config(bg=self._card_bg))
+
+        # Text Color button
+        btn_color = tk.Button(toolbar, text="🎨", command=self._apply_text_color,
+                             **button_config)
+        btn_color.pack(side="left", padx=1)
+        btn_color.bind("<Enter>", lambda e, b=btn_color: b.config(bg="#e5e7eb"))
+        btn_color.bind("<Leave>", lambda e, b=btn_color: b.config(bg=self._card_bg))
+
+        # Highlight Color button
+        btn_highlight = tk.Button(toolbar, text="🔆", command=self._apply_highlight_color,
+                                 **button_config)
+        btn_highlight.pack(side="left", padx=1)
+        btn_highlight.bind("<Enter>", lambda e, b=btn_highlight: b.config(bg="#e5e7eb"))
+        btn_highlight.bind("<Leave>", lambda e, b=btn_highlight: b.config(bg=self._card_bg))
+
+        # Emoji button
+        btn_emoji = tk.Button(toolbar, text="😀", command=self._apply_emoji,
+                            **button_config)
+        btn_emoji.pack(side="left", padx=1)
+        btn_emoji.bind("<Enter>", lambda e, b=btn_emoji: b.config(bg="#e5e7eb"))
+        btn_emoji.bind("<Leave>", lambda e, b=btn_emoji: b.config(bg=self._card_bg))
+
+        # Clear Formatting button
+        btn_clear = tk.Button(toolbar, text="📄", command=self._clear_formatting,
+                            **button_config)
+        btn_clear.pack(side="left", padx=1)
+        btn_clear.bind("<Enter>", lambda e, b=btn_clear: b.config(bg="#e5e7eb"))
+        btn_clear.bind("<Leave>", lambda e, b=btn_clear: b.config(bg=self._card_bg))
+
+        # Undo/Redo buttons added earlier
+
+        def _update_char_count(_event=None):
+            length = len(self._msg_text.get("1.0", "end-1c"))
+            remaining = max(0, 5000 - length)
+            self._char_label.config(text=f"{length}/5000")
+            # Update color based on remaining characters
+            if length >= 4500:
+                self._char_label.config(fg="#dc2626")  # Red
+            elif length >= 4000:
+                self._char_label.config(fg="#ea580c")  # Orange
+            else:
+                self._char_label.config(fg=self._text_secondary)
+
+        self._msg_text.bind("<KeyRelease>", _update_char_count)
+
         dialog.wait_window()
+
+    # ------------------------------------------------------------------
+    # Toolbar formatting functions
+    # ------------------------------------------------------------------
+    def _apply_font_family(self, family):
+        try:
+            self._msg_text.tag_configure("font_family", font=family)
+            self._msg_text.tag_add("font_family", "sel.first", "sel.last")
+        except tk.TclError:
+            pass
+
+    def _apply_font_size(self, size):
+        try:
+            current_font = tkfont.Font(font=self._msg_text["font"])
+            new_font = tkfont.Font(size=int(size), family=current_font['family'],
+                                  weight=current_font['weight'], slant=current_font['slant'])
+            self._msg_text.tag_configure("font_size", font=new_font)
+            self._msg_text.tag_add("font_size", "sel.first", "sel.last")
+        except tk.TclError:
+            pass
+
+    def _apply_text_color(self):
+        color = tk.colorchooser.askcolor(title="Choose Text Color")
+        if color[0]:
+            try:
+                self._msg_text.tag_configure("text_color", foreground=color[1])
+                self._msg_text.tag_add("text_color", "sel.first", "sel.last")
+            except tk.TclError:
+                pass
+
+    def _apply_highlight_color(self):
+        color = tk.colorchooser.askcolor(title="Choose Highlight Color")
+        if color[0]:
+            try:
+                self._msg_text.tag_configure("bg_highlight", background=color[1])
+                self._msg_text.tag_add("bg_highlight", "sel.first", "sel.last")
+            except tk.TclError:
+                pass
+
+    def _apply_emoji(self):
+        # Open emoji picker dialog
+        emoji_window = tk.Toplevel(self._dialog)
+        emoji_window.title("Emoji Picker")
+        emoji_window.geometry("400x300")
+        emoji_window.configure(bg="white")
+        emoji_window.transient(self._dialog)
+        
+        # Simple grid of common emojis
+        emojis = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
+                 "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰",
+                 "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜",
+                 "🤗", "🤭", "🤫", "🤔", "😐", "😑", "😶", "😐",
+                 "🙄", "😏", "😣", "😥", "😮", "🤐", "😯", "😪",
+                 "😫", "😴", "😌", "😛", "😜", "😝", "🤤", "😒",
+                 "😓", "😔", "😕", "🙃", "🤑", "😲", "🙀", "😨",
+                 "😧", "😦", "😟", "😕", "🙁", "😞", "😓", "😩",
+                 "😫", "😤", "😡", "😠", "🤬", "😈", "👿", "💀",
+                 "☠️", "💩", "🤡", "👹", "👺", "👻", "👽", "👾",
+                 "🤖", "😺", "😸", "😹", "😻", "😼", "😽", "🙀",
+                 "😿", "😾"]
+        
+        row, col = 0, 0
+        for emoji in emojis:
+            btn = tk.Button(emoji_window, text=emoji, font=("Segoe UI", 12),
+                          bg="white", relief="flat", width=4, height=2,
+                          command=lambda e=emoji: self._insert_emoji(e, emoji_window))
+            btn.grid(row=row, column=col, padx=2, pady=2)
+            col += 1
+            if col > 7:
+                col = 0
+                row += 1
+                if row > 6:
+                    break
+        
+        tk.Button(emoji_window, text="Close", command=emoji_window.destroy,
+                 bg="#f3f4f6", relief="flat").place(relx=0.5, rely=0.95, anchor="center")
+
+    def _insert_emoji(self, emoji, window):
+        try:
+            self._msg_text.insert("insert", emoji)
+            window.destroy()
+        except tk.TclError:
+            pass
+
+    def _clear_formatting(self):
+        # Remove all formatting tags
+        for tag in self._msg_text.tag_names():
+            self._msg_text.tag_remove(tag, "1.0", "end")
+        # Reset font to default
+        self._msg_text.configure(font=("Segoe UI", 10))
 
     # ------------------------------------------------------------------
     # Attachments
