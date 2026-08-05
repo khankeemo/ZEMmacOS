@@ -118,8 +118,26 @@ class CacheManager:
         if not self.is_hardware_consistent(current_hardware_id):
             self.invalidate_license_status()
 
-    def set_license_status(self, status: Dict[str, Any]) -> None:
-        self.set('license_status', status)
+    def reset_on_fresh_activation(self) -> None:
+        """Rule 3 (AWS-01): clear the old cached license state before a fresh
+        license activation is applied.
+
+        Removes stale license / customer values so a previous customer's license
+        can never resurface after a new license is activated. The hardware ID is
+        computed live (no stored key to clear) and the offline message queue is
+        preserved, so only the business-license keys are removed here. Onboarding
+        and paid-history flags are re-applied by the engine after the backend
+        reload, so they are intentionally left untouched.
+        """
+        cache = self._load_cache()
+        changed = False
+        for key in ('license_status', 'customer_email'):
+            if key in cache and cache[key] is not None:
+                cache.pop(key, None)
+                changed = True
+        if changed:
+            self._cache = cache
+            self._save_cache()
 
     def invalidate_license_status(self) -> None:
         self.delete('license_status')

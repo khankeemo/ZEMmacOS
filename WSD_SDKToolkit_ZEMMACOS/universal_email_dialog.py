@@ -90,10 +90,15 @@ class UniversalEmailDialog:
 
     Receives the owning UniversalLicenseCenter so it can reuse the engine,
     hardware detector, cached status (auto-fill) and the center's theme.
+
+    Optional `prefill` (dict) — the public interface used by the Renew
+    License dialog: overrides the auto-filled values, locks the customer
+    fields and pre-populates the subject (reason) and message (notes).
     """
 
     def __init__(self, center: Any, title: str, category: str,
-                 parent: Optional[tk.Widget] = None):
+                 parent: Optional[tk.Widget] = None,
+                 prefill: Optional[Dict[str, str]] = None):
         self._center = center
         self._title = title
         self._category = category
@@ -101,6 +106,7 @@ class UniversalEmailDialog:
         self._engine = center.engine
         self._hardware = center.hardware
         self._status = getattr(center, '_status', None)
+        self._prefill = prefill or {}
 
         self._primary = center._primary
         self._bg = center._bg
@@ -143,7 +149,7 @@ class UniversalEmailDialog:
         if status and status.license_key:
             key = status.license_key
             display_key = key[:8] + "..." if len(key) > 8 else key
-        return {
+        auto = {
             "customer_name": status.customer_name if status else "",
             "customer_email": status.customer_email if status else "",
             "customer_company": getattr(status, 'customer_company', '') if status else "",
@@ -152,6 +158,10 @@ class UniversalEmailDialog:
             "license_key": display_key,
             "hardware_id": self._hardware.get_fingerprint(),
         }
+        for key, value in (self._prefill or {}).items():
+            if key in auto and value:
+                auto[key] = value
+        return auto
 
     # ------------------------------------------------------------------
     # Small build helpers (consistent, modern widgets)
@@ -369,10 +379,10 @@ class UniversalEmailDialog:
                                                success_color=self._success,
                                                error_color=self._error)
 
-        self._name_entry = self._info_field(info_fields, "Name", self._name_var, False)
-        email_entry = self._info_field(info_fields, "Email", self._email_var, False,
+        self._name_entry = self._info_field(info_fields, "Name", self._name_var, bool(self._prefill))
+        email_entry = self._info_field(info_fields, "Email", self._email_var, bool(self._prefill),
                                        suffix=self._email_indicator_label)
-        self._company_entry = self._info_field(info_fields, "Company", self._company_var, False)
+        self._company_entry = self._info_field(info_fields, "Company", self._company_var, bool(self._prefill))
 
         product_var = tk.StringVar(value=auto["product"])
         plan_var = tk.StringVar(value=auto["plan"])
@@ -469,7 +479,7 @@ class UniversalEmailDialog:
                  fg=self._text_primary, bg=self._card_bg,
                  anchor="w").pack(fill="x", pady=(0, 4))
 
-        self._subject_var = tk.StringVar()
+        self._subject_var = tk.StringVar(value=(self._prefill or {}).get('subject', ''))
         self._subject_entry = tk.Entry(subject_inner, font=("Segoe UI", 10),
                                        relief="solid", bd=1,
                                        bg="white", fg=self._text_primary,
@@ -574,6 +584,11 @@ class UniversalEmailDialog:
 
         # Rich text tags
         self._configure_text_tags()
+
+        # Renew integration: pre-filled generated body (Reason / Notes editable)
+        prefill_message = (self._prefill or {}).get('message')
+        if prefill_message:
+            self._msg_text.insert("1.0", prefill_message)
 
         # Keyboard shortcuts for formatting + undo/redo
         self._msg_text.bind("<Control-b>", lambda e: self._toggle_style("bold", self._bold_on))

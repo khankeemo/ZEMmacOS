@@ -479,11 +479,12 @@ class UniversalLicenseCenter:
         try:
             new_status = self.engine.refresh()
         except Exception as e:
-            LiveLog.log("Refresh failed", str(e))
+            LiveLog.log("refresh.error", f"Refresh failed: {e}")
             return self._status
         if new_status is None:
-            LiveLog.log("Refresh offline", "Backend unreachable - keeping current status")
+            LiveLog.log("refresh.offline", "Backend unreachable - keeping current status")
             return self._status
+        LiveLog.log("refresh.success", f"License refreshed from server (status: {new_status.status})")
         prev_valid = bool(self._status and self._status.valid)
         self._status = new_status
         self._initialized = True
@@ -507,6 +508,7 @@ class UniversalLicenseCenter:
         # license removal. ULC never runs the Decision Engine — it only
         # re-reads the authoritative status via the engine.
         try:
+            LiveLog.log("refresh.start", "Refreshing license with the server")
             self._refresh_from_server()
             if self._btn_frame and self._btn_frame.winfo_exists():
                 for child in self._btn_frame.winfo_children():
@@ -999,8 +1001,12 @@ class UniversalLicenseCenter:
             if not validated:
                 msg = (err.get('message') if isinstance(err, dict) else None) \
                     or result.get('message') \
-                    or (f"License validation failed. Status: {api_status}"
-                        if api_status else "License validation failed.")
+                    or (f"License validation could not be completed (status: {api_status}). "
+                        "Please check the license key and try again, or contact support."
+                        if api_status else
+                        "License validation could not be completed. Please check the license key "
+                        "and try again, or contact support.")
+                LiveLog.log("operation.error", f"License validation failed: {msg}")
                 _set_status(str(msg), self._error)
                 validate_btn.config(state='normal', text='Validate License')
                 otp_entry.config(state='disabled')
@@ -1144,13 +1150,22 @@ class UniversalLicenseCenter:
                     self._status = status
                     self._initialized = True
                 self._app_unlocked = True
+                LiveLog.log("general.unlocked", f"{operation} completed — application unlocked")
                 dialog.destroy()
                 self._show_success_dialog(operation)
                 self._refresh_ui()
             else:
                 err = result.get('error') or result.get('data') or result
                 msg = err.get('message') if isinstance(err, dict) else str(err)
-                msg = msg or result.get('message') or ("Activation failed" if is_activate else "Renewal failed")
+                # Rule 5 & 8: surface the real server message verbatim; only when
+                # the server supplied no message at all use an actionable local
+                # phrasing (what / why / next) rather than a bare "failed".
+                if not msg:
+                    action = "Activation" if is_activate else "Renewal"
+                    msg = (f"{action} could not be completed. "
+                           f"The server did not return a reason. Please contact support "
+                           f"at {self._support_email or 'your provider'} for assistance.")
+                LiveLog.log("operation.error", msg)
                 _set_status(str(msg), self._error)
                 final_btn.config(state='normal', text=final_label)
 

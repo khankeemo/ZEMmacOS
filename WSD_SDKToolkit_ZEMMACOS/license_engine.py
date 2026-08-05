@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional
 from .client import ApiClient, ApiError, ConnectionUnavailable
 from .hardware import HardwareDetector
 from .cache import CacheManager
+from .live_log import LiveLog
 
 logger = logging.getLogger(__name__)
 
@@ -206,19 +207,19 @@ class LicenseEngine:
 
         if onboarding_complete:
             if has_paid:
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — inactive (existing customer with paid history)")
+                LiveLog.log("license.invalid", "Decision — inactive (existing customer with paid history)")
                 return LicenseStatus(
                     valid=False, status='inactive',
                     hardware_id=hardware_id,
                     message='License not found or inactive. Please contact your administrator or activate a valid license.'
                 )
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — trial_consumed (onboarding complete, no paid license)")
+            LiveLog.log("license.invalid", "Decision — trial_consumed (onboarding complete, no paid license)")
             return LicenseStatus(
                 valid=False, status='trial_consumed',
                 hardware_id=hardware_id,
                 message='Your trial has ended. Please activate a paid license or renew an existing license.'
             )
-        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no_license (new customer)")
+        LiveLog.log("license.invalid", "Decision — no_license (new customer)")
         return LicenseStatus(
             valid=False, status='no_license',
             hardware_id=hardware_id,
@@ -242,10 +243,10 @@ class LicenseEngine:
         try:
             status_response = self._client.get_license_status(hardware_id)
         except ConnectionUnavailable as e:
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Warning — backend unreachable: {e}")
+            LiveLog.log("license.offline", f"Backend unreachable: {e}")
             return None
         if not status_response.get('success'):
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Warning — license status endpoint error, using local state")
+            LiveLog.log("license.offline", "License status endpoint error, using local state")
             return None
 
         api_status = status_response.get('status', 'no_license')
@@ -257,14 +258,14 @@ class LicenseEngine:
                 self._license_key = status.license_key
             if api_status == 'licensed':
                 self._cache.mark_has_ever_activated_paid_license()
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — {api_status} on server (unified API)")
+            LiveLog.log("license.valid", f"Decision — {api_status} on server (unified API)")
             return status
 
         # Server confirmed no active license — never fall back to cached business values.
         self._cache.invalidate_license_status()
         self._cache.clear_license_key()
         self._license_key = None
-        print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — no active state on server (status={api_status})")
+        LiveLog.log("license.invalid", f"Decision — no active state on server (status={api_status})")
         decision = self._build_no_license_decision(hardware_id)
         self._status = decision
         return decision
@@ -273,7 +274,7 @@ class LicenseEngine:
         hardware_id = self._hardware.get_fingerprint()
         self._cache.invalidate_if_hardware_mismatch(hardware_id)
         self._process_message_queue()
-        print(f"[{time.strftime('%H:%M:%S')}] License Engine initialize — hardware: {hardware_id[:16]}...")
+        LiveLog.log("engine.initialize", f"License Engine initialize — hardware: {hardware_id[:16]}...")
 
         # Server-first: the backend is the single source of truth while online.
         server_status = self._sync_status_from_server()
@@ -288,10 +289,10 @@ class LicenseEngine:
             if not self._license_key and self._status.license_key:
                 self._license_key = self._status.license_key
             if self._is_valid_status(self._status):
-                print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — restored from cache (status: {self._status.status})")
+                LiveLog.log("license.cache", f"Decision — restored from cache (status: {self._status.status})")
                 self._notify_ready(True)
                 return self._status
-            print(f"{time.strftime('%H:%M:%S')} LiveLog: Decision — cached state found but not valid ({self._status.status})")
+            LiveLog.log("license.invalid", f"Decision — cached state found but not valid ({self._status.status})")
 
         self._status = self._build_no_license_decision(hardware_id)
         self._notify_ready(False)
@@ -361,6 +362,11 @@ class LicenseEngine:
     def activate(self, license_key: str) -> Dict[str, Any]:
         result = self._client.activate_license(license_key)
         if result.get('success'):
+            LiveLog.log("activation.success", "License activated on server — applying fresh state")
+            # Rule 3 (AWS-01): a fresh activation must not inherit any old cached
+            # license/customer state. Clear the stale business keys first, then
+            # reload the authoritative status from the backend.
+            self._cache.reset_on_fresh_activation()
             self._license_key = license_key
             self._cache.save_license_key(license_key)
             lic = result.get('license', {})
@@ -437,6 +443,7 @@ class LicenseEngine:
                     customer_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         result = self._client.start_trial(email, customer_name=customer_name, customer_data=customer_data)
         if result.get('success'):
+            LiveLog.log("trial.started", "Trial started on server — applying fresh state")
             trial_data = result.get('trial', {}) if isinstance(result.get('trial'), dict) else result
             customer_data = customer_data or {}
             # Backend normalized status is authoritative (single source of truth).
@@ -505,6 +512,7 @@ class LicenseEngine:
             raise ValueError("License key unavailable. Please activate first.")
         result = self._client.renew_license(key, extra_days)
         if result.get('success'):
+            LiveLog.log("renewal.success", "License renewed on server — applying fresh state")
             self._license_key = key
             lic = result.get('license', {})
             hardware_id = self._hardware.get_fingerprint()
