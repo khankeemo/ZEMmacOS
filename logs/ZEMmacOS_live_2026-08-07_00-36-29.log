@@ -1,0 +1,46 @@
+ZEMmacOS Live Log - Started 2026-08-07T00:36:29.016137
+================================================================================
+[2026-08-07 00:36:29] [STARTUP   ] [INFO   ] LiveLog system initialized
+[2026-08-07 00:36:29] [STARTUP   ] [INFO   ] Log file: D:\ZEMmacOS\logs\ZEMmacOS_live_2026-08-07_00-36-29.log
+[2026-08-07 00:36:29] [STARTUP   ] [INFO   ] Application started
+[2026-08-07 00:36:29] [STARTUP   ] [INFO   ] Configuration loaded
+[2026-08-07 00:36:29] [STARTUP   ] [INFO   ] Theme loaded
+[2026-08-07 00:36:29] [STARTUP   ] [INFO   ] Starting SDK initialization sequence
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Initializing license engine
+[2026-08-07 00:36:29] [UI        ] [INFO   ] UI locked
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Loading SDK config
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Detecting hardware
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Running decision engine
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Decision engine result: no_license
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] State: no_license — showing Universal License Center
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Opening Universal License Center
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] [SDK] [INFO] License Center started | Application lock engaged
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] License Center started | Application lock engaged
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] License Center started | Application lock engaged
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] [SDK] [INFO] Using pre-initialised status: no_license
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Using pre-initialised status: no_license
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] ULC using status | Status: no_license
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] [SDK] [INFO] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-07 00:36:29] [SDK       ] [INFO   ] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-07 00:36:32] [SDK       ] [INFO   ] Activation started | Opening pre-activation dialog
+[2026-08-07 00:36:33] [SDK       ] [INFO   ] Software store URL not configured | store.url is empty in api-config.json
+[2026-08-07 00:36:37] [SDK       ] [INFO   ] Renewal started | Opening pre-renewal dialog
+[2026-08-07 00:36:38] [SDK       ] [INFO   ] Software store URL not configured | store.url is empty in api-config.json
+[2026-08-07 00:36:43] [SDK       ] [INFO   ] Opening sales enquiry | Showing sales dialog
+[2026-08-07 00:36:59] [SDK       ] [INFO   ] Opening support request | Showing support dialog
+[2026-08-07 00:37:43] [SDK       ] [INFO   ] refresh.start | Refreshing license with the server
+[2026-08-07 00:37:43] [SDK       ] [INFO   ] WORKFLOW_START | refresh — workflow started
+[2026-08-07 00:37:43] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | Checking Server — refresh
+[2026-08-07 00:37:44] [SDK       ] [INFO   ] license.invalid | Decision — no active state on server (status=no_license)
+[2026-08-07 00:37:44] [SDK       ] [INFO   ] license.invalid | Decision — no_license (new customer)
+[2026-08-07 00:37:44] [SDK       ] [INFO   ] STATUS_CHANGED | Status: no_license
+[2026-08-07 00:37:44] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | Refreshing Dashboard — no_license
+[2026-08-07 00:37:44] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | Completed — refresh
+[2026-08-07 00:37:44] [SDK       ] [INFO   ] WORKFLOW_COMPLETE | refresh — workflow complete
+[2026-08-07 00:37:44] [SDK       ] [INFO   ] refresh.success | License refreshed from server (status: no_license)
+[2026-08-07 00:37:55] [SDK       ] [INFO   ] ULC closed | Application locked - exiting process
+[2026-08-07 00:37:55] [SDK       ] [WARNING] ULC closed without resolving license — exiting
+[2026-08-07 00:37:55] [STARTUP   ] [WARNING] Application shutdown due to incomplete license flow
+[2026-08-07 00:37:55] [STARTUP   ] [INFO   ] LiveLog system stopped

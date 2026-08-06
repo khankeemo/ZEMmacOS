@@ -1,0 +1,28 @@
+2026-08-07 00:35:58 | INFO     | ============================================================
+2026-08-07 00:35:58 | INFO     | ZEMmacOS Application Started
+2026-08-07 00:35:58 | INFO     | Log file: D:\ZEMmacOS\logs\ZEMmacOS_2026-08-07_00-35-58.log
+2026-08-07 00:35:58 | INFO     | ============================================================
+2026-08-07 00:35:59 | INFO     | [SDK] Initializing license engine
+2026-08-07 00:35:59 | INFO     | [UI] UI locked
+2026-08-07 00:36:02 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 00:36:02 | INFO     | [SDK] [SDK] [INFO] License Center started
+2026-08-07 00:36:02 | INFO     | [SDK] License Center started
+2026-08-07 00:36:02 | INFO     | [SDK] License Center started
+2026-08-07 00:36:02 | INFO     | [SDK] [SDK] [INFO] Using pre-initialised status: no_license
+2026-08-07 00:36:02 | INFO     | [SDK] Using pre-initialised status: no_license
+2026-08-07 00:36:02 | INFO     | [SDK] ULC using status
+2026-08-07 00:36:02 | INFO     | [SDK] [SDK] [INFO] Opening Universal License Center
+2026-08-07 00:36:02 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 00:36:02 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 00:36:02 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 00:36:13 | INFO     | [SDK] Trial started
+2026-08-07 00:36:13 | INFO     | [SDK] [TRIAL] [INFO] Starting trial flow
+2026-08-07 00:36:13 | INFO     | [TRIAL] Starting trial flow
+2026-08-07 00:36:13 | INFO     | [SDK] Opening Welcome Dialog
+2026-08-07 00:36:13 | INFO     | [SDK] [WELCOME] [INFO] Opening Welcome Dialog
+2026-08-07 00:36:13 | INFO     | [WELCOME] Opening Welcome Dialog
+2026-08-07 00:36:23 | INFO     | [SDK] Welcome dialog closed
+2026-08-07 00:36:23 | INFO     | [SDK] ULC closed
+2026-08-07 00:36:23 | WARNING  | [SDK] ULC closed without resolving license — exiting
+2026-08-07 00:36:23 | ERROR    | License flow incomplete — shutting down
+2026-08-07 00:36:23 | INFO     | Logger stopped

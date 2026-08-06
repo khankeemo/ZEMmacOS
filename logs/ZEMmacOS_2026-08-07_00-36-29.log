@@ -1,0 +1,37 @@
+2026-08-07 00:36:29 | INFO     | ============================================================
+2026-08-07 00:36:29 | INFO     | ZEMmacOS Application Started
+2026-08-07 00:36:29 | INFO     | Log file: D:\ZEMmacOS\logs\ZEMmacOS_2026-08-07_00-36-29.log
+2026-08-07 00:36:29 | INFO     | ============================================================
+2026-08-07 00:36:29 | INFO     | [SDK] Initializing license engine
+2026-08-07 00:36:29 | INFO     | [UI] UI locked
+2026-08-07 00:36:29 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 00:36:29 | INFO     | [SDK] [SDK] [INFO] License Center started
+2026-08-07 00:36:29 | INFO     | [SDK] License Center started
+2026-08-07 00:36:29 | INFO     | [SDK] License Center started
+2026-08-07 00:36:29 | INFO     | [SDK] [SDK] [INFO] Using pre-initialised status: no_license
+2026-08-07 00:36:29 | INFO     | [SDK] Using pre-initialised status: no_license
+2026-08-07 00:36:29 | INFO     | [SDK] ULC using status
+2026-08-07 00:36:29 | INFO     | [SDK] [SDK] [INFO] Opening Universal License Center
+2026-08-07 00:36:29 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 00:36:29 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 00:36:29 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 00:36:32 | INFO     | [SDK] Activation started
+2026-08-07 00:36:33 | INFO     | [SDK] Software store URL not configured
+2026-08-07 00:36:37 | INFO     | [SDK] Renewal started
+2026-08-07 00:36:38 | INFO     | [SDK] Software store URL not configured
+2026-08-07 00:36:43 | INFO     | [SDK] Opening sales enquiry
+2026-08-07 00:36:59 | INFO     | [SDK] Opening support request
+2026-08-07 00:37:43 | INFO     | [SDK] refresh.start
+2026-08-07 00:37:43 | INFO     | [SDK] WORKFLOW_START
+2026-08-07 00:37:43 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 00:37:44 | INFO     | [SDK] license.invalid
+2026-08-07 00:37:44 | INFO     | [SDK] license.invalid
+2026-08-07 00:37:44 | INFO     | [SDK] STATUS_CHANGED
+2026-08-07 00:37:44 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 00:37:44 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 00:37:44 | INFO     | [SDK] WORKFLOW_COMPLETE
+2026-08-07 00:37:44 | INFO     | [SDK] refresh.success
+2026-08-07 00:37:55 | INFO     | [SDK] ULC closed
+2026-08-07 00:37:55 | WARNING  | [SDK] ULC closed without resolving license — exiting
+2026-08-07 00:37:55 | ERROR    | License flow incomplete — shutting down
+2026-08-07 00:37:55 | INFO     | Logger stopped
