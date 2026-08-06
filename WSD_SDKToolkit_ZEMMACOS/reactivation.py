@@ -1,7 +1,11 @@
-"""License reactivation workflow — delegates to LicenseEngine"""
+"""License reactivation workflow — thin wrapper; ALL logic lives in LicenseEngine"""
 from .license_engine import LicenseEngine
 
-__all__ = ["send_reactivation_request", "get_reactivation_status"]
+__all__ = ["reactivate", "send_reactivation_request", "get_reactivation_status"]
+
+
+def reactivate(engine: LicenseEngine, license_key: str = "") -> dict:
+    return engine.reactivate(license_key or None)
 
 
 def send_reactivation_request(engine: LicenseEngine, **kwargs) -> dict:

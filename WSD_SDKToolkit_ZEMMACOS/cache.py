@@ -86,6 +86,19 @@ class CacheManager:
             del cache[key]
             self._save_cache()
 
+    def peek(self, key: str) -> Optional[Any]:
+        """Raw read — returns the stored value even if the TTL expired,
+        without deleting it (used by the engine for decision flags)."""
+        cache = self._load_cache()
+        entry = cache.get(key)
+        if entry is None:
+            return None
+        return entry.get('value')
+
+    def flush(self) -> None:
+        """Force the in-memory cache to disk (used pre-restart)."""
+        self._save_cache()
+
     def clear(self) -> None:
         self._cache = {}
         self._save_cache()

@@ -1,4 +1,4 @@
-"""Universal conversation engine — delegates to LicenseEngine and ApiClient"""
+"""Universal conversation engine — thin wrapper; ALL logic lives in LicenseEngine"""
 from .license_engine import LicenseEngine
 
 __all__ = ["create_communication", "get_conversation", "reply_to_conversation",
@@ -23,4 +23,4 @@ def list_conversations(engine: LicenseEngine, email: str) -> dict:
 
 
 def get_request_history(engine: LicenseEngine, email: str) -> dict:
-    return engine._client.get_request_history(email)
+    return engine.get_request_history(email)

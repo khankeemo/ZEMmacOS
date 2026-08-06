@@ -1,4 +1,11 @@
-"""API Client for Universal License Platform"""
+"""API Client for Universal License Platform — transport layer only.
+
+Responsibility matrix (SDK V2):
+- HTTP requests, HMAC authentication, retry, response parsing.
+- NEVER touches UI, refresh, cache, status, or dialogs.
+- All orchestration (validation order, cache writes, events) lives in
+  LicenseEngine; the engine is the only module that may call state changes.
+"""
 import os
 import time
 from typing import Any, Dict, Optional
@@ -7,7 +14,6 @@ import requests
 
 from .crypto import generate_timestamp, generate_nonce, sign_request
 from .hardware import HardwareDetector
-from .cache import CacheManager
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -33,8 +39,10 @@ class ApiClient:
         self,
         config: Dict[str, Any],
         hardware: Optional[HardwareDetector] = None,
-        cache: Optional[CacheManager] = None
+        cache: Optional[Any] = None
     ):
+        # ``cache`` is accepted for backward compatibility only — the client is
+        # transport-only and never reads or writes cache state.
         self.config = config
         self.api_config = config.get('api', {})
         self.base_url = self.api_config.get('url', '').rstrip('/')
@@ -48,7 +56,6 @@ class ApiClient:
         self.product_id = config.get('product', {}).get('id', '')
         self.product_name = config.get('product', {}).get('name', '')
         self._hardware = hardware or HardwareDetector()
-        self._cache = cache
 
     def _get_hardware_id(self) -> str:
         return self._hardware.get_fingerprint()
@@ -195,8 +202,6 @@ class ApiClient:
         payload = {'action': 'activate', 'license_key': license_key, 'hardware_id': hardware_id,
                    'product_id': self.product_id}
         response = self._request('license', payload)
-        if self._cache:
-            self._cache.invalidate_license_status()
         return response
 
     def deactivate_license(self, license_key: str, hardware_id: Optional[str] = None) -> Dict[str, Any]:
@@ -204,8 +209,6 @@ class ApiClient:
             hardware_id = self._get_hardware_id()
         payload = {'license_key': license_key, 'hardware_id': hardware_id}
         response = self._request('license/deactivate', payload)
-        if self._cache:
-            self._cache.invalidate_license_status()
         return response
 
     def renew_license(self, license_key: str, extra_days: Optional[int] = None) -> Dict[str, Any]:
@@ -213,8 +216,6 @@ class ApiClient:
         if extra_days is not None:
             payload['extra_days'] = extra_days
         response = self._request('license', payload)
-        if self._cache:
-            self._cache.invalidate_license_status()
         return response
 
     def start_trial(self, email: str, customer_name: str = '',
@@ -269,8 +270,6 @@ class ApiClient:
             'customer_email': customer_email or '',
         }
         response = self._request('trial', payload)
-        if self._cache:
-            self._cache.invalidate_license_status()
         return response
 
     def bind_device(

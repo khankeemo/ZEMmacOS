@@ -994,7 +994,7 @@ class UniversalEmailDialog:
     def _upload_attachments(self, conversation_id: str):
         for file_obj in self._files:
             try:
-                upload = self._engine._client.upload_attachment(
+                upload = self._engine.upload_attachment(
                     conversation_id, file_obj.path)
                 if not upload.get('success'):
                     self._log("ATTACHMENT", "WARNING",

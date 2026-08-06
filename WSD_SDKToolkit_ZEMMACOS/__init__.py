@@ -12,6 +12,9 @@ __all__ = [
     "CacheManager",
     "LiveLog",
     "SingleInstance",
+    "EventBus",
+    "WorkflowProgress",
+    "DialogManager",
 ]
 
 from .client import ApiClient, ApiError, ConnectionUnavailable
@@ -20,6 +23,9 @@ from .hardware import HardwareDetector
 from .cache import CacheManager
 from .welcome import WelcomeDialog
 from .live_log import LiveLog
+from .event_bus import EventBus, LICENSE_STATUS_CHANGED
+from .workflow_progress import WorkflowProgress
+from .dialog_manager import DialogManager
 from .universal_license_center import UniversalLicenseCenter
 from .universal_email_dialog import UniversalEmailDialog
 from .universal_success_dialog import SuccessDialog

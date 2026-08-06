@@ -1,23 +1,28 @@
-"""Universal License Center - single customer experience for all license operations"""
+"""Universal License Center - single customer experience for all license operations
+
+UI LAYER ONLY (SDK V2): no business logic, no API calls, no cache writes,
+no events. Everything is delegated to LicenseEngine; the ULC subscribes to
+LicenseStatusChanged and re-renders from the event payload.
+"""
 import json
 import os
 import platform
 import sys
 import tkinter as tk
 import webbrowser
-from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, Optional
 
-from .client import ApiClient, ApiError
 from .license_engine import LicenseEngine, LicenseStatus
 from .hardware import HardwareDetector
-from .cache import CacheManager
 from .welcome import WelcomeDialog
 from .universal_success_dialog import SuccessDialog
 from .live_log import LiveLog
 from .single_instance import SingleInstance
 from .validation import OTP_INVALID_MESSAGE
 from .universal_email_dialog import UniversalEmailDialog
+from .dialog_manager import DialogManager
+from .event_bus import EventBus
+from .workflow_progress import WorkflowProgress, format_timer
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -45,8 +50,6 @@ class UniversalLicenseCenter:
                  reentry: bool = False):
         self.config = _load_api_config() if config_path is None else self._load_config(config_path)
         self.hardware = HardwareDetector()
-        self.cache = CacheManager(self.config)
-        self.client = ApiClient(self.config, self.hardware, self.cache)
         self.engine = LicenseEngine(config_path, on_license_ready=self._on_engine_ready)
         self.on_license_ready = on_license_ready
         self._log_fn = log_fn
@@ -60,6 +63,7 @@ class UniversalLicenseCenter:
         self._app_unlocked = False
         self._trial_consumed = False
         self._reentry = reentry
+        self._events_bound = False
 
         branding = self.config.get("branding", {})
         self._primary = branding.get("primary_color", "#6366f1")
@@ -140,7 +144,7 @@ class UniversalLicenseCenter:
             LiveLog.log("License valid", "Launching application directly")
             return {'action': 'launch', 'status': self._status.to_dict(), 'unlocked': True}
 
-        self._trial_consumed = self.cache.peek_onboarding_complete()
+        self._trial_consumed = self.engine.is_onboarding_complete()
 
         self._log("SDK", "INFO", "Opening Universal License Center",
                   f"Status: {status}, trial_consumed={self._trial_consumed}")
@@ -152,9 +156,7 @@ class UniversalLicenseCenter:
         LiveLog.log("Opening Welcome Dialog")
         self._log("WELCOME", "INFO", "Opening Welcome Dialog")
         welcome = WelcomeDialog(
-            client=self.client,
-            hardware=self.hardware,
-            cache=self.cache,
+            engine=self.engine,
             product_name=self._product_name,
             log_fn=self._log_fn,
         )
@@ -177,7 +179,7 @@ class UniversalLicenseCenter:
 
     def _show_error_dialog(self, title: str, message: str) -> None:
         LiveLog.log("Showing Error Dialog", f"{title}: {message}")
-        messagebox.showerror(title, message, parent=self._root)
+        DialogManager.error(self._root, title, message)
 
     def _show_inactive_license_dialog(self) -> None:
         """Shown when the backend confirms the license was removed
@@ -268,6 +270,7 @@ class UniversalLicenseCenter:
         self._root.transient()
         self._root.grab_set()
         self._root.protocol('WM_DELETE_WINDOW', self._on_ulc_close)
+        self._bind_events()
         self._build_ui()
         self._refresh_display()
         self._refresh_hardware_display()
@@ -278,6 +281,45 @@ class UniversalLicenseCenter:
         return {"status": self._status.to_dict() if self._status else None,
                 "unlocked": self._app_unlocked,
                 "trial_consumed": trial_consumed}
+
+    # ====================================================================
+    # Event subscription (Phase 3 — LicenseStatusChanged is the single channel)
+    # ====================================================================
+
+    def _bind_events(self):
+        if self._events_bound:
+            return
+        EventBus.subscribe_status_changed(self._on_status_changed)
+        EventBus.subscribe("workflow.progress", self._on_workflow_progress)
+        self._events_bound = True
+
+    def _unbind_events(self):
+        if not self._events_bound:
+            return
+        EventBus.unsubscribe_status_changed(self._on_status_changed)
+        EventBus.unsubscribe("workflow.progress", self._on_workflow_progress)
+        self._events_bound = False
+
+    def _on_status_changed(self, status: Optional[LicenseStatus]):
+        """Single UI refresh path — every engine state mutation converges here.
+        The ULC never polls or refreshes itself after workflows."""
+        self._status = status or self._status
+        self._initialized = True
+        if not self._root or not self._root.winfo_exists():
+            return
+        self._refresh_display()
+        self._rebuild_buttons()
+
+    def _on_workflow_progress(self, stage: str, detail: str = ""):
+        if not self._root or not self._root.winfo_exists():
+            return
+        label = getattr(self, '_output_label', None)
+        if label is not None:
+            try:
+                text = stage if not detail else f"{stage} — {detail}"
+                label.config(text=text, fg=self._text_secondary)
+            except Exception:
+                pass
 
     def _center_window(self):
         if not self._root:
@@ -349,177 +391,16 @@ class UniversalLicenseCenter:
         self._btn_frame = tk.Frame(main, bg=self._bg)
         self._btn_frame.pack(fill="both", expand=True)
 
-        status = self._status.status if self._status else 'no_license'
-        is_valid = self._status.valid if self._status else False
-        is_expired = status == 'expired'
-        is_trial = status == 'trial'
-        is_paid = status == 'licensed' and is_valid
-        is_deactivated = status == 'deactivated'
-        is_force_reactivation = status == 'force_reactivation'
-        is_inactive = status == 'inactive'
-        is_trial_consumed = status == 'trial_consumed'
-
-        refresh_btn = ("Refresh", self._refresh_ui, self._text_secondary)
-        close_btn = ("Close", self._on_ulc_close, "#e5e7eb")
-        exit_btn = ("Exit", self._on_ulc_close, "#e5e7eb")
-        if self._reentry:
-            exit_btn = close_btn
-
-        if is_trial:
-            buttons = [
-                ("Activate License", self._activate_license, self._primary),
-                ("Renew License", self._renew_license_flow, self._primary),
-                ("Contact Support", self._contact_support, self._text_secondary),
-                ("View Conversations", self._view_conversations, self._text_secondary),
-                ("View Notifications", self._view_notifications, self._text_secondary),
-                refresh_btn,
-                close_btn,
-            ]
-        elif is_paid:
-            buttons = [
-                ("Renew License", self._renew_license_flow, self._primary),
-                ("View Hardware Status", self._view_hardware_status, self._text_secondary),
-                ("Contact Support", self._contact_support, self._text_secondary),
-                ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
-                ("View Conversations", self._view_conversations, self._text_secondary),
-                ("View Notifications", self._view_notifications, self._text_secondary),
-                refresh_btn,
-                close_btn,
-            ]
-        elif is_expired:
-            buttons = [
-                ("Renew License", self._renew_license_flow, self._primary),
-                ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
-                ("Contact Support", self._contact_support, self._text_secondary),
-                ("View Conversations", self._view_conversations, self._text_secondary),
-                ("View Notifications", self._view_notifications, self._text_secondary),
-                refresh_btn,
-                close_btn,
-            ]
-        elif is_deactivated:
-            buttons = [
-                ("Contact Support", self._contact_support, self._primary),
-                ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
-                refresh_btn,
-                close_btn,
-            ]
-        elif is_force_reactivation:
-            buttons = [
-                ("Contact Support", self._contact_support, self._primary),
-                refresh_btn,
-                close_btn,
-            ]
-        elif is_inactive:
-            support_label = "Contact Support"
-            buttons = [
-                ("Activate License", self._activate_license, self._primary),
-                (support_label, self._contact_support, self._text_secondary),
-                refresh_btn,
-                close_btn,
-            ]
-        elif is_trial_consumed:
-            buttons = [
-                ("Activate License", self._activate_license, self._primary),
-                ("Renew License", self._renew_license_flow, self._primary),
-                ("Contact Support", self._contact_support, self._text_secondary),
-                refresh_btn,
-                close_btn,
-            ]
-        else:
-            if self._trial_consumed:
-                buttons = [
-                    ("Activate License", self._activate_license, self._primary),
-                    ("Renew License", self._renew_license_flow, self._primary),
-                    ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
-                    ("Contact Support", self._contact_support, self._text_secondary),
-                    refresh_btn,
-                    exit_btn,
-                ]
-                self._status_detail.config(
-                    text="This email has already used its free trial. Please Activate a License or Contact Sales.",
-                    fg=self._warning
-                )
-            else:
-                buttons = [
-                    ("Start Free Trial", self._start_trial, self._success),
-                    ("Activate License", self._activate_license, self._primary),
-                    ("Renew License", self._renew_license_flow, self._primary),
-                    ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
-                    ("Contact Support", self._contact_support, self._text_secondary),
-                    refresh_btn,
-                    close_btn,
-                ]
-
-        for text, cmd, color in buttons:
-            if color == "#e5e7eb":
-                btn = tk.Button(self._btn_frame, text=text, command=cmd,
-                                font=("Segoe UI", 11),
-                                bg=color, fg=self._text_primary,
-                                relief="flat", padx=12, pady=8, cursor="hand2")
-            else:
-                btn = tk.Button(self._btn_frame, text=text, command=cmd,
-                                font=("Segoe UI", 11, "bold"),
-                                bg=color, fg="white", relief="flat",
-                                padx=12, pady=8, cursor="hand2")
-            btn.pack(fill="x", pady=(0, 6))
+        self._render_buttons()
 
         self._output_label = tk.Label(main, text="", font=("Segoe UI", 9),
                                        bg=self._bg, fg=self._text_secondary,
                                        wraplength=540, justify="left")
         self._output_label.pack(fill="x", pady=(8, 0))
 
-    def _refresh_from_server(self) -> Optional[LicenseStatus]:
-        """Fetch the latest backend state (Refresh / Startup / Activation /
-        Renewal). The backend is the single source of truth: a server-confirmed
-        removal (deleted / inactive / revoked / not found) clears stale license
-        values and triggers the Inactive License dialog. Returns the refreshed
-        status, or the current status when the backend is unreachable."""
-        if not self.engine:
-            return self._status
-        try:
-            new_status = self.engine.refresh()
-        except Exception as e:
-            LiveLog.log("refresh.error", f"Refresh failed: {e}")
-            return self._status
-        if new_status is None:
-            LiveLog.log("refresh.offline", "Backend unreachable - keeping current status")
-            return self._status
-        LiveLog.log("refresh.success", f"License refreshed from server (status: {new_status.status})")
-        prev_valid = bool(self._status and self._status.valid)
-        self._status = new_status
-        self._initialized = True
-        if prev_valid and not new_status.valid:
-            LiveLog.log("License removed on server",
-                        f"Server reports {new_status.status} - stale values cleared")
-        if new_status.status == 'inactive':
-            root = self._root if (self._root and self._root.winfo_exists()) else None
-            if root:
-                root.after(100, self._show_inactive_license_dialog)
-        return new_status
-
-    def _refresh_ui(self):
-        try:
-            if not self._root or not self._root.winfo_exists():
-                return
-        except Exception:
-            return
-        # Refresh always re-syncs with the backend first so stale cached
-        # license values (plan / key / validity / days) can never survive a
-        # license removal. ULC never runs the Decision Engine — it only
-        # re-reads the authoritative status via the engine.
-        try:
-            LiveLog.log("refresh.start", "Refreshing license with the server")
-            self._refresh_from_server()
-            if self._btn_frame and self._btn_frame.winfo_exists():
-                for child in self._btn_frame.winfo_children():
-                    child.destroy()
-        except Exception:
-            return
-        self._rebuild_buttons()
-        self._refresh_display()
-        self._refresh_hardware_display()
-
-    def _rebuild_buttons(self):
+    def _render_buttons(self):
+        """One button builder for every status — used by _build_ui and
+        _rebuild_buttons so the same state can never render two layouts."""
         if not self._btn_frame or not self._btn_frame.winfo_exists():
             return
         status = self._status.status if self._status else 'no_license'
@@ -543,27 +424,36 @@ class UniversalLicenseCenter:
                 ("Activate License", self._activate_license, self._primary),
                 ("Renew License", self._renew_license_flow, self._primary),
                 ("Contact Support", self._contact_support, self._text_secondary),
+                ("View Conversations", self._view_conversations, self._text_secondary),
+                ("View Notifications", self._view_notifications, self._text_secondary),
                 refresh_btn,
                 close_btn,
             ]
         elif is_paid:
             buttons = [
                 ("Renew License", self._renew_license_flow, self._primary),
-                ("Contact Support", self._contact_support, self._text_secondary),
                 ("View Hardware Status", self._view_hardware_status, self._text_secondary),
+                ("Contact Support", self._contact_support, self._text_secondary),
+                ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
+                ("View Conversations", self._view_conversations, self._text_secondary),
+                ("View Notifications", self._view_notifications, self._text_secondary),
                 refresh_btn,
                 close_btn,
             ]
         elif is_expired:
             buttons = [
                 ("Renew License", self._renew_license_flow, self._primary),
+                ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                 ("Contact Support", self._contact_support, self._text_secondary),
+                ("View Conversations", self._view_conversations, self._text_secondary),
+                ("View Notifications", self._view_notifications, self._text_secondary),
                 refresh_btn,
                 close_btn,
             ]
         elif is_deactivated:
             buttons = [
                 ("Contact Support", self._contact_support, self._primary),
+                ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                 refresh_btn,
                 close_btn,
             ]
@@ -594,6 +484,7 @@ class UniversalLicenseCenter:
                 buttons = [
                     ("Activate License", self._activate_license, self._primary),
                     ("Renew License", self._renew_license_flow, self._primary),
+                    ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                     ("Contact Support", self._contact_support, self._text_secondary),
                     refresh_btn,
                     exit_btn,
@@ -603,6 +494,7 @@ class UniversalLicenseCenter:
                     ("Start Free Trial", self._start_trial, self._success),
                     ("Activate License", self._activate_license, self._primary),
                     ("Renew License", self._renew_license_flow, self._primary),
+                    ("Sales Enquiry", self._sales_enquiry, self._text_secondary),
                     ("Contact Support", self._contact_support, self._text_secondary),
                     refresh_btn,
                     close_btn,
@@ -621,7 +513,59 @@ class UniversalLicenseCenter:
                                 padx=12, pady=8, cursor="hand2")
             btn.pack(fill="x", pady=(0, 6))
 
+    def _refresh_from_server(self) -> Optional[LicenseStatus]:
+        """Fetch the latest backend state (Refresh / Startup). Single call via
+        the engine; the LicenseStatusChanged event re-renders the UI exactly
+        once. A server-confirmed removal (deleted / inactive / revoked / not
+        found) clears stale license values and triggers the Inactive License
+        dialog. Returns the refreshed status (or current when offline)."""
+        if not self.engine:
+            return self._status
+        try:
+            new_status = self.engine.refresh()
+        except Exception as e:
+            LiveLog.log("refresh.error", f"Refresh failed: {e}")
+            return self._status
+        if new_status is None:
+            LiveLog.log("refresh.offline", "Backend unreachable - keeping current status")
+            return self._status
+        LiveLog.log("refresh.success", f"License refreshed from server (status: {new_status.status})")
+        prev_valid = bool(self._status and self._status.valid)
+        self._status = new_status
+        self._initialized = True
+        if prev_valid and not new_status.valid:
+            LiveLog.log("License removed on server",
+                        f"Server reports {new_status.status} - stale values cleared")
+        if new_status.status == 'inactive':
+            root = self._root if (self._root and self._root.winfo_exists()) else None
+            if root:
+                root.after(100, self._show_inactive_license_dialog)
+        return new_status
+
+    def _refresh_ui(self):
+        try:
+            if not self._root or not self._root.winfo_exists():
+                return
+        except Exception:
+            return
+        # One refresh: the engine re-syncs with the backend once and fires
+        # LicenseStatusChanged exactly once; _on_status_changed re-renders.
+        try:
+            LiveLog.log("refresh.start", "Refreshing license with the server")
+            self._refresh_from_server()
+        except Exception:
+            return
+        self._refresh_hardware_display()
+
+    def _rebuild_buttons(self):
+        if not self._btn_frame or not self._btn_frame.winfo_exists():
+            return
+        for child in self._btn_frame.winfo_children():
+            child.destroy()
+        self._render_buttons()
+
     def _on_ulc_close(self):
+        self._unbind_events()
         try:
             self._root.destroy()
         except Exception:
@@ -934,7 +878,7 @@ class UniversalLicenseCenter:
                 verify_btn.config(state='disabled')
                 send_otp_btn.config(state='normal', text='Send OTP')
                 return
-            _set_status(f"OTP sent — expires in {remaining // 60}:{remaining % 60:02d}",
+            _set_status(f"OTP sent — expires in {format_timer(remaining)}",
                         self._success)
             state["timer_id"] = dialog.after(1000, _update_otp_timer)
 
@@ -945,16 +889,7 @@ class UniversalLicenseCenter:
                 return
             validate_btn.config(state='disabled', text='Validating...')
             _set_status("Validating license with the server...", self._text_secondary)
-            try:
-                result = self.client.validate_license(key, self.hardware.get_fingerprint())
-            except ApiError as e:
-                _set_status(e.message or f"Validation failed (HTTP {e.status_code})", self._error)
-                validate_btn.config(state='normal', text='Validate License')
-                return
-            except Exception as e:
-                _set_status(str(e), self._error)
-                validate_btn.config(state='normal', text='Validate License')
-                return
+            result = self.engine.validate_license_key(key)
 
             lic = result.get('license') or {}
             cust = result.get('customer') or {}
@@ -963,30 +898,22 @@ class UniversalLicenseCenter:
 
             if result.get('already_activated'):
                 LiveLog.log("Already activated", "This device already has this license")
-                messagebox.showinfo("Already Activated",
-                                    "Already activated on this device. Continue using application.",
-                                    parent=dialog)
+                DialogManager.info(dialog, "Already Activated",
+                                   "Already activated on this device. Continue using application.")
                 try:
-                    if self.engine:
-                        self.engine.refresh()
+                    self.engine.refresh()
                 except Exception:
                     pass
-                status = self.engine.get_status() if self.engine else None
+                status = self.engine.get_status()
                 if status:
                     self._status = status
                     self._initialized = True
                 if self._status and self._status.valid:
                     self._app_unlocked = True
                 dialog.destroy()
-                self._refresh_ui()
                 return
 
-            hard_fail = ('expired', 'revoked', 'inactive', 'deleted',
-                         'no_license', 'not_found', 'unlicensed')
-            validated = bool(lic) and api_status not in hard_fail
-            new_customer = (not lic) and (not cust) and api_status in ('no_license', 'unlicensed', 'not_found', '')
-
-            if not is_activate and new_customer:
+            if not is_activate and result.get('new_customer'):
                 _set_status("You're a new customer. Please activate your license first.", self._warning)
                 validate_btn.config(state='normal', text='Validate License')
                 otp_entry.config(state='disabled')
@@ -998,14 +925,9 @@ class UniversalLicenseCenter:
                 state["validated"] = False
                 return
 
-            if not validated:
-                msg = (err.get('message') if isinstance(err, dict) else None) \
-                    or result.get('message') \
-                    or (f"License validation could not be completed (status: {api_status}). "
-                        "Please check the license key and try again, or contact support."
-                        if api_status else
-                        "License validation could not be completed. Please check the license key "
-                        "and try again, or contact support.")
+            if not result.get('validated'):
+                msg = result.get('message', 'License validation could not be completed. '
+                                            'Please check the license key and try again, or contact support.')
                 LiveLog.log("operation.error", f"License validation failed: {msg}")
                 _set_status(str(msg), self._error)
                 validate_btn.config(state='normal', text='Validate License')
@@ -1043,7 +965,7 @@ class UniversalLicenseCenter:
                 lines.append(f"Days remaining: {lic['days_left']}")
             if not is_activate:
                 try:
-                    renewal_info = self.client.verify_license_for_renewal(key)
+                    renewal_info = self.engine.verify_license_for_renewal(key)
                     if renewal_info.get('success') and renewal_info.get('valid'):
                         lines.append("")
                         lines.append("RENEWAL DETAILS")
@@ -1074,11 +996,7 @@ class UniversalLicenseCenter:
             send_otp_btn.config(state='disabled', text='Sending...')
             _set_status("Sending OTP...", self._text_secondary)
             try:
-                result = self.client.send_otp(email)
-            except ApiError as e:
-                _set_status(e.message or f"Failed to send OTP (HTTP {e.status_code})", self._error)
-                send_otp_btn.config(state='normal', text='Send OTP')
-                return
+                result = self.engine.send_otp(email)
             except Exception as e:
                 _set_status(str(e), self._error)
                 send_otp_btn.config(state='normal', text='Send OTP')
@@ -1104,14 +1022,7 @@ class UniversalLicenseCenter:
                 return
             verify_btn.config(state='disabled', text='Verifying...')
             try:
-                result = self.client.verify_otp(state["email"], otp)
-            except ApiError as e:
-                if e.status_code and 400 <= e.status_code < 500:
-                    _set_status(OTP_INVALID_MESSAGE, self._error)
-                else:
-                    _set_status(e.message or f"OTP verification failed (HTTP {e.status_code})", self._error)
-                verify_btn.config(state='normal', text='Verify OTP')
-                return
+                result = self.engine.verify_otp(state["email"], otp)
             except Exception as e:
                 _set_status(str(e), self._error)
                 verify_btn.config(state='normal', text='Verify OTP')
@@ -1153,7 +1064,6 @@ class UniversalLicenseCenter:
                 LiveLog.log("general.unlocked", f"{operation} completed — application unlocked")
                 dialog.destroy()
                 self._show_success_dialog(operation)
-                self._refresh_ui()
             else:
                 err = result.get('error') or result.get('data') or result
                 msg = err.get('message') if isinstance(err, dict) else str(err)
@@ -1194,12 +1104,10 @@ class UniversalLicenseCenter:
                     self._status = status
                     self._initialized = True
                     LiveLog.log("Engine status updated", f"status={status.status}, valid={status.valid}")
-                self.cache.set_onboarding_complete()
-                self.engine._cache.set_onboarding_complete()
+                self.engine.mark_onboarding_complete()
                 self._app_unlocked = True
                 LiveLog.log("Trial activated", "Showing success dialog")
                 self._show_success_dialog("trial")
-                self._refresh_ui()
             else:
                 err_msg = eng_result.get('message', 'Trial activation failed')
                 LiveLog.log("Trial server response", err_msg)
@@ -1248,38 +1156,38 @@ class UniversalLicenseCenter:
             msg += f"\nRegistered Hardware ID: {status['registered_hardware_id'][:16]}..."
             msg += f"\nMatch: {status.get('matched', False)}"
         msg += f"\n\n{status.get('message', '')}"
-        messagebox.showinfo("Hardware Status", msg, parent=self._root)
+        DialogManager.info(self._root, "Hardware Status", msg)
 
     def _view_conversations(self):
         LiveLog.log("Viewing conversations")
         email = self._status.customer_email if self._status else ''
         if not email:
-            messagebox.showinfo("Conversations", "No customer email available.", parent=self._root)
+            DialogManager.info(self._root, "Conversations", "No customer email available.")
             return
         result = self.engine.list_conversations(email)
         conversations = result.get('conversations', [])
         if not conversations:
-            messagebox.showinfo("Conversations", "No conversations found.", parent=self._root)
+            DialogManager.info(self._root, "Conversations", "No conversations found.")
             return
         msg = "\n\n".join([
             f"ID: {c.get('id', 'N/A')}\nCategory: {c.get('category', 'N/A')}\nStatus: {c.get('status', 'N/A')}\nSubject: {c.get('subject', 'N/A')}\nCreated: {c.get('created_at', 'N/A')}"
             for c in conversations[:10]
         ])
-        messagebox.showinfo("Conversations", msg, parent=self._root)
+        DialogManager.info(self._root, "Conversations", msg)
 
     def _view_notifications(self):
         LiveLog.log("Viewing notifications")
         email = self._status.customer_email if self._status else ''
         if not email:
-            messagebox.showinfo("Notifications", "No customer email available.", parent=self._root)
+            DialogManager.info(self._root, "Notifications", "No customer email available.")
             return
         result = self.engine.get_notifications(email)
         notifications = result.get('notifications', [])
         if not notifications:
-            messagebox.showinfo("Notifications", "No notifications found.", parent=self._root)
+            DialogManager.info(self._root, "Notifications", "No notifications found.")
             return
         msg = "\n\n".join([
             f"{n.get('title', 'N/A')}\n{n.get('message', 'N/A')}\n{n.get('created_at', 'N/A')}"
             for n in notifications[:10]
         ])
-        messagebox.showinfo("Notifications", msg, parent=self._root)
+        DialogManager.info(self._root, "Notifications", msg)

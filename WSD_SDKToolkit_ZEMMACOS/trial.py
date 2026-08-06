@@ -1,4 +1,4 @@
-"""Trial management workflow — delegates to LicenseEngine and WelcomeDialog"""
+"""Trial management workflow — thin wrapper; ALL logic lives in LicenseEngine"""
 from .license_engine import LicenseEngine
 from .welcome import WelcomeDialog
 
@@ -11,7 +11,7 @@ def start_trial(engine: LicenseEngine, email: str, customer_name: str = "",
 
 
 def get_trial_status(engine: LicenseEngine) -> dict:
-    return engine._client.get_trial_status(engine.get_hardware_id())
+    return engine.get_trial_status()
 
 
 def convert_trial(engine: LicenseEngine, plan: str = "",

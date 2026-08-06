@@ -109,26 +109,12 @@ class SuccessDialog:
     def _save_runtime_state(self) -> None:
         if not self._engine:
             return
-        try:
-            status = self._engine.get_status()
-            if status:
-                self._engine._cache.set_license_status(status.to_dict())
-                key = self._engine.get_license_key()
-                if key:
-                    self._engine._cache.save_license_key(key)
-                self._engine._cache.set_onboarding_complete()
-                LiveLog.log("Runtime state saved", f"Status: {status.status}")
-        except Exception as e:
-            LiveLog.log("Runtime state save failed", str(e))
+        self._engine.persist_runtime_state()
 
     def _flush_cache(self) -> None:
         if not self._engine:
             return
-        try:
-            self._engine._cache._save_cache()
-            LiveLog.log("Cache flushed to disk", "Pre-restart cache write complete")
-        except Exception as e:
-            LiveLog.log("Cache flush failed", str(e))
+        self._engine.flush_cache()
 
     def _close_all_windows(self) -> None:
         if self._root:

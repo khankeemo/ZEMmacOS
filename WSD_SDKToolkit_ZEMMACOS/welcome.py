@@ -1,17 +1,22 @@
-"""Welcome Dialog - Customer onboarding with OTP verification and trial generation"""
+"""Welcome Dialog - Customer onboarding with OTP verification and trial generation
+
+UI LAYER ONLY (SDK V2): OTP, registration and cache writes are delegated to
+LicenseEngine; this dialog renders the form, validates fields inline and
+reports progress through the shared WorkflowProgress stages.
+"""
 import json
 import os
 import time as _time
 import traceback
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 from typing import Any, Callable, Dict, Optional
 
-from .client import ApiClient, ApiError
-from .hardware import HardwareDetector
-from .cache import CacheManager
+from .license_engine import LicenseEngine
+from .client import ApiError
 from .validation import (FieldIndicator, OTP_INVALID_MESSAGE,
                          is_valid_email, is_valid_mobile, mobile_digits_error)
+from .workflow_progress import WorkflowProgress, format_timer
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -21,12 +26,15 @@ _COUNTRIES_CACHE: list = []
 
 
 class WelcomeDialog:
-    def __init__(self, client: ApiClient, hardware: HardwareDetector,
-                 cache: CacheManager, product_name: str = '',
-                 log_fn: Optional[Callable[[str, str, str, Optional[str]], None]] = None):
-        self.client = client
-        self.hardware = hardware
-        self.cache = cache
+    def __init__(self, engine: Optional[LicenseEngine] = None,
+                 product_name: str = '',
+                 log_fn: Optional[Callable[[str, str, str, Optional[str]], None]] = None,
+                 client: Optional[Any] = None,
+                 hardware: Optional[Any] = None,
+                 cache: Optional[Any] = None):
+        # ``client`` / ``hardware`` / ``cache`` are accepted for backward
+        # compatibility only — all operations go through the engine.
+        self.engine = engine
         self.product_name = product_name
         self._log_fn = log_fn
         self._result: Optional[Dict[str, Any]] = None
@@ -36,7 +44,8 @@ class WelcomeDialog:
         self._otp_sent = False
         self._otp_expires_at = 0.0
         self._otp_timer_id = None
-        branding = client.config.get('branding', {})
+        branding = (engine.config.get('branding', {})
+                    if engine is not None else {})
         self._primary = branding.get('primary_color', '#6366f1')
         self._bg = '#f0f2f5'
         self._card_bg = '#ffffff'
@@ -47,7 +56,9 @@ class WelcomeDialog:
         self._border = '#d1d5db'
 
     def is_onboarding_complete(self) -> bool:
-        return self.cache.is_onboarding_complete()
+        if self.engine is not None:
+            return self.engine.is_onboarding_complete()
+        return False
 
     def show(self) -> Dict[str, Any]:
         if self.is_onboarding_complete():
@@ -179,7 +190,7 @@ class WelcomeDialog:
             self._set_countries(_COUNTRIES_CACHE)
             return
         try:
-            result = self.client.get_countries()
+            result = self.engine.get_countries()
             if isinstance(result, dict) and result.get('data'):
                 countries = result['data']
                 if isinstance(countries, list) and countries:
@@ -259,7 +270,7 @@ class WelcomeDialog:
         self._send_btn.config(state='disabled', text='Sending...')
         self._clear_error()
         try:
-            result = self.client.send_otp(email)
+            result = self.engine.send_otp(email)
             if result.get('success'):
                 self._otp_sent = True
                 self._log("OTP", "SUCCESS", "Welcome OTP sent successfully", f"email={email}")
@@ -288,7 +299,7 @@ class WelcomeDialog:
         self._verify_btn.config(state='disabled', text='Verifying...')
         self._clear_error()
         try:
-            result = self.client.verify_otp(email, otp)
+            result = self.engine.verify_otp(email, otp)
             if result.get('success'):
                 self._log("OTP", "SUCCESS", "OTP verified successfully", f"email={email}")
                 if result.get('customer_exists'):
@@ -323,8 +334,8 @@ class WelcomeDialog:
     def _handle_existing_customer(self):
         name = self._name_entry.get().strip()
         email = self._email_entry.get().strip()
-        self.cache.set_onboarding_complete()
-        self.cache.set('customer_email', email)
+        self.engine.mark_onboarding_complete()
+        self.engine.set_customer_email(email)
         self._status_label.config(text='Customer already exists — opening License Center...', fg=self._primary)
         self._root.update()
         _time.sleep(1)
@@ -341,11 +352,11 @@ class WelcomeDialog:
         mobile = self._mobile_entry.get().strip()
         company = self._company_entry.get().strip()
         country_code = self._selected_country.get('code', '') if self._selected_country else ''
-        hardware_id = self.hardware.get_fingerprint()
+        hardware_id = self.engine.get_hardware_id()
         self._status_label.config(text='Creating your account...', fg=self._primary)
         self._root.update()
         try:
-            register_result = self.client.register_customer(
+            register_result = self.engine.register_customer(
                 name=name, email=email, mobile=mobile,
                 country_code=country_code, hardware_id=hardware_id,
                 company_name=company
@@ -356,8 +367,8 @@ class WelcomeDialog:
                 self._show_error(err)
                 self._verify_btn.config(state='normal', text='Verify')
                 return
-            self.cache.set_onboarding_complete()
-            self.cache.set('customer_email', email)
+            self.engine.mark_onboarding_complete()
+            self.engine.set_customer_email(email)
             customer_data = {
                 'mobile': mobile,
                 'country_code': country_code,
@@ -407,7 +418,5 @@ class WelcomeDialog:
             self._verify_btn.config(state='disabled')
             self._otp_timer_id = None
             return
-        minutes = remaining // 60
-        seconds = remaining % 60
-        self._status_label.config(text=f'OTP sent — expires in {minutes}:{seconds:02d}', fg=self._success)
+        self._status_label.config(text=f'OTP sent — expires in {format_timer(remaining)}', fg=self._success)
         self._otp_timer_id = self._root.after(1000, self._update_otp_timer)

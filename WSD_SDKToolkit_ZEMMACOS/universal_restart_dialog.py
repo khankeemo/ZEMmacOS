@@ -73,11 +73,7 @@ class RestartDialog:
         try:
             status = self._engine.get_status()
             if status:
-                self._engine._cache.set_license_status(status.to_dict())
-                key = self._engine.get_license_key()
-                if key:
-                    self._engine._cache.save_license_key(key)
-                self._engine._cache.set_onboarding_complete()
+                self._engine.persist_runtime_state()
                 LiveLog.log("Runtime state saved", f"Status: {status.status}")
                 return True
             LiveLog.log("Runtime state save skipped", "No status available")
@@ -88,7 +84,7 @@ class RestartDialog:
 
     def _flush_cache(self) -> None:
         try:
-            self._engine._cache._save_cache()
+            self._engine.flush_cache()
             LiveLog.log("Cache flushed to disk", "Pre-restart cache write complete")
         except Exception as e:
             LiveLog.log("Cache flush failed", str(e))
