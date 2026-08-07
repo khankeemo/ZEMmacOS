@@ -6,7 +6,7 @@ MIGRATION_FAILED.
 """
 from typing import Any, Callable, Dict, List, Optional
 
-from .live_log import LiveLog
+from .global_message import GlobalMessage, CAT_STARTUP
 
 __all__ = ["MigrationRunner"]
 
@@ -63,10 +63,12 @@ class MigrationRunner:
                     self._cache._cache = migrated
                     self._cache._save_cache()
                 self._cache.set(VERSION_CACHE_KEY, version + 1)
-                LiveLog.log("MIGRATION_OK", f"Migrated cache v{version} -> v{version + 1}")
+                GlobalMessage.log(CAT_STARTUP, "MIGRATION_OK",
+                                  message=f"Migrated cache v{version} -> v{version + 1}")
             except Exception as e:
                 succeeded = False
-                LiveLog.log("MIGRATION_FAILED", f"Migration v{version} failed: {e}")
+                GlobalMessage.log(CAT_STARTUP, "MIGRATION_FAILED",
+                                  message=f"Migration v{version} failed: {e}")
         return succeeded
 
     def upgrade_required(self) -> bool:

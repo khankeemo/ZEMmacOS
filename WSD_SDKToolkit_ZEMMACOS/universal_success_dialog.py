@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from .license_engine import LicenseEngine, LicenseStatus
 from .live_log import LiveLog
+from .global_message import GlobalMessage, CAT_RESTART
 
 
 class SuccessDialog:
@@ -92,8 +93,7 @@ class SuccessDialog:
         sep.pack(fill="x", pady=16)
 
         msg = tk.Label(main,
-                       text="Your licence has been updated successfully.\n"
-                            "Please restart the application to apply the latest licence information.",
+                       text=GlobalMessage.get('license_success'),
                        font=("Segoe UI", 11), fg=self._text_secondary, bg=self._card_bg,
                        justify="center", wraplength=460)
         msg.pack(pady=(0, 20))
@@ -151,12 +151,14 @@ class SuccessDialog:
         if self._reentry:
             LiveLog.log("Dialog closed", "Returning to Dashboard")
             return
+        GlobalMessage.log(CAT_RESTART, 'restart.launch', 'restarting')
         cmd = [sys.executable] + sys.argv
         LiveLog.log("Restart command", f"Executing: {' '.join(cmd[:3])}...")
         try:
             subprocess.Popen(cmd)
-            LiveLog.log("Restart command launched", "New process started")
+            GlobalMessage.log(CAT_RESTART, 'restart.launched', 'restart_launched')
         except Exception as e:
-            LiveLog.log("Restart launch failed", str(e))
+            GlobalMessage.log(CAT_RESTART, 'restart.failed', 'restart_failed',
+                              detail=str(e))
         LiveLog.log("Current process closing", "Exiting")
         sys.exit(0)

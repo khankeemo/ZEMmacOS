@@ -57,7 +57,7 @@ class RollbackCoordinator:
         try:
             if getattr(self._engine, "_cache", None) is not None:
                 if snapshot.cache_status is not None:
-                    self._engine._cache.set_license_status(snapshot.cache_status)
+                    self._engine._cache.set('license_status', snapshot.cache_status)
                 else:
                     self._engine._cache.invalidate_license_status()
             if snapshot.license_key is not None:

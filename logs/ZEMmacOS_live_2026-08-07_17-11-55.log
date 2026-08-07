@@ -1,0 +1,63 @@
+ZEMmacOS Live Log - Started 2026-08-07T17:11:55.381970
+================================================================================
+[2026-08-07 17:11:55] [STARTUP   ] [INFO   ] LiveLog system initialized
+[2026-08-07 17:11:55] [STARTUP   ] [INFO   ] Log file: D:\ZEMmacOS\logs\ZEMmacOS_live_2026-08-07_17-11-55.log
+[2026-08-07 17:11:55] [STARTUP   ] [INFO   ] Application started
+[2026-08-07 17:11:55] [STARTUP   ] [INFO   ] Configuration loaded
+[2026-08-07 17:11:55] [STARTUP   ] [INFO   ] Theme loaded
+[2026-08-07 17:11:55] [STARTUP   ] [INFO   ] Starting SDK initialization sequence
+[2026-08-07 17:11:55] [SDK       ] [INFO   ] Initializing license engine
+[2026-08-07 17:11:55] [UI        ] [INFO   ] UI locked
+[2026-08-07 17:11:55] [SDK       ] [INFO   ] Loading SDK config
+[2026-08-07 17:11:55] [SDK       ] [INFO   ] Detecting hardware
+[2026-08-07 17:11:55] [SDK       ] [INFO   ] Running decision engine
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] Decision engine result: no_license
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] State: no_license — showing Universal License Center
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] Opening Universal License Center
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] ulc.opened | Universal License Center opened.
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] [SDK] [INFO] Using pre-initialised status: no_license
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] Using pre-initialised status: no_license
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] ULC using status | Status: no_license
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] [SDK] [INFO] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-07 17:11:56] [SDK       ] [INFO   ] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-07 17:12:03] [SDK       ] [INFO   ] Activation started | Opening pre-activation dialog
+[2026-08-07 17:12:04] [SDK       ] [INFO   ] Software store URL not configured | store.url is empty in api-config.json
+[2026-08-07 17:12:18] [SDK       ] [INFO   ] Trial started | Opening Welcome Dialog
+[2026-08-07 17:12:18] [SDK       ] [INFO   ] [TRIAL] [INFO] Starting trial flow
+[2026-08-07 17:12:18] [TRIAL     ] [INFO   ] Starting trial flow
+[2026-08-07 17:12:18] [SDK       ] [INFO   ] Opening Welcome Dialog
+[2026-08-07 17:12:18] [SDK       ] [INFO   ] [WELCOME] [INFO] Opening Welcome Dialog
+[2026-08-07 17:12:18] [WELCOME   ] [INFO   ] Opening Welcome Dialog
+[2026-08-07 17:13:03] [OTP       ] [INFO   ] Sending welcome OTP | email=keemodatabox@gmail.com
+[2026-08-07 17:13:03] [SDK       ] [INFO   ] WORKFLOW_STATE | VALIDATING — otp-send
+[2026-08-07 17:13:03] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | Sending OTP — keemodatabox@gmail.com
+[2026-08-07 17:13:05] [SDK       ] [INFO   ] OTP_SENT | OTP sent to keemodatabox@gmail.com
+[2026-08-07 17:13:05] [SDK       ] [INFO   ] WORKFLOW_STATE | OTP_SENT — keemodatabox@gmail.com
+[2026-08-07 17:13:05] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | OTP Sent — keemodatabox@gmail.com
+[2026-08-07 17:13:05] [OTP       ] [SUCCESS] Welcome OTP sent successfully | email=keemodatabox@gmail.com
+[2026-08-07 17:13:39] [OTP       ] [INFO   ] OTP verification started | email=keemodatabox@gmail.com
+[2026-08-07 17:13:39] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | Waiting OTP
+[2026-08-07 17:13:40] [SDK       ] [INFO   ] WORKFLOW_STATE | FAILED — otp
+[2026-08-07 17:13:40] [OTP       ] [ERROR  ] OTP verification failed | OTP is not valid.
+[2026-08-07 17:13:45] [OTP       ] [INFO   ] OTP verification started | email=keemodatabox@gmail.com
+[2026-08-07 17:13:45] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | Waiting OTP
+[2026-08-07 17:13:46] [SDK       ] [INFO   ] OTP_VERIFIED | OTP verified for keemodatabox@gmail.com
+[2026-08-07 17:13:46] [SDK       ] [INFO   ] WORKFLOW_STATE | OTP_VERIFIED — keemodatabox@gmail.com
+[2026-08-07 17:13:46] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | OTP Verified — keemodatabox@gmail.com
+[2026-08-07 17:13:46] [OTP       ] [SUCCESS] OTP verified successfully | email=keemodatabox@gmail.com
+[2026-08-07 17:13:49] [SDK       ] [INFO   ] Trial activating via engine | email=keemodatabox@gmail.com, name=Mahin Khan
+[2026-08-07 17:13:49] [SDK       ] [INFO   ] IDEMPOTENCY | trial started (idempotency_key=070ad6ff…)
+[2026-08-07 17:13:49] [SDK       ] [INFO   ] WORKFLOW_STATE | PROCESSING — trial
+[2026-08-07 17:13:49] [SDK       ] [INFO   ] WORKFLOW_START | trial — workflow started
+[2026-08-07 17:13:49] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | Checking Customer — keemodatabox@gmail.com
+[2026-08-07 17:13:50] [SDK       ] [INFO   ] trial.started | Trial started on server — applying fresh state
+[2026-08-07 17:13:50] [SDK       ] [INFO   ] WORKFLOW_STATE | PROCESSING — Trial
+[2026-08-07 17:13:50] [SDK       ] [INFO   ] WORKFLOW_PROGRESS | Updating License — Trial
+[2026-08-07 17:13:51] [SDK       ] [INFO   ] WORKFLOW_STATE | FAILED — trial
+[2026-08-07 17:13:51] [SDK       ] [INFO   ] WORKFLOW_ERROR | trial — 'CacheManager' object has no attribute 'set_license_status'
+[2026-08-07 17:16:01] [SDK       ] [INFO   ] ULC closed | Application locked - exiting process
+[2026-08-07 17:16:01] [SDK       ] [WARNING] ULC closed without resolving license — exiting
+[2026-08-07 17:16:01] [STARTUP   ] [WARNING] Application shutdown due to incomplete license flow
+[2026-08-07 17:16:01] [STARTUP   ] [INFO   ] LiveLog system stopped

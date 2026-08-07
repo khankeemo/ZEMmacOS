@@ -1,0 +1,54 @@
+2026-08-07 17:11:55 | INFO     | ============================================================
+2026-08-07 17:11:55 | INFO     | ZEMmacOS Application Started
+2026-08-07 17:11:55 | INFO     | Log file: D:\ZEMmacOS\logs\ZEMmacOS_2026-08-07_17-11-55.log
+2026-08-07 17:11:55 | INFO     | ============================================================
+2026-08-07 17:11:55 | INFO     | [SDK] Initializing license engine
+2026-08-07 17:11:55 | INFO     | [UI] UI locked
+2026-08-07 17:11:56 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 17:11:56 | INFO     | [SDK] ulc.opened
+2026-08-07 17:11:56 | INFO     | [SDK] [SDK] [INFO] Using pre-initialised status: no_license
+2026-08-07 17:11:56 | INFO     | [SDK] Using pre-initialised status: no_license
+2026-08-07 17:11:56 | INFO     | [SDK] ULC using status
+2026-08-07 17:11:56 | INFO     | [SDK] [SDK] [INFO] Opening Universal License Center
+2026-08-07 17:11:56 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 17:11:56 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 17:11:56 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 17:12:03 | INFO     | [SDK] Activation started
+2026-08-07 17:12:04 | INFO     | [SDK] Software store URL not configured
+2026-08-07 17:12:18 | INFO     | [SDK] Trial started
+2026-08-07 17:12:18 | INFO     | [SDK] [TRIAL] [INFO] Starting trial flow
+2026-08-07 17:12:18 | INFO     | [TRIAL] Starting trial flow
+2026-08-07 17:12:18 | INFO     | [SDK] Opening Welcome Dialog
+2026-08-07 17:12:18 | INFO     | [SDK] [WELCOME] [INFO] Opening Welcome Dialog
+2026-08-07 17:12:18 | INFO     | [WELCOME] Opening Welcome Dialog
+2026-08-07 17:13:03 | INFO     | [OTP] Sending welcome OTP
+2026-08-07 17:13:03 | INFO     | [SDK] WORKFLOW_STATE
+2026-08-07 17:13:03 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 17:13:05 | INFO     | [SDK] OTP_SENT
+2026-08-07 17:13:05 | INFO     | [SDK] WORKFLOW_STATE
+2026-08-07 17:13:05 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 17:13:05 | INFO     | ✓ [OTP] Welcome OTP sent successfully
+2026-08-07 17:13:39 | INFO     | [OTP] OTP verification started
+2026-08-07 17:13:39 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 17:13:40 | INFO     | [SDK] WORKFLOW_STATE
+2026-08-07 17:13:40 | ERROR    | [OTP] OTP verification failed
+2026-08-07 17:13:45 | INFO     | [OTP] OTP verification started
+2026-08-07 17:13:45 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 17:13:46 | INFO     | [SDK] OTP_VERIFIED
+2026-08-07 17:13:46 | INFO     | [SDK] WORKFLOW_STATE
+2026-08-07 17:13:46 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 17:13:46 | INFO     | ✓ [OTP] OTP verified successfully
+2026-08-07 17:13:49 | INFO     | [SDK] Trial activating via engine
+2026-08-07 17:13:49 | INFO     | [SDK] IDEMPOTENCY
+2026-08-07 17:13:49 | INFO     | [SDK] WORKFLOW_STATE
+2026-08-07 17:13:49 | INFO     | [SDK] WORKFLOW_START
+2026-08-07 17:13:49 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 17:13:50 | INFO     | [SDK] trial.started
+2026-08-07 17:13:50 | INFO     | [SDK] WORKFLOW_STATE
+2026-08-07 17:13:50 | INFO     | [SDK] WORKFLOW_PROGRESS
+2026-08-07 17:13:51 | INFO     | [SDK] WORKFLOW_STATE
+2026-08-07 17:13:51 | INFO     | [SDK] WORKFLOW_ERROR
+2026-08-07 17:16:01 | INFO     | [SDK] ULC closed
+2026-08-07 17:16:01 | WARNING  | [SDK] ULC closed without resolving license — exiting
+2026-08-07 17:16:01 | ERROR    | License flow incomplete — shutting down
+2026-08-07 17:16:01 | INFO     | Logger stopped

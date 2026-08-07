@@ -12,6 +12,7 @@ __all__ = [
     "CacheManager",
     "LiveLog",
     "SingleInstance",
+    "GlobalMessage",
     "EventBus",
     "WorkflowProgress",
     "GlobalStateMachine",
@@ -66,6 +67,7 @@ from .universal_email_dialog import UniversalEmailDialog
 from .universal_success_dialog import SuccessDialog
 from .universal_restart_dialog import RestartDialog
 from .single_instance import SingleInstance
+from .global_message import GlobalMessage
 
 from . import activation
 from . import renewal

@@ -1,0 +1,16 @@
+ZEMmacOS Live Log - Started 2026-08-07T16:24:40.207423
+================================================================================
+[2026-08-07 16:24:40] [STARTUP   ] [INFO   ] LiveLog system initialized
+[2026-08-07 16:24:40] [STARTUP   ] [INFO   ] Log file: D:\ZEMmacOS\logs\ZEMmacOS_live_2026-08-07_16-24-40.log
+[2026-08-07 16:24:40] [STARTUP   ] [INFO   ] Application started
+[2026-08-07 16:24:40] [STARTUP   ] [INFO   ] Configuration loaded
+[2026-08-07 16:24:40] [STARTUP   ] [INFO   ] Theme loaded
+[2026-08-07 16:24:40] [STARTUP   ] [INFO   ] Starting SDK initialization sequence
+[2026-08-07 16:24:40] [SDK       ] [INFO   ] Initializing license engine
+[2026-08-07 16:24:40] [UI        ] [INFO   ] UI locked
+[2026-08-07 16:24:40] [SDK       ] [INFO   ] Loading SDK config
+[2026-08-07 16:24:40] [SDK       ] [INFO   ] Detecting hardware
+[2026-08-07 16:24:40] [SDK       ] [INFO   ] Running decision engine
+[2026-08-07 16:24:40] [SDK       ] [INFO   ] Decision engine result: error
+[2026-08-07 16:24:40] [SDK       ] [INFO   ] State: error — showing Universal License Center
+[2026-08-07 16:24:40] [SDK       ] [INFO   ] Opening Universal License Center
