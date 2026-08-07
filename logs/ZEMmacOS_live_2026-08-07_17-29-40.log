@@ -1,0 +1,31 @@
+ZEMmacOS Live Log - Started 2026-08-07T17:29:40.057746
+================================================================================
+[2026-08-07 17:29:40] [STARTUP   ] [INFO   ] LiveLog system initialized
+[2026-08-07 17:29:40] [STARTUP   ] [INFO   ] Log file: D:\ZEMmacOS\logs\ZEMmacOS_live_2026-08-07_17-29-40.log
+[2026-08-07 17:29:40] [STARTUP   ] [INFO   ] Application started
+[2026-08-07 17:29:40] [STARTUP   ] [INFO   ] Configuration loaded
+[2026-08-07 17:29:40] [STARTUP   ] [INFO   ] Theme loaded
+[2026-08-07 17:29:40] [STARTUP   ] [INFO   ] Starting SDK initialization sequence
+[2026-08-07 17:29:40] [SDK       ] [INFO   ] Initializing license engine
+[2026-08-07 17:29:40] [UI        ] [INFO   ] UI locked
+[2026-08-07 17:29:40] [SDK       ] [INFO   ] Loading SDK config
+[2026-08-07 17:29:40] [SDK       ] [INFO   ] Detecting hardware
+[2026-08-07 17:29:40] [SDK       ] [INFO   ] Running decision engine
+[2026-08-07 17:29:41] [SDK       ] [INFO   ] Decision engine result: trial
+[2026-08-07 17:29:41] [SDK       ] [SUCCESS] Valid trial — launching main application
+[2026-08-07 17:29:41] [STARTUP   ] [SUCCESS] License valid — building main application
+[2026-08-07 17:29:41] [STARTUP   ] [INFO   ] Building UI
+[2026-08-07 17:29:42] [STARTUP   ] [INFO   ] UI built, dashboard shown
+[2026-08-07 17:29:42] [UI        ] [SUCCESS] UI unlocked
+[2026-08-07 17:29:42] [APP       ] [SUCCESS] Application unlocked
+[2026-08-07 17:29:43] [ACTIVATION] [INFO   ] Opening Universal License Center for activation
+[2026-08-07 17:29:43] [SDK       ] [INFO   ] ulc.opened | Universal License Center opened.
+[2026-08-07 17:29:43] [SDK       ] [INFO   ] [SDK] [INFO] Using pre-initialised status: trial
+[2026-08-07 17:29:43] [SDK       ] [INFO   ] Using pre-initialised status: trial
+[2026-08-07 17:29:43] [SDK       ] [INFO   ] ULC using status | Status: trial
+[2026-08-07 17:29:43] [SDK       ] [INFO   ] [SDK] [INFO] Opening Universal License Center | Status: trial, trial_consumed=False
+[2026-08-07 17:29:43] [SDK       ] [INFO   ] Opening Universal License Center | Status: trial, trial_consumed=False
+[2026-08-07 17:29:43] [SDK       ] [INFO   ] Opening Universal License Center | Status: trial, trial_consumed=False
+[2026-08-07 17:29:43] [SDK       ] [INFO   ] Opening Universal License Center | Status: trial, trial_consumed=False
+[2026-08-07 17:29:45] [SDK       ] [INFO   ] Activation started | Opening pre-activation dialog
+[2026-08-07 17:29:47] [SDK       ] [INFO   ] Software store URL not configured | store.url is empty in api-config.json

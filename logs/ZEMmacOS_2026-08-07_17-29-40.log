@@ -1,0 +1,43 @@
+2026-08-07 17:29:40 | INFO     | ============================================================
+2026-08-07 17:29:40 | INFO     | ZEMmacOS Application Started
+2026-08-07 17:29:40 | INFO     | Log file: D:\ZEMmacOS\logs\ZEMmacOS_2026-08-07_17-29-40.log
+2026-08-07 17:29:40 | INFO     | ============================================================
+2026-08-07 17:29:40 | INFO     | [SDK] Initializing license engine
+2026-08-07 17:29:40 | INFO     | [UI] UI locked
+2026-08-07 17:29:41 | INFO     | ✓ [STARTUP] License valid — building main application
+2026-08-07 17:29:41 | INFO     | [STARTUP] Building UI
+2026-08-07 17:29:42 | INFO     | [STARTUP] UI built, dashboard shown
+2026-08-07 17:29:42 | INFO     | ✓ [UI] UI unlocked
+2026-08-07 17:29:42 | INFO     | ✓ [APP] Application unlocked
+2026-08-07 17:29:43 | INFO     | Auto-fetching catalogue...
+2026-08-07 17:29:43 | INFO     | ============================================================
+2026-08-07 17:29:43 | INFO     | FETCHING macOS CATALOGUE FROM APPLE
+2026-08-07 17:29:43 | INFO     | ============================================================
+2026-08-07 17:29:43 | INFO     | Initializing gibMacOS...
+2026-08-07 17:29:43 | INFO     | Using catalog: publicrelease
+2026-08-07 17:29:43 | INFO     | Max macOS version: 25
+2026-08-07 17:29:43 | INFO     | Fetching catalog from Apple...
+2026-08-07 17:29:43 | INFO     | [ACTIVATION] Opening Universal License Center for activation
+2026-08-07 17:29:43 | INFO     | [SDK] ulc.opened
+2026-08-07 17:29:43 | INFO     | [SDK] [SDK] [INFO] Using pre-initialised status: trial
+2026-08-07 17:29:43 | INFO     | [SDK] Using pre-initialised status: trial
+2026-08-07 17:29:43 | INFO     | [SDK] ULC using status
+2026-08-07 17:29:43 | INFO     | [SDK] [SDK] [INFO] Opening Universal License Center
+2026-08-07 17:29:43 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 17:29:43 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 17:29:43 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 17:29:44 | INFO     | ✓ Found 43 macOS versions
+2026-08-07 17:29:44 | INFO     |  
+2026-08-07 17:29:44 | INFO     | ============================================================
+2026-08-07 17:29:44 | INFO     | ✓ CATALOGUE FETCH COMPLETED - Found 43 versions
+2026-08-07 17:29:44 | INFO     | ============================================================
+2026-08-07 17:29:44 | INFO     |  
+2026-08-07 17:29:44 | INFO     | INSTRUCTIONS:
+2026-08-07 17:29:44 | INFO     | 1. Find the number next to the macOS version you want
+2026-08-07 17:29:44 | INFO     | 2. Enter that number in the input box above
+2026-08-07 17:29:44 | INFO     | 3. Press ENTER or click DOWNLOAD SELECTED to start downloading
+2026-08-07 17:29:44 | INFO     |  
+2026-08-07 17:29:44 | WARNING  | NOTE: Each macOS version contains MULTIPLE packages (5GB-12GB total)
+2026-08-07 17:29:44 | INFO     | The downloader will download ALL packages sequentially.
+2026-08-07 17:29:45 | INFO     | [SDK] Activation started
+2026-08-07 17:29:47 | INFO     | [SDK] Software store URL not configured
