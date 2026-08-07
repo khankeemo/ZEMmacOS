@@ -196,11 +196,14 @@ class ApiClient:
         response = self._request('license', payload)
         return response
 
-    def activate_license(self, license_key: str, hardware_id: Optional[str] = None) -> Dict[str, Any]:
+    def activate_license(self, license_key: str, hardware_id: Optional[str] = None,
+                         idempotency: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
         payload = {'action': 'activate', 'license_key': license_key, 'hardware_id': hardware_id,
                    'product_id': self.product_id}
+        if idempotency:
+            payload.update(idempotency)
         response = self._request('license', payload)
         return response
 
@@ -211,15 +214,19 @@ class ApiClient:
         response = self._request('license/deactivate', payload)
         return response
 
-    def renew_license(self, license_key: str, extra_days: Optional[int] = None) -> Dict[str, Any]:
+    def renew_license(self, license_key: str, extra_days: Optional[int] = None,
+                      idempotency: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         payload = {'action': 'renew', 'license_key': license_key}
         if extra_days is not None:
             payload['extra_days'] = extra_days
+        if idempotency:
+            payload.update(idempotency)
         response = self._request('license', payload)
         return response
 
     def start_trial(self, email: str, customer_name: str = '',
-                    customer_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                    customer_data: Optional[Dict[str, Any]] = None,
+                    idempotency: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         hardware_id = self._get_hardware_id()
         payload: Dict[str, Any] = {
             'action': 'start', 'customer_email': email,
@@ -227,6 +234,8 @@ class ApiClient:
         }
         if customer_data:
             payload['customer_data'] = customer_data
+        if idempotency:
+            payload.update(idempotency)
         return self._request('trial', payload)
 
     def get_license_status(self, hardware_id: Optional[str] = None) -> Dict[str, Any]:
@@ -238,15 +247,42 @@ class ApiClient:
         headers['Content-Type'] = 'application/json'
         try:
             resp = requests.get(url, headers=headers, timeout=self.timeout)
-            if resp.status_code == 200:
-                return resp.json()
-            return {'success': False, 'status': 'no_license', 'error': f'HTTP {resp.status_code}'}
+            data = {}
+            try:
+                data = resp.json()
+            except Exception:
+                if resp.text:
+                    data = {'message': resp.text}
+            # Return the backend response exactly as-is, including its
+            # universal status on 4xx/5xx. The SDK renders the backend verdict;
+            # it never substitutes a locally-inferred status.
+            data['http_status'] = resp.status_code
+            data['success'] = bool(data.get('success', 200 <= resp.status_code < 300))
+            return data
         except requests.exceptions.Timeout:
             raise ConnectionUnavailable(f'Request timeout after {self.timeout}s')
         except requests.exceptions.ConnectionError as e:
             raise ConnectionUnavailable(f'Connection error: {str(e)}')
         except Exception as e:
-            return {'success': False, 'status': 'no_license', 'error': str(e)}
+            raise ConnectionUnavailable(f'License status request failed: {str(e)}')
+
+    def get_health(self) -> Dict[str, Any]:
+        """Non-mutating health/version probe (SECTION 0D §15/§17)."""
+        url = f"{self.base_url}/api/{self.api_version}/health"
+        api_path = f"/api/{self.api_version}/health"
+        headers = self._sign_request({}, method='GET', path=api_path, query='')
+        headers['Content-Type'] = 'application/json'
+        try:
+            resp = requests.get(url, headers=headers, timeout=self.timeout)
+            if resp.status_code in (200, 503):
+                return resp.json()
+            return {'status': 'error', 'http_status': resp.status_code, 'tests': {}}
+        except requests.exceptions.Timeout:
+            return {'status': 'error', 'error': 'timeout', 'tests': {}}
+        except requests.exceptions.ConnectionError as e:
+            return {'status': 'error', 'error': str(e), 'tests': {}}
+        except Exception as e:
+            return {'status': 'error', 'error': str(e), 'tests': {}}
 
     def get_trial_status(self, hardware_id: Optional[str] = None) -> Dict[str, Any]:
         if hardware_id is None:
@@ -259,6 +295,7 @@ class ApiClient:
         plan: Optional[str] = None,
         customer_name: str = '',
         customer_email: str = '',
+        idempotency: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
@@ -269,6 +306,8 @@ class ApiClient:
             'customer_name': customer_name or 'SDK User',
             'customer_email': customer_email or '',
         }
+        if idempotency:
+            payload.update(idempotency)
         response = self._request('trial', payload)
         return response
 
@@ -277,12 +316,15 @@ class ApiClient:
         license_key: str,
         hardware_id: Optional[str] = None,
         device_name: Optional[str] = None,
+        idempotency: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         if hardware_id is None:
             hardware_id = self._get_hardware_id()
         payload: Dict[str, Any] = {'action': 'bind', 'license_key': license_key, 'hardware_id': hardware_id}
         if device_name:
             payload['device_name'] = device_name
+        if idempotency:
+            payload.update(idempotency)
         return self._request('device', payload)
 
     def verify_license_for_renewal(self, license_key: str) -> Dict[str, Any]:

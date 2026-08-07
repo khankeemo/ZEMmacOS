@@ -55,14 +55,7 @@ class WelcomeDialog:
         self._error = '#ef4444'
         self._border = '#d1d5db'
 
-    def is_onboarding_complete(self) -> bool:
-        if self.engine is not None:
-            return self.engine.is_onboarding_complete()
-        return False
-
     def show(self) -> Dict[str, Any]:
-        if self.is_onboarding_complete():
-            return {'skipped': True, 'message': 'Onboarding already completed'}
         self._result = None
         self._root = tk.Toplevel()
         self._root.title(self.product_name or 'Welcome')

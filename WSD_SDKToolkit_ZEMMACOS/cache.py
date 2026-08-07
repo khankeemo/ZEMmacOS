@@ -1,9 +1,18 @@
-"""Local cache manager for license status (offline support)"""
+"""Local cache manager for license status (offline support).
+
+SECTION 0D §11 — values are encrypted at rest with an app-derived Fernet key
+when `enable_security()` is called. Writes fail closed (never plaintext) once
+security is enabled; legacy plaintext cache files are still read and upgraded.
+"""
 import json
 import os
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+from .security import SecurityRules, SecurityUnavailableError, _FERNET_AVAILABLE
+
+_ENCRYPTED_MARKER = 'ENCRYPTED:'
 
 
 class CacheManager:
@@ -17,6 +26,40 @@ class CacheManager:
         self._corrupt_file = self._cache_dir / 'cache.corrupt'
         self._ttl_days = self._get_ttl()
         self._cache: Optional[Dict[str, Any]] = None
+        self._encryption_enabled = False
+        self._fingerprint: Optional[str] = None
+
+    def enable_security(self, fingerprint: str) -> None:
+        """Turn on encryption-at-rest (§0D.11). Fail closed after this point:
+        the cache is never written to disk in plaintext again."""
+        self._fingerprint = fingerprint
+        self._encryption_enabled = True
+        SecurityRules.set_key(fingerprint)
+
+    def _serialize(self, cache: Dict[str, Any]) -> str:
+        plain = json.dumps(cache)
+        if not self._encryption_enabled:
+            return plain
+        if not _FERNET_AVAILABLE:
+            raise SecurityUnavailableError(
+                'Encryption is unavailable. Cached values must never be '
+                'written in plaintext (SECTION 0D §11).'
+            )
+        return _ENCRYPTED_MARKER + SecurityRules.encrypt(plain)
+
+    def _deserialize(self, raw: str) -> Optional[Dict[str, Any]]:
+        raw = raw.strip()
+        if raw.startswith(_ENCRYPTED_MARKER):
+            try:
+                ciphertext = raw[len(_ENCRYPTED_MARKER):]
+                return json.loads(SecurityRules.decrypt(ciphertext))
+            except (SecurityUnavailableError, json.JSONDecodeError):
+                return None
+        # Legacy plaintext cache (pre-0D.11) — read it; the next save upgrades it.
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
 
     def _get_ttl(self) -> int:
         offline = self.config.get('offline', {})
@@ -34,7 +77,13 @@ class CacheManager:
             return self._cache
         try:
             with open(self._cache_file, 'r') as f:
-                self._cache = json.load(f)
+                raw = f.read()
+            loaded = self._deserialize(raw)
+            if loaded is None:
+                self._preserve_corrupt_cache()
+                self._cache = {}
+                return self._cache
+            self._cache = loaded
             return self._cache
         except (json.JSONDecodeError, IOError):
             self._preserve_corrupt_cache()
@@ -55,8 +104,9 @@ class CacheManager:
             return
         self._ensure_cache_dir()
         try:
+            payload = self._serialize(self._cache)
             with open(self._tmp_file, 'w') as f:
-                json.dump(self._cache, f, indent=2)
+                f.write(payload)
             os.replace(self._tmp_file, self._cache_file)
         except Exception:
             if self._tmp_file.exists():
@@ -135,12 +185,10 @@ class CacheManager:
         """Rule 3 (AWS-01): clear the old cached license state before a fresh
         license activation is applied.
 
-        Removes stale license / customer values so a previous customer's license
-        can never resurface after a new license is activated. The hardware ID is
-        computed live (no stored key to clear) and the offline message queue is
-        preserved, so only the business-license keys are removed here. Onboarding
-        and paid-history flags are re-applied by the engine after the backend
-        reload, so they are intentionally left untouched.
+        Storage-only cleanup — removes stale license/customer values so a
+        previous customer's license can never resurface after a new license is
+        activated. The hardware ID is computed live (no stored key to clear) and
+        the offline message queue is preserved. The cache never decides status.
         """
         cache = self._load_cache()
         changed = False
@@ -165,7 +213,15 @@ class CacheManager:
     def save_license_key(self, license_key: str) -> None:
         key_path = self._cache_dir / 'license.key'
         try:
-            key_path.write_text(license_key.strip())
+            value = license_key.strip()
+            if self._encryption_enabled:
+                if not _FERNET_AVAILABLE:
+                    raise SecurityUnavailableError(
+                        'Encryption is unavailable. License key must never be '
+                        'written in plaintext (SECTION 0D §11).'
+                    )
+                value = _ENCRYPTED_MARKER + SecurityRules.encrypt(value)
+            key_path.write_text(value)
         except Exception:
             pass
 
@@ -173,7 +229,13 @@ class CacheManager:
         key_path = self._cache_dir / 'license.key'
         if key_path.exists():
             try:
-                return key_path.read_text().strip() or None
+                value = key_path.read_text().strip() or None
+                if value and value.startswith(_ENCRYPTED_MARKER):
+                    try:
+                        return SecurityRules.decrypt(value[len(_ENCRYPTED_MARKER):])
+                    except Exception:
+                        return None
+                return value
             except Exception:
                 pass
         return None
@@ -186,35 +248,23 @@ class CacheManager:
             except Exception:
                 pass
 
+    # ====================================================================
+    # Storage-only onboarding / history persistence.
+    #
+    # These methods persist state for offline display only. The cache NEVER
+    # derives business status from them — the Global License Status API
+    # (database) is the only source of truth for every license decision.
+    # ====================================================================
+
     def set_onboarding_complete(self) -> None:
         cache = self._load_cache()
         cache['onboarding_complete'] = {'value': True, 'cached_at': time.time()}
         self._save_cache()
 
-    def is_onboarding_complete(self) -> bool:
-        return self.get('onboarding_complete') is True
-
-    def peek_onboarding_complete(self) -> bool:
-        cache = self._load_cache()
-        entry = cache.get('onboarding_complete')
-        if entry is None:
-            return False
-        return entry.get('value') is True
-
     def mark_has_ever_activated_paid_license(self) -> None:
         cache = self._load_cache()
         cache['has_ever_activated_paid_license'] = {'value': True, 'cached_at': time.time()}
         self._save_cache()
-
-    def has_ever_activated_paid_license(self) -> bool:
-        return self.get('has_ever_activated_paid_license') is True
-
-    def peek_has_ever_activated_paid_license(self) -> bool:
-        cache = self._load_cache()
-        entry = cache.get('has_ever_activated_paid_license')
-        if entry is None:
-            return False
-        return entry.get('value') is True
 
     # ====================================================================
     # Message Queue (Offline Retry)

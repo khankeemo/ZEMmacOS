@@ -14,6 +14,55 @@ from typing import Any, Callable, Optional
 from .live_log import LiveLog
 
 
+class GlobalStateMachine:
+    """Canonical workflow lifecycle state machine (LOCKED spec §3).
+
+    Every workflow follows the identical lifecycle and may never invent a
+    custom state:
+        IDLE → VALIDATING → OTP_SENT → OTP_VERIFIED → PROCESSING → REFRESHING
+               → COMPLETED
+        Failure path (any point): FAILED
+
+    The engine is the only emitter; UI reads the current state. A state change
+    is written to LiveLog and published on the generic EventBus channel
+    ``workflow.state``. The atomicity (one workflow at a time) is enforced by
+    the engine's RLock, not here.
+    """
+
+    IDLE = "IDLE"
+    VALIDATING = "VALIDATING"
+    OTP_SENT = "OTP_SENT"
+    OTP_VERIFIED = "OTP_VERIFIED"
+    PROCESSING = "PROCESSING"
+    REFRESHING = "REFRESHING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+    _state = IDLE
+
+    @classmethod
+    def set(cls, state: str, detail: str = "") -> str:
+        cls._state = state
+        try:
+            from .event_bus import EventBus
+            EventBus.emit("workflow.state", state, detail)
+        except Exception:
+            pass
+        if detail:
+            LiveLog.log("WORKFLOW_STATE", f"{state} — {detail}")
+        else:
+            LiveLog.log("WORKFLOW_STATE", state)
+        return state
+
+    @classmethod
+    def get(cls) -> str:
+        return cls._state
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._state = cls.IDLE
+
+
 class WorkflowProgress:
     """Singleton progress reporter.
 

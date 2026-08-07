@@ -8,6 +8,10 @@ from typing import Dict, Optional
 
 
 class HardwareDetector:
+    # Fingerprint algorithm version (SECTION 0D §12). Bump when the identifier
+    # set or hash changes so stored bindings re-verify against the backend.
+    FINGERPRINT_VERSION = "v1"
+
     def __init__(self):
         self._fingerprint: Optional[str] = None
         self._identifiers: Optional[Dict[str, str]] = None
@@ -16,9 +20,35 @@ class HardwareDetector:
         if self._fingerprint is None:
             identifiers = self._collect_identifiers()
             combined = self._build_combined_string(identifiers)
-            self._fingerprint = self._hash_identifiers(combined)
+            digest = self._hash_identifiers(combined)
+            self._fingerprint = f"{self.FINGERPRINT_VERSION}:{digest}"
             self._identifiers = identifiers
         return self._fingerprint
+
+    def fingerprint_version(self) -> str:
+        """Return the current algorithm version (e.g. 'v1')."""
+        return self.FINGERPRINT_VERSION
+
+    @staticmethod
+    def parse_fingerprint(fingerprint: str) -> Dict[str, str]:
+        """Split a stored fingerprint into {version, hash}. Returns
+        {'version': '', 'hash': raw} for legacy un-versioned fingerprints."""
+        if not fingerprint:
+            return {'version': '', 'hash': ''}
+        if ':' in fingerprint:
+            version, _, digest = fingerprint.partition(':')
+            return {'version': version, 'hash': digest}
+        return {'version': '', 'hash': fingerprint}
+
+    def fingerprint_changed(self, stored_fingerprint: Optional[str]) -> bool:
+        """A version mismatch means the algorithm changed — re-verify against the
+        backend (SECTION 0B Rule 2), never re-bind locally."""
+        if not stored_fingerprint:
+            return False
+        parsed = self.parse_fingerprint(stored_fingerprint)
+        if parsed['version'] and parsed['version'] != self.FINGERPRINT_VERSION:
+            return True
+        return stored_fingerprint != self.get_fingerprint()
 
     def get_identifiers(self) -> Dict[str, str]:
         if self._identifiers is None:

@@ -14,7 +14,25 @@ __all__ = [
     "SingleInstance",
     "EventBus",
     "WorkflowProgress",
+    "GlobalStateMachine",
     "DialogManager",
+    "SessionManager",
+    "PermissionEngine",
+    "ConfigManager",
+    "FeatureFlags",
+    "OfflineMode",
+    "IdempotencyManager",
+    "TimeoutRules",
+    "CommunicationQueue",
+    "NotificationCenter",
+    "ErrorCatalog",
+    "SecurityRules",
+    "MigrationRunner",
+    "HealthCheck",
+    "MetricsCollector",
+    "VersionCompatibility",
+    "SupportRequestTracker",
+    "RollbackCoordinator",
 ]
 
 from .client import ApiClient, ApiError, ConnectionUnavailable
@@ -24,8 +42,25 @@ from .cache import CacheManager
 from .welcome import WelcomeDialog
 from .live_log import LiveLog
 from .event_bus import EventBus, LICENSE_STATUS_CHANGED
-from .workflow_progress import WorkflowProgress
+from .workflow_progress import WorkflowProgress, GlobalStateMachine
 from .dialog_manager import DialogManager
+from .config_manager import ConfigManager
+from .session import SessionManager
+from .permissions import PermissionEngine
+from .feature_flags import FeatureFlags
+from .offline_mode import OfflineMode
+from .idempotency import IdempotencyManager
+from .timeout_rules import TimeoutRules
+from .communication_queue import CommunicationQueue
+from .notification_center import NotificationCenter
+from .error_catalog import ErrorCatalog
+from .security import SecurityRules
+from .migration import MigrationRunner
+from .health_check import HealthCheck
+from .metrics import MetricsCollector
+from .version_compat import VersionCompatibility
+from .support_workflow import SupportRequestTracker
+from .rollback import RollbackCoordinator
 from .universal_license_center import UniversalLicenseCenter
 from .universal_email_dialog import UniversalEmailDialog
 from .universal_success_dialog import SuccessDialog

@@ -35,7 +35,23 @@ from .hardware import HardwareDetector
 from .cache import CacheManager
 from .live_log import LiveLog
 from .event_bus import EventBus
-from .workflow_progress import WorkflowProgress
+from .workflow_progress import WorkflowProgress, GlobalStateMachine
+from .config_manager import ConfigManager
+from .session import AUTH_ANONYMOUS, SessionManager
+from .feature_flags import FeatureFlags
+from .idempotency import IdempotencyManager
+from .timeout_rules import TimeoutRules
+from .permissions import PermissionEngine
+from .metrics import MetricsCollector
+from .offline_mode import OfflineMode
+from .health_check import HealthCheck
+from .communication_queue import CommunicationQueue
+from .notification_center import NotificationCenter
+from .migration import MigrationRunner
+from .rollback import RollbackCoordinator
+from .support_workflow import SupportRequestTracker
+from .version_compat import VersionCompatibility
+from .security import SecurityRules, SecurityUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +131,27 @@ class LicenseStatus:
         )
 
 
+def _map_universal_status(api_status: str):
+    """Map the backend's universal status to the SDK display status + validity.
+
+    Pure render mapping — the backend (database) already decides the license
+    state. The SDK only converts the universal status to a display-friendly
+    status string and reflects the backend's validity (ACTIVE / TRIAL_ACTIVE
+    are the only valid states). No business reasoning happens here.
+    """
+    valid = api_status in ('ACTIVE', 'TRIAL_ACTIVE')
+    display = {
+        'ACTIVE': 'licensed',
+        'TRIAL_ACTIVE': 'trial',
+        'TRIAL_EXPIRED': 'trial_consumed',
+        'NO_CUSTOMER': 'no_license',
+        'INACTIVE': 'inactive',
+        'REVOKED': 'revoked',
+        'EXPIRED': 'expired',
+    }.get(api_status, 'no_license')
+    return display, valid
+
+
 class _WorkflowGuard:
     """Workflow Lock (Phase 2) + exactly-once stage logging (Phase 13).
 
@@ -128,6 +165,7 @@ class _WorkflowGuard:
 
     def __enter__(self) -> '_WorkflowGuard':
         self._engine._workflow_lock.acquire()
+        GlobalStateMachine.set(GlobalStateMachine.PROCESSING, self._name)
         LiveLog.log(LOG_WORKFLOW_START, f"{self._name} — workflow started")
         return self
 
@@ -135,8 +173,10 @@ class _WorkflowGuard:
         try:
             if exc_type is None:
                 WorkflowProgress.stage(WorkflowProgress.COMPLETED, self._name)
+                GlobalStateMachine.set(GlobalStateMachine.COMPLETED, self._name)
                 LiveLog.log(LOG_WORKFLOW_COMPLETE, f"{self._name} — workflow complete")
             else:
+                GlobalStateMachine.set(GlobalStateMachine.FAILED, self._name)
                 LiveLog.log(LOG_WORKFLOW_ERROR, f"{self._name} — {exc}")
         finally:
             self._engine._workflow_lock.release()
@@ -146,17 +186,49 @@ class _WorkflowGuard:
 class LicenseEngine:
     def __init__(self, config_path: Optional[str] = None,
                  on_license_ready: Optional[Callable[[bool], None]] = None):
-        self.config = self._load_config(config_path)
+        self.config = ConfigManager(config_path)
+        self._raw_config = self.config.raw()
         self._hardware = HardwareDetector()
-        self._cache = CacheManager(self.config)
+        self._cache = CacheManager(self._raw_config)
+        try:
+            self._cache.enable_security(self._hardware.get_fingerprint())
+        except SecurityUnavailableError as e:
+            LiveLog.log("SECURITY_UNAVAILABLE", str(e))
         self._client = ApiClient(
-            config=self.config,
+            config=self._raw_config,
             hardware=self._hardware,
         )
         self._workflow_lock = threading.RLock()
         self._status: Optional[LicenseStatus] = None
         self._license_key: Optional[str] = None
         self.on_license_ready: Optional[Callable[[bool], None]] = on_license_ready
+
+        # Enterprise suite (SECTION 0D) — utility/derivation layers composed here.
+        self.timeouts = self.config.timeouts
+        self.feature_flags = FeatureFlags(self._cache)
+        self.idempotency = IdempotencyManager(self._cache)
+        self.permissions = PermissionEngine(self.feature_flags, self.get_hardware_state)
+        self.metrics = MetricsCollector()
+        self.offline = OfflineMode(self.timeouts.offline_grace_days)
+        self.health = HealthCheck(self, poll_interval_ms=self.timeouts.poll_interval_ms,
+                                  timeout_s=self.timeouts.health_timeout_seconds)
+        self.comm_queue = CommunicationQueue(self._cache)
+        self.notifications = NotificationCenter(self._cache)
+        self.migrator = MigrationRunner(self._cache)
+        self.rollback = RollbackCoordinator(self)
+        self.support_tracker = SupportRequestTracker(self._cache)
+        self.version = VersionCompatibility()
+
+        # Run cache migrations on startup (SECTION 0D §13).
+        try:
+            self.migrator.run()
+        except Exception as e:
+            LiveLog.log("MIGRATION_ERROR", str(e))
+
+        # Seed the global session with config-derived values.
+        SessionManager.set_runtime(self.config.runtime)
+        SessionManager.set_sdk_version(self.config.sdk_version)
+        self._hardware_fingerprint_cache = None
 
     def _workflow(self, name: str) -> _WorkflowGuard:
         return _WorkflowGuard(self, name)
@@ -184,11 +256,6 @@ class LicenseEngine:
     def mark_onboarding_complete(self) -> None:
         self._cache.set_onboarding_complete()
 
-    def is_onboarding_complete(self) -> bool:
-        if self._cache.peek_onboarding_complete():
-            return True
-        return self._cache.is_onboarding_complete()
-
     def set_customer_email(self, email: str) -> None:
         self._cache.set('customer_email', email)
 
@@ -202,6 +269,82 @@ class LicenseEngine:
             self._cache.set('pending_otp', True)
         else:
             self._cache.delete('pending_otp')
+
+    # ====================================================================
+    # Enterprise suite accessors (SECTION 0D) — UI reads via the engine
+    # ====================================================================
+
+    def session(self) -> Dict[str, Any]:
+        return SessionManager.snapshot()
+
+    def can_activate(self) -> 'PermissionResult':
+        return self.permissions.can_activate()
+
+    def can_renew(self) -> 'PermissionResult':
+        return self.permissions.can_renew()
+
+    def can_start_trial(self) -> 'PermissionResult':
+        return self.permissions.can_start_trial()
+
+    def can_replace_hardware(self) -> 'PermissionResult':
+        return self.permissions.can_replace_hardware()
+
+    def can_reset_hardware(self) -> 'PermissionResult':
+        return self.permissions.can_reset_hardware()
+
+    def can_contact_support(self) -> 'PermissionResult':
+        return self.permissions.can_contact_support()
+
+    def can_upgrade(self) -> 'PermissionResult':
+        return self.permissions.can_upgrade()
+
+    def permission_report(self) -> Dict[str, Any]:
+        return {k: v.to_dict() for k, v in self.permissions.report().items()}
+
+    def feature_flags_report(self) -> Dict[str, bool]:
+        return self.feature_flags.enabled()
+
+    def metrics_report(self) -> Dict[str, Any]:
+        return self.metrics.report()
+
+    def offline_status(self) -> Dict[str, Any]:
+        return self.offline.describe()
+
+    def add_notification(self, title: str, body: str = "",
+                         severity: str = 'information', source: str = "") -> Dict[str, Any]:
+        return self.notifications.add(title, body, severity, source)
+
+    def notifications_list(self, unread_only: bool = False, pinned_only: bool = False,
+                           severity: Optional[str] = None) -> List[Dict[str, Any]]:
+        return self.notifications.list(unread_only, pinned_only, severity)
+
+    def notifications_unread(self) -> int:
+        return self.notifications.unread_count()
+
+    def mark_notification_read(self, notification_id: str) -> bool:
+        return self.notifications.mark_read(notification_id)
+
+    def mark_all_notifications_read(self) -> int:
+        return self.notifications.mark_all_read()
+
+    def dismiss_notification(self, notification_id: str) -> bool:
+        return self.notifications.dismiss(notification_id)
+
+    def pin_notification(self, notification_id: str) -> bool:
+        return self.notifications.pin(notification_id)
+
+    def support_requests(self, stage: Optional[str] = None) -> List[Dict[str, Any]]:
+        return self.support_tracker.list(stage)
+
+    def track_support_request(self, subject: str, message: str,
+                              license_key: str = "") -> Dict[str, Any]:
+        key = license_key or self._license_key or ""
+        return self.support_tracker.create(subject, message, license_key=key,
+                                           hardware_id=self.get_hardware_id(),
+                                           customer_email=self.get_customer_email() or "")
+
+    def health_check(self) -> Dict[str, Any]:
+        return self.health.check()
 
     def persist_runtime_state(self) -> None:
         """Persist current runtime state to cache (used pre-restart)."""
@@ -225,41 +368,27 @@ class LicenseEngine:
             LiveLog.log("Cache flush failed", str(e))
 
     def _process_message_queue(self) -> None:
-        queue = self._cache.get_message_queue()
-        changed = False
-        for msg in queue:
-            if msg.get('status') == 'sent':
-                continue
-            now_ts = int(time.time())
-            if now_ts < msg.get('next_retry_at', 0):
-                continue
-            if msg.get('retry_count', 0) >= msg.get('max_retries', 5):
-                continue
-            msg['status'] = 'sending'
-            try:
-                self._client.create_communication(
-                    category=msg.get('category', 'general'),
-                    customer_email=msg.get('customer_email', ''),
-                    customer_name=msg.get('customer_name', ''),
-                    subject=msg.get('subject', ''),
-                    message=msg.get('message', ''),
-                    product_id=msg.get('product_id', ''),
-                    license_key=msg.get('license_key', ''),
-                    hardware_id=msg.get('hardware_id', self._hardware.get_fingerprint()),
-                    sdk_version=msg.get('sdk_version', ''),
-                    runtime_type=msg.get('runtime_type', ''),
-                )
-                msg['status'] = 'sent'
-                changed = True
-            except Exception as e:
-                msg['retry_count'] = msg.get('retry_count', 0) + 1
-                msg['last_error'] = str(e)
-                exp_backoff = pow(2, msg['retry_count']) * 60
-                msg['next_retry_at'] = now_ts + exp_backoff
-                msg['status'] = 'failed'
-                changed = True
-        if changed:
-            self._cache.save_message_queue(queue)
+        """Flush the offline communication queue via the CommunicationQueue
+        lifecycle (§0D §8). The engine is transport-only: the deliver callback
+        performs the actual API send and returns True on success."""
+
+        def deliver(msg: Dict[str, Any]) -> bool:
+            response = self._client.create_communication(
+                category=msg.get('category', 'general'),
+                customer_email=msg.get('customer_email', ''),
+                customer_name=msg.get('customer_name', ''),
+                subject=msg.get('subject', ''),
+                message=msg.get('message', ''),
+                product_id=msg.get('product_id', ''),
+                license_key=msg.get('license_key', ''),
+                hardware_id=msg.get('hardware_id', self._hardware.get_fingerprint()),
+                sdk_version=msg.get('sdk_version', ''),
+                runtime_type=msg.get('runtime_type', ''),
+            )
+            return bool(response.get('success', False))
+
+        stats = self.comm_queue.process(deliver)
+        if stats.get('delivered'):
             self._cache.cleanup_sent_messages()
 
     def _load_config(self, config_path: Optional[str]) -> Dict[str, Any]:
@@ -277,34 +406,38 @@ class LicenseEngine:
 
     @staticmethod
     def _is_valid_status(status: Optional[LicenseStatus]) -> bool:
+        """Offline display helper — trust the cached backend verdict only.
+
+        The 'valid' flag stored on a cached LicenseStatus originates from the
+        backend's universal verdict. Offline, the SDK only displays that last
+        server-returned verdict; it never recomputes validity from local data
+        (days_left / expiry are not reasoned over by the SDK).
+        """
         if not status:
             return False
-        if status.status == 'trial':
-            if status.days_left is not None and status.days_left <= 0:
-                return False
-            if status.expiry_date:
-                try:
-                    expiry = datetime.fromisoformat(status.expiry_date.replace('Z', '+00:00'))
-                    if expiry.timestamp() < datetime.now().timestamp():
-                        return False
-                except Exception:
-                    pass
-        return status.status in ('licensed', 'trial')
+        return bool(status.valid)
 
     def _build_status_from_unified(self, status_response: Dict[str, Any],
                                    hardware_id: str) -> LicenseStatus:
-        """Build a LicenseStatus from the backend's normalized status response.
-        All license values come from the backend — nothing is calculated or
-        defaulted locally except absent-optional fallbacks."""
+        """Build a LicenseStatus from the backend's unified status response.
+
+        The backend verdict is authoritative: the SDK maps the universal status
+        to a display status and valid flag, and never decides business state
+        locally. All values (customer / license / plan / product / devices /
+        message) come from the backend response.
+        """
         cust = status_response.get('customer', {}) or {}
         lic = status_response.get('license', {}) or {}
         plan = status_response.get('plan', {}) or {}
         product = status_response.get('product', {}) or {}
         devices = status_response.get('devices', {}) or {}
-        api_status = status_response.get('status', 'no_license')
+        api_status = status_response.get('status', 'NO_CUSTOMER')
+        message = status_response.get('message') or status_response.get('reason') or ''
+
+        display_status, valid = _map_universal_status(api_status)
         return LicenseStatus(
-            valid=True,
-            status=api_status,
+            valid=valid,
+            status=display_status,
             expiry_date=lic.get('expiry_date'),
             days_left=lic.get('days_remaining', lic.get('days_left', 0)),
             plan=plan.get('name') or lic.get('plan'),
@@ -316,7 +449,8 @@ class LicenseEngine:
             customer_mobile=cust.get('mobile'),
             max_devices=devices.get('maximum', 999),
             device_count=devices.get('current', 0),
-            trial_active=(api_status == 'trial'),
+            trial_active=(api_status == 'TRIAL_ACTIVE'),
+            message=message,
         )
 
     def _build_offline_status(self, result: Dict[str, Any],
@@ -363,33 +497,20 @@ class LicenseEngine:
             device_count=lic.get('device_count', 0),
         )
 
-    def _build_no_license_decision(self, hardware_id: str) -> LicenseStatus:
-        """Local customer-state decision used only when the backend is
-        unreachable or has confirmed there is no active license."""
-        onboarding_complete = self.is_onboarding_complete()
-        has_paid = self._cache.peek_has_ever_activated_paid_license()
-        if not has_paid:
-            has_paid = self._cache.has_ever_activated_paid_license()
+    def _render_offline_status(self, hardware_id: str) -> LicenseStatus:
+        """Offline (backend unreachable) display status — never a business decision.
 
-        if onboarding_complete:
-            if has_paid:
-                LiveLog.log("license.invalid", "Decision — inactive (existing customer with paid history)")
-                return LicenseStatus(
-                    valid=False, status='inactive',
-                    hardware_id=hardware_id,
-                    message='License not found or inactive. Please contact your administrator or activate a valid license.'
-                )
-            LiveLog.log("license.invalid", "Decision — trial_consumed (onboarding complete, no paid license)")
-            return LicenseStatus(
-                valid=False, status='trial_consumed',
-                hardware_id=hardware_id,
-                message='Your trial has ended. Please activate a paid license or renew an existing license.'
-            )
-        LiveLog.log("license.invalid", "Decision — no_license (new customer)")
+        The Global License Status API (database) is the only source of truth for
+        license state. When the backend cannot be reached the SDK cannot know the
+        customer state, so it renders a neutral offline placeholder for display
+        only. It never infers inactive / trial_consumed / no_license from local
+        cache or onboarding / paid-history flags.
+        """
+        self.offline.server_lost(has_valid_cache=False)
         return LicenseStatus(
-            valid=False, status='no_license',
+            valid=False, status='error',
             hardware_id=hardware_id,
-            message='No license or trial was found. Start a Free Trial or activate your license.'
+            message='The license server could not be reached. Please check your connection and retry.'
         )
 
     def _sync_status_from_server(self) -> Optional[LicenseStatus]:
@@ -411,30 +532,47 @@ class LicenseEngine:
         except ConnectionUnavailable as e:
             LiveLog.log("license.offline", f"Backend unreachable: {e}")
             return None
-        if not status_response.get('success'):
+        if not isinstance(status_response, dict) or not status_response.get('status'):
             LiveLog.log("license.offline", "License status endpoint error, using local state")
             return None
 
-        api_status = status_response.get('status', 'no_license')
-        if api_status in ('licensed', 'trial'):
+        api_status = status_response.get('status', 'NO_CUSTOMER')
+
+        # Customer Not Found (fresh install / never activated): the backend is
+        # the only source of truth. Immediately clear EVERY piece of previous
+        # local state — cache, session, license key, trial, customer — so no
+        # stale data can ever survive for a brand-new user. The SDK never layers
+        # a derived local status on top of this and never writes cache.
+        if api_status == 'NO_CUSTOMER':
+            self._cache.reset_all()
+            self._license_key = None
+            SessionManager.set_customer({})
+            SessionManager.set_license({})
+            SessionManager.set_plan({})
+            SessionManager.set_auth_state(AUTH_ANONYMOUS)
+            SessionManager.end_workflow()
+            LiveLog.log("license.fresh",
+                        "Customer not found on server — cleared local cache, session and license state")
+            self._status = self._build_status_from_unified(status_response, hardware_id)
+            return self._status
+
+        if api_status in ('ACTIVE', 'TRIAL_ACTIVE'):
             status = self._build_status_from_unified(status_response, hardware_id)
             self._status = status
             self._cache.set_license_status(status.to_dict())
             if not self._license_key and status.license_key:
                 self._license_key = status.license_key
-            if api_status == 'licensed':
-                self._cache.mark_has_ever_activated_paid_license()
             LiveLog.log("license.valid", f"Decision — {api_status} on server (unified API)")
             LiveLog.log(LOG_CACHE_REFRESH, f"Cache refreshed from backend (status: {api_status})")
             return status
 
-        # Server confirmed no active license — never fall back to cached business values.
-        self._cache.invalidate_license_status()
-        self._cache.clear_license_key()
-        self._license_key = None
-        LiveLog.log("license.invalid", f"Decision — no active state on server (status={api_status})")
-        decision = self._build_no_license_decision(hardware_id)
+        # Server confirmed the customer/license state (universal status). The
+        # backend verdict is authoritative — the SDK renders it as-is and never
+        # infers inactive / trial_consumed / no_license from local cache.
+        LiveLog.log("license.invalid", f"Decision — server state on server (status={api_status})")
+        decision = self._build_status_from_unified(status_response, hardware_id)
         self._status = decision
+        self._cache.set_license_status(decision.to_dict())
         return decision
 
     def _apply_fresh_state(self, license_key: str, result: Dict[str, Any],
@@ -452,6 +590,7 @@ class LicenseEngine:
             # cached license/customer state. Clear the stale business keys
             # first, then reload the authoritative status from the backend.
             self._cache.reset_on_fresh_activation()
+        GlobalStateMachine.set(GlobalStateMachine.PROCESSING, operation_label)
         self._license_key = license_key or self._license_key
         if self._license_key:
             self._cache.save_license_key(self._license_key)
@@ -464,6 +603,7 @@ class LicenseEngine:
             self._status = self._build_offline_status(result, status_key, license_key)
             self._cache.set_license_status(self._status.to_dict())
 
+        GlobalStateMachine.set(GlobalStateMachine.REFRESHING, operation_label)
         WorkflowProgress.stage(WorkflowProgress.SAVING_CACHE, operation_label)
         if self._status and self._status.valid:
             self._cache.set_license_status(self._status.to_dict())
@@ -472,16 +612,47 @@ class LicenseEngine:
             if mark_onboarding:
                 self._cache.set_onboarding_complete()
 
+        # Seed the global session from the freshly applied state (SECTION 0D §1).
+        self._seed_session()
+
         if kind == 'activation':
             LiveLog.log(LOG_ACTIVATION_SUCCESS, "License activated successfully")
+            self.metrics.record_success('activation')
         elif kind == 'renewal':
             LiveLog.log("RENEWAL_SUCCESS", "License renewed successfully")
+            self.metrics.record_success('renewal')
         elif kind == 'trial':
             LiveLog.log("trial.success", "Trial activated")
+            self.metrics.record_success('trial')
+        elif kind in ('bind', 'hardware_binding'):
+            LiveLog.log("hardware.bound", "Device bound")
+            self.metrics.record_success('hardware_rebind')
 
         WorkflowProgress.stage(WorkflowProgress.REFRESHING_SDK, operation_label)
         self._publish_status()
         self._notify_ready(bool(self._status and self._status.valid))
+        GlobalStateMachine.set(GlobalStateMachine.COMPLETED, operation_label)
+
+    def _seed_session(self) -> None:
+        """Write the current status into the global session (SECTION 0D §1)."""
+        status = self._status
+        if status is None:
+            return
+        SessionManager.set_customer({
+            "name": status.customer_name,
+            "email": status.customer_email,
+            "mobile": status.customer_mobile or status.customer_phone,
+        })
+        SessionManager.set_license({
+            "license_key": status.license_key,
+            "status": status.status,
+            "expiry_date": status.expiry_date,
+            "days_left": status.days_left,
+        })
+        SessionManager.set_plan({"name": status.plan, "max_devices": status.max_devices})
+        SessionManager.set_auth_state('licensed' if status.status == 'licensed'
+                                      else 'trial' if status.status == 'trial'
+                                      else 'anonymous')
 
     # ====================================================================
     # Initialization / refresh
@@ -490,13 +661,42 @@ class LicenseEngine:
     def initialize(self) -> LicenseStatus:
         with self._workflow('initialize'):
             hardware_id = self._hardware.get_fingerprint()
+            # Enable encryption-at-rest with the hardware-bonded key (SECTION 0D §11).
+            try:
+                self._cache.enable_security(hardware_id)
+            except SecurityUnavailableError as e:
+                LiveLog.log("SECURITY_UNAVAILABLE", str(e))
             self._cache.invalidate_if_hardware_mismatch(hardware_id)
             self._process_message_queue()
             LiveLog.log("engine.initialize", f"License Engine initialize — hardware: {hardware_id[:16]}...")
 
+            # Seed the global session (SECTION 0D §1).
+            SessionManager.set_hardware_id(hardware_id)
+            SessionManager.set_product({
+                "id": self.config.get_product_id(),
+                "name": self.config.get_product_name(),
+                "version": self.config.product().get("version", ""),
+            })
+
+            # Health + feature flags + version compatibility (SECTIONS 0D §4/§15/§17).
+            health = self.health.check()
+            if health.get("status") == "ok":
+                self.feature_flags.apply_server_payload(health.get("flags"))
+            compat = self.version.verify(self, health)
+            if not compat.get("ok"):
+                self._status = LicenseStatus(
+                    valid=False, status='upgrade_required',
+                    hardware_id=hardware_id,
+                    message=compat.get("message") or 'This version of the application is no longer supported. Please update to continue.',
+                )
+                self._publish_status()
+                self._notify_ready(False)
+                return self._status
+
             # Server-first: the backend is the single source of truth while online.
             server_status = self._sync_status_from_server()
             if server_status is not None:
+                self.offline.server_reachable(True)
                 self._publish_status()
                 self._notify_ready(server_status.valid)
                 return server_status
@@ -504,6 +704,7 @@ class LicenseEngine:
             # Backend unreachable — offline fallback to cached local state only.
             saved = self._cache.peek_license_status()
             if saved:
+                self.offline.server_lost(has_valid_cache=True)
                 self._status = LicenseStatus.from_dict(saved)
                 if not self._license_key and self._status.license_key:
                     self._license_key = self._status.license_key
@@ -514,13 +715,23 @@ class LicenseEngine:
                     return self._status
                 LiveLog.log("license.invalid", f"Decision — cached state found but not valid ({self._status.status})")
 
-            self._status = self._build_no_license_decision(hardware_id)
+            self.offline.server_lost(has_valid_cache=False)
+            self._status = self._render_offline_status(hardware_id)
             self._publish_status()
             self._notify_ready(False)
             return self._status
 
     def get_hardware_id(self) -> str:
-        return self._hardware.get_fingerprint()
+        if self._hardware_fingerprint_cache is None:
+            self._hardware_fingerprint_cache = self._hardware.get_fingerprint()
+        return self._hardware_fingerprint_cache
+
+    def get_health(self) -> Dict[str, Any]:
+        """Health check transport passthrough (SECTION 0D §15) — non-mutating."""
+        try:
+            return self._client.get_health()
+        except Exception as e:
+            return {'status': 'error', 'error': str(e), 'tests': {}}
 
     def get_status(self) -> Optional[LicenseStatus]:
         return self._status
@@ -534,10 +745,17 @@ class LicenseEngine:
         """
         with self._workflow('refresh'):
             WorkflowProgress.stage(WorkflowProgress.CHECKING_SERVER, 'refresh')
+            GlobalStateMachine.set(GlobalStateMachine.REFRESHING, 'status')
+            timer = self.metrics.start_timer('refresh')
             status = self._sync_status_from_server()
             if status is not None:
                 self._status = status
+                self.offline.server_reachable(True)
+                self.metrics.record_success('refresh', self.metrics.stop_timer('refresh') or timer)
                 self._publish_status()
+            else:
+                self.offline.server_lost(has_valid_cache=bool(self._cache.peek_license_status()))
+                GlobalStateMachine.set(GlobalStateMachine.FAILED, 'refresh')
             return self._status
 
     def get_license_key(self) -> Optional[str]:
@@ -562,10 +780,12 @@ class LicenseEngine:
                     'error': {}, 'message': 'Please enter a license key'}
         hardware_id = hardware_id or self._hardware.get_fingerprint()
         LiveLog.log(LOG_VALIDATION_START, "Validating license key")
+        GlobalStateMachine.set(GlobalStateMachine.VALIDATING, 'license')
         WorkflowProgress.stage(WorkflowProgress.CHECKING_LICENSE)
         try:
             result = self._client.validate_license(license_key, hardware_id)
         except ApiError as e:
+            GlobalStateMachine.set(GlobalStateMachine.FAILED, 'license')
             LiveLog.log(LOG_VALIDATION_ERROR, str(e))
             return {'success': False, 'validated': False, 'already_activated': False,
                     'new_customer': False, 'status': '',
@@ -616,6 +836,7 @@ class LicenseEngine:
             if api_status else
             "License validation could not be completed. Please check the license key "
             "and try again, or contact support.")
+        GlobalStateMachine.set(GlobalStateMachine.FAILED, 'license')
         LiveLog.log(LOG_VALIDATION_ERROR, str(out['message']))
         return out
 
@@ -623,10 +844,12 @@ class LicenseEngine:
         """Engine-owned OTP send — one path for Welcome, Activation and Renewal."""
         if not email:
             raise ValueError("No registered email was found for this license.")
+        GlobalStateMachine.set(GlobalStateMachine.VALIDATING, 'otp-send')
         WorkflowProgress.stage(WorkflowProgress.SENDING_OTP, email)
         result = self._client.send_otp(email)
         if result.get('success'):
             LiveLog.log(LOG_OTP_SENT, f"OTP sent to {email}")
+            GlobalStateMachine.set(GlobalStateMachine.OTP_SENT, email)
             WorkflowProgress.stage(WorkflowProgress.OTP_SENT, email)
         return result
 
@@ -641,11 +864,15 @@ class LicenseEngine:
             result = self._client.verify_otp(email, otp)
         except ApiError as e:
             if e.status_code and 400 <= e.status_code < 500:
+                GlobalStateMachine.set(GlobalStateMachine.FAILED, 'otp')
                 return {'success': False, 'message': 'OTP is not valid.'}
             raise
         if result.get('success'):
             LiveLog.log(LOG_OTP_VERIFIED, f"OTP verified for {email}")
+            GlobalStateMachine.set(GlobalStateMachine.OTP_VERIFIED, email)
             WorkflowProgress.stage(WorkflowProgress.OTP_VERIFIED, email)
+        else:
+            GlobalStateMachine.set(GlobalStateMachine.FAILED, 'otp')
         return result
 
     def register_customer(self, name: str, email: str, mobile: str,
@@ -717,17 +944,24 @@ class LicenseEngine:
         Validate → License Found → Customer Found → Hardware Ready →
         (OTP verified by caller) → Bind Hardware → Create Activation →
         Download Latest Status → Clear Local Cache → Save New Cache →
-        Fire Event → Refresh Entire SDK → Success."""
+        Fire Event → Refresh Entire SDK → Success.
+        Idempotent (SECTION 0D §6): repeated clicks produce ONE activation."""
         if not license_key:
             raise ValueError("License key unavailable.")
+        op = self.idempotency.begin('activation')
+        if op is None:
+            return {'success': False, 'already_activated': True,
+                    'message': 'Activation already completed.'}
         with self._workflow('activation'):
             LiveLog.log(LOG_ACTIVATION_STARTED, "Activation started")
             WorkflowProgress.stage(WorkflowProgress.CHECKING_HARDWARE, 'activation')
-            result = self._client.activate_license(license_key)
+            result = self._client.activate_license(license_key, idempotency=op.payload())
             if result.get('success'):
                 self._apply_fresh_state(license_key, result, 'activation',
                                         'Activation', mark_onboarding=True)
+                self.idempotency.complete(op)
             else:
+                self.metrics.record_failure('activation')
                 LiveLog.log(LOG_ACTIVATION_SUCCESS, "Activation failed — server response")
             return result
 
@@ -737,12 +971,17 @@ class LicenseEngine:
         key = license_key or self._license_key
         if not key:
             raise ValueError("License key unavailable. Please activate first.")
+        op = self.idempotency.begin('reactivation')
         with self._workflow('reactivation'):
             LiveLog.log(LOG_ACTIVATION_STARTED, "Reactivation started")
-            result = self._client.activate_license(key)
+            result = self._client.activate_license(key, idempotency=op.payload() if op else None)
             if result.get('success'):
                 self._apply_fresh_state(key, result, 'activation',
                                         'Reactivation', mark_onboarding=True)
+                if op:
+                    self.idempotency.complete(op)
+            else:
+                self.metrics.record_failure('activation')
             return result
 
     def start_trial(self, email: str, customer_name: str = '',
@@ -752,29 +991,44 @@ class LicenseEngine:
         Refresh."""
         if not email:
             raise ValueError("A valid email is required to start a trial.")
+        op = self.idempotency.begin('trial')
         with self._workflow('trial'):
             WorkflowProgress.stage(WorkflowProgress.CHECKING_CUSTOMER, email)
-            result = self._client.start_trial(email, customer_name=customer_name, customer_data=customer_data)
+            result = self._client.start_trial(email, customer_name=customer_name,
+                                              customer_data=customer_data,
+                                              idempotency=op.payload() if op else None)
             if result.get('success'):
                 LiveLog.log("trial.started", "Trial started on server — applying fresh state")
                 self._apply_fresh_state(self._license_key or '', result, 'trial',
                                         'Trial', mark_paid=False, mark_onboarding=False)
+                if op:
+                    self.idempotency.complete(op)
+            else:
+                self.metrics.record_failure('trial')
             return result
 
     def convert_trial(self, plan: Optional[str] = None, customer_name: str = '',
                       customer_email: str = '') -> Dict[str, Any]:
         """Trial conversion (Phase 8): Trial → Purchase → OTP → Payment →
-        Activation → Lock Trial → Convert Record → Create License → Refresh."""
+        Activation → Lock Trial → Convert Record → Create License → Refresh.
+        Idempotent (SECTION 0D §6)."""
         status = self._status or self.get_status()
         if not status or status.status != 'trial':
             raise RuntimeError("No active trial to convert.")
+        op = self.idempotency.begin('trial_conversion')
         with self._workflow('trial_conversion'):
             hardware_id = self._hardware.get_fingerprint()
-            result = self._client.convert_trial(hardware_id, plan, customer_name, customer_email)
+            result = self._client.convert_trial(hardware_id, plan, customer_name, customer_email,
+                                                idempotency=op.payload() if op else None)
             if result.get('success'):
                 lic = result.get('license', {}) or {}
                 self._apply_fresh_state(lic.get('license_key') or '', result,
                                         'conversion', 'Trial Conversion')
+                self.metrics.record_success('trial_conversion')
+                if op:
+                    self.idempotency.complete(op)
+            else:
+                self.metrics.record_failure('trial_conversion')
             return result
 
     def get_plans(self) -> Dict[str, Any]:
@@ -784,17 +1038,24 @@ class LicenseEngine:
               license_key: Optional[str] = None) -> Dict[str, Any]:
         """Renewal pipeline (Phase 7): OTP verified → Verify Payment → Renew →
         Update Expiry → Download Status → Refresh Cache → Fire Event →
-        Refresh SDK."""
+        Refresh SDK. Idempotent (SECTION 0D §6)."""
         key = license_key or self._license_key
         if not key:
             raise ValueError("License key unavailable. Please activate first.")
+        op = self.idempotency.begin('renewal')
         with self._workflow('renewal'):
             LiveLog.log("renewal.start", "Renewal started")
-            result = self._client.renew_license(key, extra_days)
+            result = self._client.renew_license(key, extra_days,
+                                                idempotency=op.payload() if op else None)
             if result.get('success'):
                 LiveLog.log("renewal.success", "License renewed on server — applying fresh state")
                 self._apply_fresh_state(key, result, 'renewal', 'Renewal',
                                         mark_paid=True, mark_onboarding=False)
+                self.metrics.record_success('renewal')
+                if op:
+                    self.idempotency.complete(op)
+            else:
+                self.metrics.record_failure('renewal')
             return result
 
     def deactivate(self, license_key: Optional[str] = None) -> Dict[str, Any]:
@@ -856,12 +1117,19 @@ class LicenseEngine:
         key = license_key or self._license_key
         if not key:
             raise ValueError("License key unavailable.")
+        op = self.idempotency.begin('hardware_bind')
         with self._workflow('hardware_binding'):
-            result = self._client.bind_device(key, device_name=device_name)
+            result = self._client.bind_device(key, device_name=device_name,
+                                              idempotency=op.payload() if op else None)
             if result.get('success'):
                 LiveLog.log("hardware.bound", "Device bound on server — applying fresh state")
                 self._apply_fresh_state(key, result, 'bind', 'Hardware Binding')
                 self._cache.delete('pending_otp')
+                self.metrics.record_success('hardware_rebind')
+                if op:
+                    self.idempotency.complete(op)
+            else:
+                self.metrics.record_failure('hardware_rebind')
             return result
 
     # ====================================================================
