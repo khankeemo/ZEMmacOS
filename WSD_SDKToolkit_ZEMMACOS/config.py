@@ -33,5 +33,20 @@ def get_product_info(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_store_url(config: Dict[str, Any]) -> str:
-    """Central location for the software store URL used by every Buy License button."""
-    return (config.get("store", {}).get("url") or "").strip()
+    """Backwards-compatible store URL accessor. Prefers the dedicated Buy
+    portal URL (store.buy_url) and falls back to the generic store.url."""
+    return get_buy_url(config)
+
+
+def get_buy_url(config: Dict[str, Any]) -> str:
+    """Central location for the Buy License portal URL (opens the Universal
+    Buy portal /internal/api/buy). Used by every Buy License button."""
+    store = config.get("store", {}) or {}
+    return (store.get("buy_url") or store.get("url") or "").strip()
+
+
+def get_renew_url(config: Dict[str, Any]) -> str:
+    """Central location for the Renew License portal URL (opens the Universal
+    Renew portal /internal/api/renew). Used by every Renew License button."""
+    store = config.get("store", {}) or {}
+    return (store.get("renew_url") or store.get("url") or "").strip()

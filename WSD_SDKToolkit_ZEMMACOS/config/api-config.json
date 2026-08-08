@@ -12,6 +12,11 @@
     "timeout": 30000,
     "retry_count": 3
   },
+  "store": {
+    "url": "https://www.websmithdigital.com/software-store",
+    "buy_url": "https://www.websmithdigital.com/internal/api/buy",
+    "renew_url": "https://www.websmithdigital.com/internal/api/renew"
+  },
   "trial": {
     "enabled": true,
     "days": 7,

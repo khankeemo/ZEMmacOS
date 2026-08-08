@@ -67,6 +67,31 @@ class _Messages:
     validation_key_required = "Please enter a license key."
     already_activated = "Already activated on this device. Continue using the application."
 
+    # Activation dialog — compact universal phrasing (SECTION 0E). Every message
+    # shown in the Activate License flow resolves here; no hardcoded strings.
+    ui_validating = "Checking license..."
+    ui_license_not_found = "License not found. Please verify your license key."
+    ui_customer_not_found = "Customer not found. Please check your email."
+    ui_license_inactive = "License is inactive."
+    ui_license_revoked = "License has been revoked."
+    ui_license_expired = "License has expired. Please renew your license."
+    ui_license_active = "License validated successfully."
+    ui_sending_otp = "Sending OTP..."
+    ui_otp_sent = "OTP sent successfully."
+    ui_otp_expires_in = "OTP sent — expires in {0}"
+    ui_otp_invalid = "Invalid OTP. Please try again."
+    ui_otp_expired = "OTP expired. Request a new OTP."
+    ui_otp_verified = "OTP verified successfully."
+    ui_binding_hardware = "Binding Hardware..."
+    ui_creating_activation = "Creating Activation..."
+    ui_updating_license = "Updating License..."
+    ui_refreshing_license = "Refreshing License..."
+    ui_updating_application = "Updating Application..."
+    ui_activation_completed = "License activated successfully."
+    ui_enter_license_key = "Enter your license key"
+    ui_hardware_hint = "Hardware: {0}"
+    ui_otp_label = "Security Code"
+
     # OTP
     otp_sending = "Sending a one-time password..."
     otp_sent = "One-time password sent. Please check your email."

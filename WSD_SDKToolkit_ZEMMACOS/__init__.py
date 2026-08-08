@@ -17,6 +17,7 @@ __all__ = [
     "WorkflowProgress",
     "GlobalStateMachine",
     "DialogManager",
+    "ui_styles",
     "SessionManager",
     "PermissionEngine",
     "ConfigManager",
@@ -45,6 +46,7 @@ from .live_log import LiveLog
 from .event_bus import EventBus, LICENSE_STATUS_CHANGED
 from .workflow_progress import WorkflowProgress, GlobalStateMachine
 from .dialog_manager import DialogManager
+from . import ui_styles
 from .config_manager import ConfigManager
 from .session import SessionManager
 from .permissions import PermissionEngine

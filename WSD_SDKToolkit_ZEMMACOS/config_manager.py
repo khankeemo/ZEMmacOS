@@ -92,6 +92,12 @@ class ConfigManager:
     def get_store_url(self) -> str:
         return self.urls().get("store") or _config.get_store_url(self._raw)
 
+    def get_buy_url(self) -> str:
+        return self.urls().get("buy") or _config.get_buy_url(self._raw)
+
+    def get_renew_url(self) -> str:
+        return self.urls().get("renew") or _config.get_renew_url(self._raw)
+
     def get_app_url(self) -> str:
         return self.api().get("app_url", "") or self.get_api_url()
 

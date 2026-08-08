@@ -1,0 +1,51 @@
+2026-08-07 19:08:43 | INFO     | ============================================================
+2026-08-07 19:08:43 | INFO     | ZEMmacOS Application Started
+2026-08-07 19:08:43 | INFO     | Log file: D:\ZEMmacOS\logs\ZEMmacOS_2026-08-07_19-08-43.log
+2026-08-07 19:08:43 | INFO     | ============================================================
+2026-08-07 19:08:43 | INFO     | [SDK] Initializing license engine
+2026-08-07 19:08:43 | INFO     | [UI] UI locked
+2026-08-07 19:08:45 | INFO     | ✓ [STARTUP] License valid — building main application
+2026-08-07 19:08:45 | INFO     | [STARTUP] Building UI
+2026-08-07 19:08:45 | INFO     | [STARTUP] UI built, dashboard shown
+2026-08-07 19:08:45 | INFO     | ✓ [UI] UI unlocked
+2026-08-07 19:08:45 | INFO     | ✓ [APP] Application unlocked
+2026-08-07 19:08:46 | INFO     | Auto-fetching catalogue...
+2026-08-07 19:08:46 | INFO     | ============================================================
+2026-08-07 19:08:46 | INFO     | FETCHING macOS CATALOGUE FROM APPLE
+2026-08-07 19:08:46 | INFO     | ============================================================
+2026-08-07 19:08:46 | INFO     | Initializing gibMacOS...
+2026-08-07 19:08:46 | INFO     | Using catalog: publicrelease
+2026-08-07 19:08:46 | INFO     | Max macOS version: 25
+2026-08-07 19:08:46 | INFO     | Fetching catalog from Apple...
+2026-08-07 19:08:47 | INFO     | [ACTIVATION] Opening Universal License Center for activation
+2026-08-07 19:08:47 | INFO     | [SDK] ulc.opened
+2026-08-07 19:08:47 | INFO     | [SDK] [SDK] [INFO] Using pre-initialised status: trial
+2026-08-07 19:08:47 | INFO     | [SDK] Using pre-initialised status: trial
+2026-08-07 19:08:47 | INFO     | [SDK] ULC using status
+2026-08-07 19:08:47 | INFO     | [SDK] [SDK] [INFO] Opening Universal License Center
+2026-08-07 19:08:47 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 19:08:47 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 19:08:47 | INFO     | ✓ Found 43 macOS versions
+2026-08-07 19:08:47 | INFO     | [SDK] Opening Universal License Center
+2026-08-07 19:08:47 | INFO     |  
+2026-08-07 19:08:47 | INFO     | ============================================================
+2026-08-07 19:08:47 | INFO     | ✓ CATALOGUE FETCH COMPLETED - Found 43 versions
+2026-08-07 19:08:47 | INFO     | ============================================================
+2026-08-07 19:08:47 | INFO     |  
+2026-08-07 19:08:47 | INFO     | INSTRUCTIONS:
+2026-08-07 19:08:47 | INFO     | 1. Find the number next to the macOS version you want
+2026-08-07 19:08:47 | INFO     | 2. Enter that number in the input box above
+2026-08-07 19:08:47 | INFO     | 3. Press ENTER or click DOWNLOAD SELECTED to start downloading
+2026-08-07 19:08:47 | INFO     |  
+2026-08-07 19:08:47 | WARNING  | NOTE: Each macOS version contains MULTIPLE packages (5GB-12GB total)
+2026-08-07 19:08:47 | INFO     | The downloader will download ALL packages sequentially.
+2026-08-07 19:08:48 | INFO     | [SDK] Activation started
+2026-08-07 19:09:20 | INFO     | Cleaning temporary files...
+2026-08-07 19:09:21 | INFO     | Removed: .\py\__pycache__
+2026-08-07 19:09:21 | INFO     | Removed: .\Scripts\__pycache__
+2026-08-07 19:09:21 | INFO     | Removed: .\WSD_SDKToolkit_ZEMMACOS\__pycache__
+2026-08-07 19:09:21 | INFO     | Removed 3 __pycache__ folder(s)
+2026-08-07 19:09:21 | INFO     | Removed 0 .pyc/.pyo file(s)
+2026-08-07 19:09:21 | INFO     | ✓ Cleanup complete (3 items)
+2026-08-07 19:09:24 | WARNING  | Deleting ALL log files...
+2026-08-07 19:09:24 | INFO     | ✓ Deleted 3 log file(s)

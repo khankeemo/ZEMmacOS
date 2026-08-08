@@ -25,6 +25,11 @@ from .universal_email_dialog import UniversalEmailDialog
 from .dialog_manager import DialogManager
 from .event_bus import EventBus
 from .workflow_progress import WorkflowProgress, format_timer
+from .ui_styles import (
+    COL, setup_dpi_awareness, theme_set_primary,
+    Card, GradientHeader, Button as StyledButton, RoundedEntry,
+    Label, SectionLabel, Subtitle, StatusPill, ProgressBar,
+)
 
 SDK_VERSION = "1.0.0"
 RUNTIME_TYPE = "python"
@@ -83,6 +88,9 @@ class UniversalLicenseCenter:
         self._company_name = branding.get("company_name", "Your Company")
         self._support_email = branding.get("support_email", "")
         self._sales_email = branding.get("sales_email", "")
+
+        setup_dpi_awareness()
+        theme_set_primary(self._primary)
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         with open(config_path, "r", encoding="utf-8") as f:
@@ -714,8 +722,11 @@ class UniversalLicenseCenter:
         self._show_pre_activation_dialog("activate")
 
     def _renew_license_flow(self):
-        LiveLog.log("Renewal started", "Opening pre-renewal dialog")
-        self._show_pre_activation_dialog("renew")
+        """Renew License button → opens the Universal Renew portal in the
+        default browser (/internal/api/renew). The portal validates the
+        existing license, collects OTP + payment, and EXTENDS the existing
+        license (never creates a new one)."""
+        self._open_renew_portal()
 
     def _show_pre_activation_dialog(self, mode: str):
         """Pre-activation / pre-renewal choice dialog (commercial standard):
@@ -774,27 +785,42 @@ class UniversalLicenseCenter:
         dialog.wait_window()
 
     def _open_store(self):
-        """Open the software store in the default browser.
+        """Open the Universal Buy License portal (/internal/api/buy) in the
+        default browser.
 
-        The store URL comes from one central configuration location
-        (config/api-config.json → store.url)."""
-        from .config import get_store_url
-        url = get_store_url(self.config)
+        The URL comes from one central configuration location
+        (config/api-config.json → store.buy_url, falling back to store.url)."""
+        from .config import get_buy_url
+        url = get_buy_url(self.config)
         if not url:
-            LiveLog.log("Software store URL not configured", "store.url is empty in api-config.json")
+            LiveLog.log("Buy portal URL not configured", "store.buy_url is empty in api-config.json")
             return
-        LiveLog.log("Opening software store", url)
+        LiveLog.log("Opening buy portal", url)
         try:
             webbrowser.open(url)
         except Exception as e:
-            LiveLog.log("Failed to open store", str(e))
+            LiveLog.log("Failed to open buy portal", str(e))
+
+    def _open_renew_portal(self):
+        """Open the Universal Renew License portal (/internal/api/renew)."""
+        from .config import get_renew_url
+        url = get_renew_url(self.config)
+        if not url:
+            LiveLog.log("Renew portal URL not configured", "store.renew_url is empty in api-config.json")
+            return
+        LiveLog.log("Opening renew portal", url)
+        try:
+            webbrowser.open(url)
+        except Exception as e:
+            LiveLog.log("Failed to open renew portal", str(e))
 
     def _show_key_flow_dialog(self, mode: str):
-        """Mandatory activation/renewal workflow (Rule 0A-4):
+        """Compact, modern activation/renewal workflow (Universal Activation UI).
 
-        Enter License Key → Validate License API
-          → fail: exact backend message, NO OTP, NO Activate
-          → pass: Send OTP → Verify OTP → Enable Activate/Renew
+        Enter License Key -> Validate (Global Status API) -> auto OTP ->
+        Verify OTP -> Activate/Renew. Every user-visible message resolves
+        through GlobalMessage (no hardcoded strings); all look-and-feel comes
+        from the shared ui_styles design system.
         """
         is_activate = mode == 'activate'
         title = "Activate License" if is_activate else "Renew License"
@@ -802,133 +828,162 @@ class UniversalLicenseCenter:
 
         dialog = tk.Toplevel(self._root)
         dialog.title(title)
-        dialog.geometry("560x640")
-        dialog.configure(bg=self._bg)
+        dialog.geometry("500x600")
+        dialog.configure(bg=COL["bg"])
+        dialog.resizable(False, False)
         dialog.transient(self._root)
         dialog.grab_set()
-        dialog.resizable(False, False)
 
-        header = tk.Frame(dialog, bg=self._primary, height=64)
-        header.pack(fill="x")
-        header.pack_propagate(False)
-        tk.Label(header, text=title,
-                 font=("Segoe UI", 18, "bold"),
-                 fg="white", bg=self._primary).pack(expand=True)
+        GradientHeader(dialog, title=title,
+                       subtitle="Universal License Engine", height=64).pack(fill="x")
 
-        main = tk.Frame(dialog, bg=self._card_bg, padx=24, pady=18)
-        main.pack(fill="both", expand=True)
+        card = Card(dialog, padx=22, pady=18)
+        card.pack(fill="both", expand=True, padx=2, pady=2)
+        main = card.body
 
-        tk.Label(main, text="Enter your license key:",
-                 font=("Segoe UI", 11),
-                 bg=self._card_bg, fg=self._text_secondary).pack(anchor="w", pady=(0, 6))
-        key_entry = tk.Entry(main, font=("Consolas", 13), width=30,
-                             relief="solid", bd=1, justify="center")
-        key_entry.pack(fill="x", pady=(0, 6))
+        phase = StatusPill(main, height=26)
+        phase.pack(anchor="w", pady=(0, 12))
+        phase.set_text("Ready", "neutral")
+
+        # ---- License key -----------------------------------------------------
+        SectionLabel(main, GlobalMessage.get("ui_enter_license_key")).pack(pady=(0, 6))
+        key_entry = RoundedEntry(main, width=440, justify="center")
+        key_entry.pack(fill="x", pady=(0, 4))
         if self.engine and self.engine.get_license_key():
             key_entry.insert(0, self.engine.get_license_key())
-        key_entry.focus()
+        hw_id = self.hardware.get_fingerprint()
+        hw = Subtitle(main, size=8)
+        hw.pack(anchor="w", pady=(0, 10))
+        hw.config(text=GlobalMessage.get("ui_hardware_hint", hw_id[:16] + "…"))
 
-        hw_id = self.hardware.get_fingerprint()[:16] + "..."
-        tk.Label(main, text=f"Hardware: {hw_id}",
-                 font=("Segoe UI", 9), bg=self._card_bg, fg="#9ca3af").pack(anchor="w")
+        validate_btn = StyledButton(main, "Validate License", kind="primary", width=440)
+        validate_btn.pack(fill="x", pady=(4, 8))
 
-        status_label = tk.Label(main, text="", font=("Segoe UI", 10),
-                                bg=self._card_bg, fg=self._error,
-                                wraplength=500, justify="left")
-        status_label.pack(fill="x", pady=(8, 0))
+        status = Label(main, text="", justify="center", wraplength=430)
+        status.pack(fill="x", pady=(2, 2))
+        progress = ProgressBar(main, width=430, height=8)
+        progress.pack(fill="x", pady=(6, 0))
 
-        details_label = tk.Label(main, text="", font=("Segoe UI", 10),
-                                 bg=self._card_bg, fg=self._text_primary,
-                                 justify="left", wraplength=500)
-        details_label.pack(fill="x", pady=(6, 0))
+        details = Label(main, text="", justify="left", wraplength=430, size=9,
+                        color=COL["text_muted"])
+        details.pack(fill="x", pady=(6, 2))
 
-        validate_btn = tk.Button(main, text="Validate License",
-                                 font=("Segoe UI", 12, "bold"),
-                                 bg=self._primary, fg="white", relief="flat",
-                                 padx=16, pady=8, cursor="hand2")
-        validate_btn.pack(fill="x", pady=(10, 4))
-
-        otp_row = tk.Frame(main, bg=self._card_bg)
-        otp_row.pack(fill="x", pady=(4, 0))
-        otp_entry = tk.Entry(otp_row, font=("Segoe UI", 13), relief="solid",
-                             bd=1, justify="center", width=10)
-        otp_entry.pack(side="left", fill="x", expand=True)
-        otp_entry.config(state='disabled')
-        send_otp_btn = tk.Button(otp_row, text="Resend OTP",
-                                 font=("Segoe UI", 10, "bold"),
-                                 bg=self._text_secondary, fg="white",
-                                 relief="flat", state='disabled',
-                                 padx=10, pady=6, cursor="hand2")
-        send_otp_btn.pack(side="left", padx=(8, 0))
-        verify_btn = tk.Button(otp_row, text="Verify OTP",
-                               font=("Segoe UI", 10, "bold"),
-                               bg=self._success, fg="white", relief="flat",
-                               state='disabled', padx=10, pady=6, cursor="hand2")
+        # ---- OTP ---------------------------------------------------------------
+        SectionLabel(main, GlobalMessage.get("ui_otp_label")).pack(pady=(14, 6))
+        otp_row = tk.Frame(main, bg=COL["surface"])
+        otp_row.pack(fill="x", pady=(0, 4))
+        otp_entry = RoundedEntry(otp_row, width=200, justify="center")
+        otp_entry.pack(side="left", expand=True, fill="x")
+        verify_btn = StyledButton(otp_row, "Verify", kind="success", width=122)
         verify_btn.pack(side="left", padx=(8, 0))
 
-        final_btn = tk.Button(main, text=final_label,
-                              font=("Segoe UI", 12, "bold"),
-                              bg=self._primary, fg="white", relief="flat",
-                              state='disabled', padx=16, pady=8, cursor="hand2")
-        final_btn.pack(fill="x", pady=(10, 4))
+        resend_btn = StyledButton(main, "Resend OTP", kind="ghost", width=150)
+        resend_btn.pack(anchor="w", pady=(6, 2))
+        resend_btn.set_state("disabled")
+        otp_entry.state("disabled")
+        verify_btn.set_state("disabled")
 
-        tk.Button(main, text="Cancel", font=("Segoe UI", 11),
-                  bg="#e5e7eb", fg=self._text_primary, relief="flat",
-                  command=dialog.destroy, cursor="hand2",
-                  padx=12, pady=4).pack(fill="x")
+        final_btn = StyledButton(main, final_label, kind="primary", width=440)
+        final_btn.pack(fill="x", pady=(14, 6))
+        final_btn.set_state("disabled")
 
+        cancel_btn = StyledButton(main, "Cancel", kind="ghost", width=440)
+        cancel_btn.pack(fill="x", pady=(0, 0))
+
+        # ---- Shared state & controls ------------------------------------------
         state = {"validated": False, "otp_verified": False, "email": "",
                  "timer_id": None, "otp_expires_at": 0.0, "renewal_info": None,
                  "renewal_paid": False}
+        STATUS_FG = {
+            "success": COL["success"], "error": COL["error"],
+            "warning": COL["warning"], "info": COL["primary"],
+            "muted": COL["text_muted"], "neutral": COL["text"],
+        }
 
-        def _set_status(text, fg):
-            status_label.config(text=text, fg=fg)
+        def _set_status(text: str, kind: str = "muted") -> None:
+            status.config(text=text, fg=STATUS_FG.get(kind, COL["text"]))
+
+        def _set_phase(text: str, kind: str = "neutral") -> None:
+            phase.set_text(text, kind)
 
         def _update_otp_timer():
+            import time as _time
             if state["timer_id"] is not None:
                 try:
                     dialog.after_cancel(state["timer_id"])
                 except Exception:
                     pass
                 state["timer_id"] = None
-            import time as _time
             remaining = int(state["otp_expires_at"] - _time.time())
             if remaining <= 0:
                 state["otp_expires_at"] = 0.0
-                _set_status("OTP expired. Request a new OTP.", self._error)
-                otp_entry.config(state='disabled')
-                verify_btn.config(state='disabled')
-                send_otp_btn.config(state='normal', text='Resend OTP')
+                _set_status(GlobalMessage.get("ui_otp_expired"), "error")
+                _set_phase("OTP expired", "error")
+                otp_entry.state("disabled")
+                verify_btn.set_state("disabled")
+                resend_btn.set_state("normal")
                 return
-            _set_status(f"OTP sent — expires in {format_timer(remaining)}",
-                        self._success)
+            _set_status(
+                GlobalMessage.get("ui_otp_expires_in", format_timer(remaining)),
+                "info")
             state["timer_id"] = dialog.after(1000, _update_otp_timer)
+
+        def _validation_message(result: dict) -> str:
+            status_kind = result.get('status', '')
+            lic = result.get('license') or {}
+            cust = result.get('customer') or {}
+            err = result.get('error') or {}
+            if result.get('new_customer') or not lic:
+                if not cust.get('email'):
+                    return GlobalMessage.get("ui_customer_not_found")
+                return GlobalMessage.get("ui_license_not_found")
+            if status_kind in ('not_found', 'no_license', 'unlicensed', ''):
+                return GlobalMessage.get("ui_license_not_found")
+            if status_kind in ('inactive', 'deleted', 'disabled'):
+                return GlobalMessage.get("ui_license_inactive")
+            if status_kind == 'revoked':
+                return GlobalMessage.get("ui_license_revoked")
+            if status_kind == 'expired':
+                return GlobalMessage.get("ui_license_expired")
+            msg = err.get('message') if isinstance(err, dict) else None
+            if msg:
+                return str(msg)  # server message verbatim (Rule 5)
+            return GlobalMessage.get("validation_failed")
 
         def do_validate():
             key = key_entry.get().strip()
             if not key:
-                _set_status("Please enter a license key", self._error)
+                _set_status(GlobalMessage.get("validation_key_required"), "error")
+                _set_phase("Enter a key", "error")
                 return
-            validate_btn.config(state='disabled', text='Validating...')
-            _set_status("Validating license with the server...", self._text_secondary)
-            result = self.engine.validate_license_key(key)
+            validate_btn.set_state("disabled")
+            validate_btn.set_text("Validating…")
+            _set_status(GlobalMessage.get("ui_validating"), "info")
+            _set_phase("Checking license", "info")
+            progress.start()
+            try:
+                result = self.engine.validate_license_key(key)
+            except Exception as exc:
+                progress.stop()
+                _set_status(str(exc), "error")
+                validate_btn.set_state("normal"); validate_btn.set_text("Validate License")
+                return
 
-            lic = result.get('license') or {}
             cust = result.get('customer') or {}
-            err = result.get('error') or {}
+            lic = result.get('license') or {}
             api_status = result.get('status', '')
 
             if result.get('already_activated'):
+                progress.stop()
                 LiveLog.log("Already activated", "This device already has this license")
                 DialogManager.info(dialog, "Already Activated",
-                                   "Already activated on this device. Continue using application.")
+                                   GlobalMessage.get("already_activated"))
                 try:
                     self.engine.refresh()
                 except Exception:
                     pass
-                status = self.engine.get_status()
-                if status:
-                    self._status = status
+                if self.engine.get_status():
+                    self._status = self.engine.get_status()
                     self._initialized = True
                 if self._status and self._status.valid:
                     self._app_unlocked = True
@@ -936,81 +991,65 @@ class UniversalLicenseCenter:
                 return
 
             if not is_activate and result.get('new_customer'):
-                _set_status("You're a new customer. Please activate your license first.", self._warning)
-                validate_btn.config(state='normal', text='Validate License')
-                otp_entry.config(state='disabled')
-                send_otp_btn.config(state='disabled', text='Resend OTP')
-                verify_btn.config(state='disabled')
-                final_btn.config(state='normal', text='Activate License',
-                                 command=lambda: (dialog.destroy(), self._activate_license()))
-                details_label.config(text="")
+                progress.stop()
+                _set_status(GlobalMessage.get("ui_customer_not_found"), "warning")
+                _set_phase("New customer", "warning")
+                validate_btn.set_state("normal"); validate_btn.set_text("Validate License")
+                otp_entry.state("disabled")
+                resend_btn.set_state("disabled")
+                verify_btn.set_state("disabled")
+                final_btn.set_state("normal"); final_btn.set_text("Activate License")
+                details.config(text="")
                 state["validated"] = False
                 return
 
             if not result.get('validated'):
-                msg = result.get('message', 'License validation could not be completed. '
-                                            'Please check the license key and try again, or contact support.')
-                LiveLog.log("operation.error", f"License validation failed: {msg}")
-                _set_status(str(msg), self._error)
-                validate_btn.config(state='normal', text='Validate License')
-                otp_entry.config(state='disabled')
-                send_otp_btn.config(state='disabled')
-                verify_btn.config(state='disabled')
-                final_btn.config(state='disabled')
-                details_label.config(text="")
+                progress.stop()
+                msg = _validation_message(result)
+                LiveLog.log("operation.error", msg)
+                _set_status(msg, "error")
+                _set_phase("Not validated", "error")
+                validate_btn.set_state("normal"); validate_btn.set_text("Validate License")
+                otp_entry.state("disabled")
+                resend_btn.set_state("disabled")
+                verify_btn.set_state("disabled")
+                final_btn.set_state("disabled")
                 state["validated"] = False
                 return
 
+            progress.stop()
             state["validated"] = True
             state["otp_verified"] = False
             state["email"] = cust.get('email', '')
-            validate_btn.config(state='normal', text='Validate License')
-            send_otp_btn.config(state='normal', text='Sending...')
-            verify_btn.config(state='disabled')
-            otp_entry.config(state='disabled')
-            otp_entry.delete(0, 'end')
-            final_btn.config(state='disabled')
+            validate_btn.set_state("normal"); validate_btn.set_text("Validate License")
+
             lines = []
             if cust.get('name'):
-                lines.append(f"Customer: {cust['name']}")
+                lines.append("Customer: %s" % cust['name'])
             if state["email"]:
-                lines.append(f"Email: {state['email']}")
+                lines.append("Email: %s" % state['email'])
             if self._product_name:
-                lines.append(f"Product: {self._product_name}")
+                lines.append("Product: %s" % self._product_name)
             if lic.get('plan'):
-                lines.append(f"Plan: {lic['plan']}")
+                lines.append("Plan: %s" % lic['plan'])
             if lic.get('expiry_date'):
-                lines.append(f"Expiry: {lic['expiry_date']}")
-            if lic.get('days_remaining') is not None:
-                lines.append(f"Days remaining: {lic['days_remaining']}")
-            elif lic.get('days_left') is not None:
-                lines.append(f"Days remaining: {lic['days_left']}")
+                lines.append("Expiry: %s" % lic['expiry_date'])
+            rem = lic.get('days_remaining')
+            if rem is None:
+                rem = lic.get('days_left')
+            if rem is not None:
+                lines.append("Days remaining: %s" % rem)
             if not is_activate:
                 try:
-                    renewal_info = self.engine.verify_license_for_renewal(key)
-                    state["renewal_info"] = renewal_info
-                    if renewal_info.get('success') and renewal_info.get('valid'):
-                        lines.append("")
-                        lines.append("RENEWAL DETAILS")
-                        if renewal_info.get('is_expired'):
-                            lines.append("Status: EXPIRED — eligible for renewal")
-                        if renewal_info.get('days_left') is not None:
-                            lines.append(f"Current days left: {renewal_info['days_left']}")
-                        available = renewal_info.get('available_plans') or []
-                        if available:
-                            lines.append("Available renewal options:")
-                            for p in available:
-                                mark = " (current)" if p.get('is_current_plan') else ""
-                                lines.append(f"  - {p.get('name', '')} — {p.get('duration', '')}{mark}")
+                    state["renewal_info"] = self.engine.verify_license_for_renewal(key)
                 except Exception:
                     state["renewal_info"] = None
-                    pass
             if not lines:
-                lines.append("License validated successfully.")
-            details_label.config(text="\n".join(lines))
-            _set_status("License validated. Sending OTP automatically...", self._success)
-            # Automatic OTP (LOCKED spec §10): validation success immediately
-            # triggers the OTP send. No manual "Send OTP" step.
+                lines.append(GlobalMessage.get("ui_license_active"))
+            details.config(text="\n".join(lines))
+
+            _set_status(GlobalMessage.get("ui_sending_otp"), "info")
+            _set_phase("Validated", "success")
             do_send_otp()
 
         def do_send_otp():
@@ -1018,98 +1057,140 @@ class UniversalLicenseCenter:
                 return
             email = state["email"]
             if not email:
-                _set_status("No registered email was found for this license.", self._error)
+                _set_status(GlobalMessage.get("otp_no_email"), "error")
                 return
-            send_otp_btn.config(state='disabled', text='Sending...')
-            _set_status("Sending OTP...", self._text_secondary)
+            resend_btn.set_state("disabled")
+            _set_status(GlobalMessage.get("ui_sending_otp"), "info")
+            _set_phase("Sending OTP", "info")
             try:
                 result = self.engine.send_otp(email)
-            except Exception as e:
-                _set_status(str(e), self._error)
-                send_otp_btn.config(state='normal', text='Resend OTP')
+            except Exception as exc:
+                _set_status(str(exc), "error")
+                resend_btn.set_state("normal")
                 return
             if result.get('success'):
                 import time as _time
                 state["otp_expires_at"] = _time.time() + int(result.get('expires_in', 300))
-                otp_entry.config(state='normal')
-                verify_btn.config(state='normal')
-                send_otp_btn.config(state='normal', text='Resend OTP')
+                otp_entry.state("normal")
+                verify_btn.set_state("normal")
+                resend_btn.set_state("normal")
+                _set_phase("OTP sent", "success")
                 _update_otp_timer()
             else:
                 msg = result.get('message') or result.get('error') or 'Failed to send OTP'
-                _set_status(str(msg), self._error)
-                send_otp_btn.config(state='normal', text='Resend OTP')
+                _set_status(str(msg), "error")
+                resend_btn.set_state("normal")
 
         def do_verify_otp():
             if not state["validated"]:
                 return
             otp = otp_entry.get().strip()
             if not otp or len(otp) < 4:
-                _set_status("Enter the OTP code", self._error)
+                _set_status(GlobalMessage.get("otp_required"), "error")
                 return
-            verify_btn.config(state='disabled', text='Verifying...')
+            verify_btn.set_state("disabled"); verify_btn.set_text("Verifying…")
             try:
                 result = self.engine.verify_otp(state["email"], otp)
-            except Exception as e:
-                _set_status(str(e), self._error)
-                verify_btn.config(state='normal', text='Verify OTP')
+            except Exception as exc:
+                _set_status(str(exc), "error")
+                verify_btn.set_state("normal"); verify_btn.set_text("Verify")
                 return
             if result.get('success'):
                 state["otp_verified"] = True
-                verify_btn.config(state='normal', text='Verify OTP')
-                otp_entry.config(state='disabled')
-                final_btn.config(state='normal')
-                _set_status("OTP verified. Proceed with the final step.", self._success)
+                verify_btn.set_state("normal"); verify_btn.set_text("Verify")
+                otp_entry.state("disabled")
+                final_btn.set_state("normal")
+                _set_status(GlobalMessage.get("ui_otp_verified"), "success")
+                _set_phase("OTP verified", "success")
             else:
                 otp_entry.delete(0, 'end')
-                _set_status(OTP_INVALID_MESSAGE, self._error)
-                verify_btn.config(state='normal', text='Verify OTP')
-                otp_entry.focus()
+                _set_status(GlobalMessage.get("ui_otp_invalid"), "error")
+                verify_btn.set_state("normal"); verify_btn.set_text("Verify")
+                otp_entry.focus_set()
 
         def do_renew_with_payment():
-            """Renewal (payment-first): Confirm payment, then extend the existing
-            license via engine.renew(). The engine refreshes status, cache and
-            fires LicenseStatusChanged — no UI refreshes itself."""
             key = key_entry.get().strip()
-            final_btn.config(state='disabled', text='Renewing...')
-            _set_status("Processing payment...", self._text_secondary)
+            final_btn.set_state("disabled"); final_btn.set_text("Renewing…")
+            _set_status(GlobalMessage.get("renewal_start"), "info")
             dialog.update_idletasks()
-            paid, _chosen_plan = self._confirm_payment_dialog(dialog, state, key)
+            paid, _chosen = self._confirm_payment_dialog(dialog, state, key)
             if not paid:
-                _set_status("Payment cancelled.", self._warning)
-                final_btn.config(state='normal', text=final_label)
+                _set_status("Payment cancelled.", "warning")
+                final_btn.set_state("normal"); final_btn.set_text(final_label)
                 return
             state["renewal_paid"] = True
+            progress.start()
             try:
-                _set_status("Renewing...", self._text_secondary)
-                dialog.update_idletasks()
                 result = self.engine.renew(license_key=key)
                 operation = "renewal"
-            except Exception as e:
-                _set_status(str(e), self._error)
-                final_btn.config(state='normal', text=final_label)
+            except Exception as exc:
+                progress.stop()
+                _set_status(str(exc), "error")
+                final_btn.set_state("normal"); final_btn.set_text(final_label)
                 return
             if result.get('success') or result.get('already_activated'):
-                _set_status("Updating License...", self._text_secondary)
-                dialog.update_idletasks()
-                status = self.engine.get_status()
-                if status:
-                    self._status = status
-                    self._initialized = True
-                self._app_unlocked = True
-                LiveLog.log("general.unlocked", f"{operation} completed — application unlocked")
-                dialog.destroy()
-                self._show_success_dialog(operation)
+                _finish_success(operation)
             else:
+                progress.stop()
                 err = result.get('error') or result.get('data') or result
                 msg = err.get('message') if isinstance(err, dict) else str(err)
                 if not msg:
-                    msg = ("Renewal could not be completed. "
-                           f"The server did not return a reason. Please contact support "
-                           f"at {self._support_email or 'your provider'} for assistance.")
+                    msg = (GlobalMessage.get("renewal_failed") + " "
+                           "Please contact support at %s." %
+                           (self._support_email or 'your provider'))
                 LiveLog.log("operation.error", msg)
-                _set_status(str(msg), self._error)
-                final_btn.config(state='normal', text=final_label)
+                _set_status(str(msg), "error")
+                final_btn.set_state("normal"); final_btn.set_text(final_label)
+
+        def _finish_success(operation: str) -> None:
+            steps = [
+                (GlobalMessage.get("ui_creating_activation"), "info"),
+                (GlobalMessage.get("ui_updating_license"), "info"),
+                (GlobalMessage.get("ui_refreshing_license"), "info"),
+                (GlobalMessage.get("ui_updating_application"), "info"),
+            ]
+            for text, kind in steps:
+                _set_status(text, "info")
+                _set_phase("In progress", "info")
+                try:
+                    dialog.update()
+                except Exception:
+                    pass
+                dialog.after(110)
+            progress.stop()
+            _set_status(GlobalMessage.get("ui_activation_completed"), "success")
+            _set_phase("Completed", "success")
+            dialog.after(140)
+            dialog.destroy()
+            self._show_success_dialog(operation)
+
+        def _final_activate():
+            key = key_entry.get().strip()
+            final_btn.set_state("disabled"); final_btn.set_text("Activating…")
+            _set_status(GlobalMessage.get("ui_binding_hardware"), "info")
+            _set_phase("Binding hardware", "info")
+            progress.start()
+            try:
+                result = self.engine.activate(key)
+            except Exception as exc:
+                progress.stop()
+                _set_status(str(exc), "error")
+                final_btn.set_state("normal"); final_btn.set_text(final_label)
+                return
+            if result.get('success') or result.get('already_activated'):
+                _finish_success("activation")
+            else:
+                progress.stop()
+                err = result.get('error') or result.get('data') or result
+                msg = err.get('message') if isinstance(err, dict) else str(err)
+                if not msg:
+                    msg = (GlobalMessage.get("activation_failed") + " "
+                           "Please contact support at %s." %
+                           (self._support_email or 'your provider'))
+                LiveLog.log("operation.error", msg)
+                _set_status(str(msg), "error")
+                _set_phase("Failed", "error")
+                final_btn.set_state("normal"); final_btn.set_text(final_label)
 
         def do_final():
             if not state["validated"] or not state["otp_verified"]:
@@ -1117,49 +1198,17 @@ class UniversalLicenseCenter:
             if not is_activate:
                 do_renew_with_payment()
                 return
-            key = key_entry.get().strip()
-            final_btn.config(state='disabled', text='Activating...')
-            _set_status("Activating...", self._text_secondary)
-            dialog.update_idletasks()
-            try:
-                result = self.engine.activate(key)
-                operation = "activation"
-            except Exception as e:
-                _set_status(str(e), self._error)
-                final_btn.config(state='normal', text=final_label)
-                return
-            if result.get('success') or result.get('already_activated'):
-                _set_status("Updating License...", self._text_secondary)
-                dialog.update_idletasks()
-                status = self.engine.get_status()
-                if status:
-                    self._status = status
-                    self._initialized = True
-                self._app_unlocked = True
-                LiveLog.log("general.unlocked", f"{operation} completed — application unlocked")
-                dialog.destroy()
-                self._show_success_dialog(operation)
-            else:
-                err = result.get('error') or result.get('data') or result
-                msg = err.get('message') if isinstance(err, dict) else str(err)
-                # Rule 5 & 8: surface the real server message verbatim; only when
-                # the server supplied no message at all use an actionable local
-                # phrasing (what / why / next) rather than a bare "failed".
-                if not msg:
-                    action = "Activation" if is_activate else "Renewal"
-                    msg = (f"{action} could not be completed. "
-                           f"The server did not return a reason. Please contact support "
-                           f"at {self._support_email or 'your provider'} for assistance.")
-                LiveLog.log("operation.error", msg)
-                _set_status(str(msg), self._error)
-                final_btn.config(state='normal', text=final_label)
+            _final_activate()
 
-        validate_btn.config(command=do_validate)
-        send_otp_btn.config(command=do_send_otp)
-        verify_btn.config(command=do_verify_otp)
-        final_btn.config(command=do_final)
-        key_entry.bind('<Return>', lambda e: do_validate())
-        otp_entry.bind('<Return>', lambda e: do_verify_otp())
+        # Wire deferred commands (created before the nested handlers exist)
+        validate_btn._command = do_validate
+        verify_btn._command = do_verify_otp
+        resend_btn._command = do_send_otp
+        final_btn._command = do_final
+        cancel_btn._command = dialog.destroy
+        key_entry.entry.bind('<Return>', lambda e: do_validate())
+        otp_entry.entry.bind('<Return>', lambda e: do_verify_otp())
+        dialog.after(60, key_entry.focus_set)
         dialog.wait_window()
 
     def _confirm_payment_dialog(self, parent, state, license_key: str):
