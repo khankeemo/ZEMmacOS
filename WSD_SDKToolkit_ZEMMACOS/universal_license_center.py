@@ -27,8 +27,7 @@ from .event_bus import EventBus
 from .workflow_progress import WorkflowProgress, format_timer
 from .ui_styles import (
     COL, setup_dpi_awareness, theme_set_primary,
-    Card, GradientHeader, Button as StyledButton, RoundedEntry,
-    Label, SectionLabel, Subtitle, StatusPill, ProgressBar,
+    Label, SectionLabel, Subtitle,
 )
 
 SDK_VERSION = "1.0.0"
@@ -47,6 +46,160 @@ def _load_api_config() -> Dict[str, Any]:
         except (FileNotFoundError, json.JSONDecodeError):
             continue
     return {}
+
+
+# ====================================================================
+# Activation form widgets — SIMPLE RECTANGULAR (classic tkinter)
+#
+# A simple, compact, flat rectangular look with none of the old FX:
+# no Canvas, no shadows, no glow, no gradients, no animations, no
+# oval/pill shapes and no decorative borders. Only clean block colours,
+# a plain rectangular card/frame, a slight focus border and a colour-only
+# hover on the buttons. Compact spacing so all content fits the window.
+#   * Input  — a plain rectangular tk.Entry textbox
+#   * Button — a plain flat rectangular tk.Button (colour-only hover)
+#   * Phase  — a plain text status line, no badge
+#   * Bar    — a thin flat static progress indicator (no animation)
+# API mirrors the previous widgets so the activation workflow code is
+# untouched: `.get`/`.insert`/`.delete`/`.state`/`.entry` for inputs,
+# `.set_state`/`.set_text`/`._command` for buttons.
+# ====================================================================
+
+_UV_INPUT_H = 30
+_UV_RADIUS = 0
+_UV_FIELD = "#ffffff"
+_UV_FIELD_TEXT = "#1e2430"
+
+
+class _UVInput(tk.Entry):
+    """A normal rectangular textbox. Slight focus border, no shadow, no glow."""
+
+    def __init__(self, parent, *, width: int = 320, justify: str = "center"):
+        tk.Entry.__init__(
+            self, parent, font=(COL["font"], 11), justify=justify,
+            relief="flat", bd=0, highlightthickness=1,
+            highlightbackground="#cbd4e1", highlightcolor=COL["primary"],
+            bg=_UV_FIELD, fg=_UV_FIELD_TEXT,
+            insertbackground=COL["primary"])
+        self.entry = self
+        chars = max(12, min(width // 10, 44))
+        try:
+            self.configure(width=chars)
+        except Exception:
+            pass
+
+    def state(self, mode: str) -> None:
+        self.config(state=mode)
+
+
+class _UVButton(tk.Button):
+    """A simple flat rectangular button. Colour-only hover, no animation."""
+
+    _FILL = {
+        "primary": "#6366f1",
+        "success": "#16a34a",
+    }
+    _FILL_HOVER = {
+        "primary": "#818cf8",
+        "success": "#22c55e",
+    }
+    _GHOST_FILL = "#f1f4f9"
+    _GHOST_FILL_HOVER = "#e4e9f3"
+
+    def __init__(self, parent, text: str, *, kind: str = "primary",
+                 command=None, width: int = 200, height: int = 34,
+                 ghost: bool = False):
+        self._kind = kind
+        self._text = text
+        self._command = command
+        self._ghost = ghost or kind == "ghost"
+        self._disabled = False
+        self._over = False
+        tk.Button.__init__(
+            self, parent, text=text, command=self._on_press,
+            relief="flat", bd=0, highlightthickness=0,
+            cursor="hand2", padx=12, pady=6,
+            font=(COL["font"], 11, "bold"))
+        self.bind("<Enter>", lambda e: self._set_over(True))
+        self.bind("<Leave>", lambda e: self._set_over(False))
+        self._draw()
+
+    def _fill_pair(self):
+        if self._ghost:
+            return self._GHOST_FILL, self._GHOST_FILL_HOVER, COL["text"]
+        base = self._FILL.get(self._kind, self._FILL["primary"])
+        hover = self._FILL_HOVER.get(self._kind, self._FILL_HOVER["primary"])
+        return base, hover, "#ffffff"
+
+    def _draw(self) -> None:
+        base, hover, fg = self._fill_pair()
+        fill = hover if (self._over and not self._disabled) else base
+        if self._disabled:
+            fill = COL["border"]
+            fg = COL["text_faint"]
+        self.configure(bg=fill, activebackground=hover,
+                       fg=fg, activeforeground=fg)
+
+    def _on_press(self) -> None:
+        if self._disabled or not self._command:
+            return
+        try:
+            self._command()
+        except Exception:
+            pass
+
+    def set_state(self, state: str) -> None:
+        self._disabled = state == "disabled"
+        self.configure(state=state)
+        self._draw()
+
+    def set_text(self, text: str) -> None:
+        self._text = text
+        self.configure(text=text)
+
+    def _set_over(self, over: bool) -> None:
+        self._over = over
+        if not self._disabled:
+            self._draw()
+
+
+class _UVPhase(tk.Label):
+    """Plain text status line (no badge, no pill)."""
+
+    def __init__(self, parent, text: str = ""):
+        tk.Label.__init__(self, parent, text=text,
+                          font=(COL["font"], 9), anchor="w",
+                          bg=COL["surface"], fg=COL["text_muted"])
+        self.set_text(text, "neutral")
+
+    def set_text(self, text: str, kind: str = "neutral") -> None:
+        colors = {"success": COL["success"], "error": COL["error"],
+                  "warning": COL["warning"], "info": COL["primary"],
+                  "muted": COL["text_muted"], "neutral": COL["text"]}
+        self.config(text=text, fg=colors.get(kind, COL["text"]))
+
+
+class _UVBar(tk.Frame):
+    """Thin flat static progress strip. Static fill, no animation."""
+
+    def __init__(self, parent, *, width: int = 430, height: int = 8):
+        self._pw = width
+        self._ph = height
+        self._running = False
+        tk.Frame.__init__(self, parent, width=width, height=height,
+                          bg=COL["border"])
+        self.pack_propagate(False)
+        self._fill = tk.Frame(self, bg=COL["primary"])
+
+    def start(self) -> None:
+        if self._running:
+            return
+        self._running = True
+        self._fill.place(x=0, y=0, width=self._pw // 2, height=self._ph)
+
+    def stop(self) -> None:
+        self._running = False
+        self._fill.place_forget()
 
 
 class UniversalLicenseCenter:
@@ -834,60 +987,74 @@ class UniversalLicenseCenter:
         dialog.transient(self._root)
         dialog.grab_set()
 
-        GradientHeader(dialog, title=title,
-                       subtitle="Universal License Engine", height=64).pack(fill="x")
+        # Simple compact rectangular card — no shadow, no layered accent
+        card = tk.Frame(dialog, bg=COL["surface"], bd=0,
+                        highlightthickness=1, highlightbackground=COL["border"])
+        card.pack(fill="both", expand=True, padx=14, pady=12)
+        main = tk.Frame(card, bg=COL["surface"])
+        main.pack(fill="both", expand=True, padx=22, pady=14)
 
-        card = Card(dialog, padx=22, pady=18)
-        card.pack(fill="both", expand=True, padx=2, pady=2)
-        main = card.body
+        # ---- Compact heading (coloured accent title) --------------------------
+        head = tk.Frame(main, bg=COL["surface"])
+        head.pack(fill="x", pady=(0, 2))
+        tk.Label(head, text=title,
+                 font=(COL["font"], 15, "bold"),
+                 bg=COL["surface"], fg=COL["primary"]).pack(anchor="w")
+        tk.Label(head, text="Universal License Engine",
+                 font=(COL["font"], 9),
+                 bg=COL["surface"], fg=COL["text_muted"]).pack(anchor="w", pady=(0, 12))
 
-        phase = StatusPill(main, height=26)
-        phase.pack(anchor="w", pady=(0, 12))
+        phase = _UVPhase(main)
+        phase.pack(anchor="w", pady=(0, 10))
         phase.set_text("Ready", "neutral")
 
         # ---- License key -----------------------------------------------------
-        SectionLabel(main, GlobalMessage.get("ui_enter_license_key")).pack(pady=(0, 6))
-        key_entry = RoundedEntry(main, width=440, justify="center")
-        key_entry.pack(fill="x", pady=(0, 4))
+        SectionLabel(main, GlobalMessage.get("ui_enter_license_key"),
+                     color=COL["primary"]).pack(pady=(0, 6))
+        key_entry = _UVInput(main, width=440, justify="center")
+        key_entry.pack(fill="x", pady=(0, 2))
         if self.engine and self.engine.get_license_key():
             key_entry.insert(0, self.engine.get_license_key())
         hw_id = self.hardware.get_fingerprint()
-        hw = Subtitle(main, size=8)
+        hw = Subtitle(main, GlobalMessage.get("ui_hardware_hint", hw_id[:16] + "…"), size=8)
         hw.pack(anchor="w", pady=(0, 10))
-        hw.config(text=GlobalMessage.get("ui_hardware_hint", hw_id[:16] + "…"))
 
-        validate_btn = StyledButton(main, "Validate License", kind="primary", width=440)
-        validate_btn.pack(fill="x", pady=(4, 8))
+        validate_btn = _UVButton(main, "Validate License", kind="primary", width=440)
+        validate_btn.pack(fill="x", pady=(0, 8))
 
         status = Label(main, text="", justify="center", wraplength=430)
         status.pack(fill="x", pady=(2, 2))
-        progress = ProgressBar(main, width=430, height=8)
+        progress = _UVBar(main, width=430, height=8)
         progress.pack(fill="x", pady=(6, 0))
 
         details = Label(main, text="", justify="left", wraplength=430, size=9,
                         color=COL["text_muted"])
         details.pack(fill="x", pady=(6, 2))
 
+        # ---- divider -----------------------------------------------------------
+        tk.Frame(main, bg=COL["border"], height=1).pack(fill="x", pady=(10, 14))
+
         # ---- OTP ---------------------------------------------------------------
-        SectionLabel(main, GlobalMessage.get("ui_otp_label")).pack(pady=(14, 6))
+        SectionLabel(main, GlobalMessage.get("ui_otp_label"),
+                     color=COL["success"]).pack(anchor="w", pady=(0, 6))
         otp_row = tk.Frame(main, bg=COL["surface"])
-        otp_row.pack(fill="x", pady=(0, 4))
-        otp_entry = RoundedEntry(otp_row, width=200, justify="center")
+        otp_row.pack(fill="x", pady=(0, 6))
+        otp_entry = _UVInput(otp_row, width=200, justify="center")
         otp_entry.pack(side="left", expand=True, fill="x")
-        verify_btn = StyledButton(otp_row, "Verify", kind="success", width=122)
+        verify_btn = _UVButton(otp_row, "Verify", kind="success", width=112)
         verify_btn.pack(side="left", padx=(8, 0))
 
-        resend_btn = StyledButton(main, "Resend OTP", kind="ghost", width=150)
-        resend_btn.pack(anchor="w", pady=(6, 2))
+        resend_btn = _UVButton(main, "Resend OTP", kind="ghost", width=140)
+        resend_btn.pack(anchor="w", pady=(0, 12))
         resend_btn.set_state("disabled")
         otp_entry.state("disabled")
         verify_btn.set_state("disabled")
 
-        final_btn = StyledButton(main, final_label, kind="primary", width=440)
-        final_btn.pack(fill="x", pady=(14, 6))
+        final_btn = _UVButton(main, final_label, kind="primary", width=440)
+        final_btn.pack(fill="x", pady=(0, 8))
         final_btn.set_state("disabled")
 
-        cancel_btn = StyledButton(main, "Cancel", kind="ghost", width=440)
+        cancel_btn = _UVButton(main, "Cancel", kind="ghost", width=440)
         cancel_btn.pack(fill="x", pady=(0, 0))
 
         # ---- Shared state & controls ------------------------------------------
