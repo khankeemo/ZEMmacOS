@@ -1,0 +1,26 @@
+[2026-08-09 11:48:36] [ACTIVATION] [INFO   ] Opening Universal License Center for activation
+[2026-08-09 11:48:36] [SDK       ] [INFO   ] ulc.opened | Universal License Center opened.
+[2026-08-09 11:48:36] [SDK       ] [INFO   ] [SDK] [INFO] Using pre-initialised status: licensed
+[2026-08-09 11:48:36] [SDK       ] [INFO   ] Using pre-initialised status: licensed
+[2026-08-09 11:48:36] [SDK       ] [INFO   ] ULC using status | Status: licensed
+[2026-08-09 11:48:36] [SDK       ] [INFO   ] [SDK] [INFO] Opening Universal License Center | Status: licensed, trial_consumed=False
+[2026-08-09 11:48:36] [SDK       ] [INFO   ] Opening Universal License Center | Status: licensed, trial_consumed=False
+[2026-08-09 11:48:36] [SDK       ] [INFO   ] Opening Universal License Center | Status: licensed, trial_consumed=False
+[2026-08-09 11:48:36] [SDK       ] [INFO   ] Opening Universal License Center | Status: licensed, trial_consumed=False
+[2026-08-09 11:48:39] [SDK       ] [INFO   ] Viewing hardware status
+[2026-08-09 11:48:44] [SDK       ] [INFO   ] Opening support request | Showing support dialog
+[2026-08-09 11:50:18] [SDK       ] [INFO   ] Sending support request | Category: support
+[2026-08-09 11:50:22] [SDK       ] [INFO   ] [ATTACHMENT] [WARNING] Attachment claude cli bypass.docx upload failed
+[2026-08-09 11:50:22] [SDK       ] [INFO   ] [ATTACHMENT] [WARNING] Attachment claude cli bypass.docx upload failed
+[2026-08-09 11:50:22] [ATTACHMENT] [WARNING] Attachment claude cli bypass.docx upload failed
+[2026-08-09 11:50:23] [SDK       ] [INFO   ] [ATTACHMENT] [WARNING] Attachment open router.txt upload failed
+[2026-08-09 11:50:23] [SDK       ] [INFO   ] [ATTACHMENT] [WARNING] Attachment open router.txt upload failed
+[2026-08-09 11:50:23] [ATTACHMENT] [WARNING] Attachment open router.txt upload failed
+[2026-08-09 11:50:25] [SDK       ] [INFO   ] [ATTACHMENT] [WARNING] Attachment Scofield Continuous.pdf upload failed
+[2026-08-09 11:50:25] [SDK       ] [INFO   ] [ATTACHMENT] [WARNING] Attachment Scofield Continuous.pdf upload failed
+[2026-08-09 11:50:25] [ATTACHMENT] [WARNING] Attachment Scofield Continuous.pdf upload failed
+[2026-08-09 11:50:25] [SDK       ] [INFO   ] support request sent | Conversation: CONV-MSLEY366-1HN2
+[2026-08-09 12:08:53] [SDK       ] [INFO   ] Opening renew portal | https://www.websmithdigital.com/internal/api/renew
+[2026-08-09 12:10:54] [STARTUP   ] [INFO   ] Application shutting down
+[2026-08-09 12:10:54] [STARTUP   ] [INFO   ] LiveLog system stopped
+[2026-08-09 12:10:54] [ACTIVATION] [SUCCESS] Activation completed
