@@ -131,6 +131,10 @@ class UniversalEmailDialog:
         self._border = center._border
         self._product_name = center._product_name
 
+        self._tool_hover = _hex_lerp(self._card_bg, self._border, 0.45)
+        self._tool_active = _hex_lerp(self._card_bg, self._border, 0.55)
+        self._readonly_bg = _hex_lerp(self._card_bg, self._primary, 0.07)
+
         self._files: List[_AttachedFile] = []
         self._dialog: Optional[tk.Toplevel] = None
         self._status_dot: Optional[tk.Canvas] = None
@@ -178,15 +182,53 @@ class UniversalEmailDialog:
     # ------------------------------------------------------------------
     # Small build helpers (consistent, modern widgets)
     # ------------------------------------------------------------------
-    def _card(self, parent: tk.Widget) -> tk.Frame:
-        return tk.Frame(parent, bg=self._card_bg,
-                        highlightthickness=1, highlightbackground=self._border,
-                        highlightcolor=self._border, relief="flat")
+    def _rounded_card(self, parent: tk.Widget, expand: bool = False):
+        """Modern card rendered as a rounded rectangle on a canvas.
+
+        Returns (canvas, inner_frame) — the content lives in `inner`, while the
+        canvas draws the subtle rounded, theme-bordered card around it.
+        `expand=True` cards follow their grid cell (message editor, attachment
+        list); the others size themselves to their content.
+        """
+        cv = tk.Canvas(parent, bg=self._bg, highlightthickness=0, bd=0)
+        inner = tk.Frame(cv, bg=self._card_bg)
+        cv.create_window((2, 2), window=inner, anchor="nw", tags=("win",))
+
+        def _redraw(_event=None):
+            w, h = cv.winfo_width(), cv.winfo_height()
+            cv.delete("shape")
+            if w <= 4 or h <= 4:
+                return
+            r = min(10.0, w / 2.0, h / 2.0)
+            x1, y1, x2, y2 = 0.5, 0.5, float(w - 0.5), float(h - 0.5)
+            pts = [x1 + r, y1, x2 - r, y1, x2, y1 + r, x2, y2 - r,
+                   x2 - r, y2, x1 + r, y2, x1, y2 - r, x1, y1 + r]
+            cv.create_polygon(pts, smooth=True, splinesteps=12,
+                              fill=self._card_bg, outline=self._border,
+                              width=1, tags=("shape",))
+
+        def _on_cv(_event=None):
+            w, h = cv.winfo_width(), cv.winfo_height()
+            if w > 4 and h > 4:
+                cv.itemconfigure("win", width=max(4, w - 4),
+                                 height=max(4, h - 4) if expand
+                                 else inner.winfo_reqheight())
+            _redraw()
+
+        def _on_inner(_event=None):
+            if not expand:
+                cv.configure(width=inner.winfo_reqwidth() + 4,
+                             height=inner.winfo_reqheight() + 4)
+            _redraw()
+
+        cv.bind("<Configure>", _on_cv)
+        inner.bind("<Configure>", _on_inner)
+        return cv, inner
 
     def _card_title(self, parent: tk.Widget, text: str,
                     meta: Optional[str] = None) -> tk.Frame:
         header = tk.Frame(parent, bg=self._card_bg)
-        header.pack(fill="x", padx=16, pady=(14, 6))
+        header.pack(fill="x", padx=16, pady=(12, 5))
 
         tk.Frame(header, bg=self._primary, width=4, height=14).pack(side="left", padx=(0, 8))
         tk.Label(header, text=text,
@@ -204,7 +246,7 @@ class UniversalEmailDialog:
                     var: tk.StringVar, readonly: bool,
                     suffix: Optional[tk.Widget] = None) -> "tk.Entry":
         row = tk.Frame(parent, bg=self._card_bg)
-        row.pack(fill="x", pady=3)
+        row.pack(fill="x", pady=2)
 
         tk.Label(row, text=label,
                  font=("Segoe UI", 9),
@@ -214,8 +256,8 @@ class UniversalEmailDialog:
         if readonly:
             entry = tk.Entry(row, font=("Segoe UI", 9),
                              relief="flat", bd=0,
-                             bg=self._bg, fg=self._text_secondary,
-                             readonlybackground=self._bg,
+                             bg=self._readonly_bg, fg=self._text_secondary,
+                             readonlybackground=self._readonly_bg,
                              cursor="arrow", width=22)
             entry.configure(textvariable=var, state="readonly")
             entry.pack(side="left", fill="x", expand=True, ipady=4)
@@ -229,6 +271,9 @@ class UniversalEmailDialog:
                              width=22)
             entry.configure(textvariable=var)
             entry.pack(side="left", fill="x", expand=True, ipady=4)
+            entry.bind("<Enter>", lambda e: entry.config(
+                highlightbackground=_hex_lerp(self._border, self._primary, 0.25)))
+            entry.bind("<Leave>", lambda e: entry.config(highlightbackground=self._border))
             if suffix is not None:
                 suffix.pack(side="left", padx=(8, 0))
         return entry
@@ -242,9 +287,9 @@ class UniversalEmailDialog:
                         bg=self._card_bg, fg=self._text_secondary,
                         relief="flat", bd=0, padx=4, pady=3,
                         cursor="hand2", highlightthickness=0,
-                        activebackground="#e5e7eb", activeforeground=self._text_primary)
+                        activebackground=self._tool_active, activeforeground=self._text_primary)
         btn.pack(side="left", padx=1)
-        btn.bind("<Enter>", lambda e, b=btn: b.config(bg="#e9ecf1"))
+        btn.bind("<Enter>", lambda e, b=btn: b.config(bg=self._tool_hover))
         btn.bind("<Leave>", lambda e, b=btn: (
             b.config(bg=self._primary, fg="white") if is_active and is_active()
             else b.config(bg=self._card_bg)))
@@ -257,15 +302,17 @@ class UniversalEmailDialog:
                                  bg=self._card_bg, fg=self._text_primary,
                                  relief="flat", bd=0, padx=6, pady=3,
                                  cursor="hand2", highlightthickness=0,
-                                 activebackground="#e9ecf1", activeforeground=self._text_primary,
+                                 activebackground=self._tool_hover, activeforeground=self._text_primary,
                                  width=width, anchor="w")
-        menu = tk.Menu(menu_btn, tearoff=0, bg="white", fg=self._text_primary,
+        menu = tk.Menu(menu_btn, tearoff=0, bg=self._card_bg, fg=self._text_primary,
                        activebackground=self._primary, activeforeground="white",
                        font=("Segoe UI", 9), relief="flat", bd=0)
         for value in values:
             menu.add_command(label=value, command=lambda v=value: command(v))
         menu_btn.configure(menu=menu)
         menu_btn.pack(side="left", padx=3)
+        menu_btn.bind("<Enter>", lambda e: menu_btn.config(bg=self._tool_hover))
+        menu_btn.bind("<Leave>", lambda e: menu_btn.config(bg=self._card_bg))
         return menu_btn
 
     def _separator(self, parent: tk.Widget):
@@ -308,8 +355,8 @@ class UniversalEmailDialog:
     def show(self) -> None:
         dialog = tk.Toplevel(self._parent)
         dialog.title(self._title)
-        dialog.geometry("1180x800")
-        dialog.minsize(1020, 700)
+        dialog.geometry("1160x780")
+        dialog.minsize(1000, 680)
         dialog.configure(bg=self._bg)
         dialog.resizable(True, True)
         if self._parent is not None:
@@ -325,7 +372,7 @@ class UniversalEmailDialog:
         action_bar.pack(side="bottom", fill="x")
         tk.Frame(action_bar, bg=self._border, height=1).pack(fill="x")  # top hairline
         action_inner = tk.Frame(action_bar, bg=self._card_bg)
-        action_inner.pack(fill="x", padx=20, pady=12)
+        action_inner.pack(fill="x", padx=20, pady=10)
 
         self._status_message = tk.Label(action_inner, text="",
                                         font=("Segoe UI", 9),
@@ -338,27 +385,29 @@ class UniversalEmailDialog:
         self._button(btn_frame, "Cancel", self._close,
                      kind="neutral", font=("Segoe UI", 9)).pack(side="left", padx=(0, 10))
         self._button(btn_frame, "Preview", self._preview,
-                     kind="subtle").pack(side="left", padx=(0, 10))
+                     kind="subtle", padx=18).pack(side="left", padx=(0, 10))
         self._button(btn_frame, "Send Message", self._do_send,
-                     kind="primary", padx=20).pack(side="left")
+                     kind="primary", padx=22, pady=8).pack(side="left")
 
         # ---- Title Bar ----
-        title_frame = tk.Frame(dialog, bg=self._primary, height=52)
+        title_frame = tk.Frame(dialog, bg=self._primary, height=48)
         title_frame.pack(fill="x", side="top")
         title_frame.pack_propagate(False)
 
         title_inner = tk.Frame(title_frame, bg=self._primary)
-        title_inner.pack(fill="both", padx=20, pady=8)
+        title_inner.pack(fill="both", padx=18, pady=6)
 
-        close_btn = tk.Label(title_inner, text="✕", font=("Segoe UI", 13, "bold"),
-                             fg="white", bg=self._primary, cursor="hand2", padx=6)
+        close_btn = tk.Label(title_inner, text="✕", font=("Segoe UI", 12, "bold"),
+                             fg="white", bg=self._primary, cursor="hand2", padx=8, pady=2)
         close_btn.pack(side="right")
         close_btn.bind("<Button-1>", lambda e: self._close())
-        close_btn.bind("<Enter>", lambda e: close_btn.config(fg=_hex_lerp("#ffffff", self._error, 0.75)))
-        close_btn.bind("<Leave>", lambda e: close_btn.config(fg="white"))
+        close_btn.bind("<Enter>", lambda e: close_btn.config(
+            bg=_hex_lerp(self._primary, "#000000", 0.22),
+            fg=_hex_lerp("#ffffff", self._error, 0.75)))
+        close_btn.bind("<Leave>", lambda e: close_btn.config(bg=self._primary, fg="white"))
 
         status_frame = tk.Frame(title_inner, bg=self._primary)
-        status_frame.pack(side="right", padx=(0, 18))
+        status_frame.pack(side="right", padx=(0, 14))
 
         self._status_dot = tk.Canvas(status_frame, width=10, height=10,
                                      bg=self._primary, highlightthickness=0)
@@ -366,13 +415,20 @@ class UniversalEmailDialog:
         self._status_dot.create_oval(2, 2, 8, 8, fill=self._success, outline="")
 
         self._status_text_label = tk.Label(status_frame, text="Ready",
-                                           font=("Segoe UI", 10),
+                                           font=("Segoe UI", 9),
                                            fg="white", bg=self._primary)
         self._status_text_label.pack(side="left")
 
         tk.Label(title_inner, text="✉  " + self._title,
                  font=("Segoe UI", 14, "bold"),
                  fg="white", bg=self._primary).pack(side="left")
+
+        if self._category:
+            tk.Label(title_inner, text=self._category.replace("-", " ").upper(),
+                     font=("Segoe UI", 8, "bold"),
+                     fg=_hex_lerp(self._primary, "#000000", 0.45),
+                     bg=_hex_lerp(self._primary, "#ffffff", 0.8),
+                     padx=9, pady=2).pack(side="left", padx=(10, 0))
 
         # ---- Main container ----
         body = tk.Frame(dialog, bg=self._bg)
@@ -382,16 +438,16 @@ class UniversalEmailDialog:
         body.rowconfigure(0, weight=1)
 
         left_col = tk.Frame(body, bg=self._bg)
-        left_col.grid(row=0, column=0, sticky="nsew", padx=(20, 12), pady=16)
+        left_col.grid(row=0, column=0, sticky="nsew", padx=(18, 10), pady=14)
         left_col.columnconfigure(0, weight=1)
 
         right_col = tk.Frame(body, bg=self._bg)
-        right_col.grid(row=0, column=1, sticky="nsew", padx=(0, 20), pady=16)
+        right_col.grid(row=0, column=1, sticky="nsew", padx=(0, 18), pady=14)
         right_col.columnconfigure(0, weight=1)
 
         # ==== Left: Customer Information ====
-        info_card = self._card(left_col)
-        info_card.grid(row=0, column=0, sticky="ew")
+        info_cv, info_card = self._rounded_card(left_col)
+        info_cv.grid(row=0, column=0, sticky="ew")
 
         self._card_title(info_card, "Customer Information", meta="auto-filled")
 
@@ -400,7 +456,7 @@ class UniversalEmailDialog:
         self._company_var = tk.StringVar(value=auto["customer_company"])
 
         info_fields = tk.Frame(info_card, bg=self._card_bg)
-        info_fields.pack(fill="x", padx=16, pady=(0, 14))
+        info_fields.pack(fill="x", padx=16, pady=(0, 12))
 
         self._email_indicator_label = tk.Label(info_fields, text="",
                                                font=("Segoe UI", 9, "bold"),
@@ -423,7 +479,7 @@ class UniversalEmailDialog:
 
         # Hardware ID (truncated display, full value as tooltip)
         hw_row = tk.Frame(info_fields, bg=self._card_bg)
-        hw_row.pack(fill="x", pady=3)
+        hw_row.pack(fill="x", pady=2)
         tk.Label(hw_row, text="Hardware",
                  font=("Segoe UI", 9),
                  fg=self._text_secondary, bg=self._card_bg,
@@ -432,7 +488,7 @@ class UniversalEmailDialog:
         hw_display = hw_value[:14] + "..." if len(hw_value) > 14 else hw_value
         tk.Label(hw_row, text=hw_display,
                  font=("Segoe UI", 9),
-                 fg=self._text_secondary, bg=self._bg,
+                 fg=self._text_secondary, bg=self._readonly_bg,
                  anchor="w", padx=8, pady=4).pack(side="left", fill="x", expand=True)
 
         def _update_email_indicator(_event=None):
@@ -451,12 +507,12 @@ class UniversalEmailDialog:
         _update_email_indicator()
 
         # ==== Left: Attachments (attached file list) ====
-        attach_card = self._card(left_col)
-        attach_card.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        attach_cv, attach_card = self._rounded_card(left_col, expand=True)
+        attach_cv.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
         left_col.rowconfigure(1, weight=1)
 
         attach_inner = tk.Frame(attach_card, bg=self._card_bg)
-        attach_inner.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+        attach_inner.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
         attach_header = self._card_title(attach_inner, "Attachments")
 
@@ -469,7 +525,7 @@ class UniversalEmailDialog:
         self._attach_count.pack(side="right")
 
         self._attach_scroll = tk.Frame(attach_inner, bg=self._card_bg)
-        self._attach_scroll.pack(fill="both", expand=True, pady=(6, 0))
+        self._attach_scroll.pack(fill="both", expand=True, pady=(4, 0))
         scroll_body = _ScrollableFrame(self._attach_scroll, self._card_bg)
         scroll_body.body.pack(fill="both", expand=True)
         self._attach_list = scroll_body.inner
@@ -477,11 +533,11 @@ class UniversalEmailDialog:
         self._render_attachments()
 
         # ==== Right: Subject ====
-        subject_card = self._card(right_col)
-        subject_card.grid(row=0, column=0, sticky="ew")
+        subject_cv, subject_card = self._rounded_card(right_col)
+        subject_cv.grid(row=0, column=0, sticky="ew")
 
         subject_inner = tk.Frame(subject_card, bg=self._card_bg)
-        subject_inner.pack(fill="x", padx=16, pady=14)
+        subject_inner.pack(fill="x", padx=16, pady=12)
 
         tk.Label(subject_inner, text="Subject",
                  font=("Segoe UI", 9, "bold"),
@@ -499,15 +555,15 @@ class UniversalEmailDialog:
         self._subject_entry.pack(fill="x", ipady=6)
 
         # ==== Right: Editor ====
-        editor_card = self._card(right_col)
-        editor_card.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        editor_cv, editor_card = self._rounded_card(right_col, expand=True)
+        editor_cv.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
         right_col.rowconfigure(1, weight=1)
 
         editor_inner = tk.Frame(editor_card, bg=self._card_bg)
-        editor_inner.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+        editor_inner.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
         editor_header = tk.Frame(editor_inner, bg=self._card_bg)
-        editor_header.pack(fill="x", pady=(14, 2))
+        editor_header.pack(fill="x", pady=(12, 2))
 
         tk.Frame(editor_header, bg=self._primary, width=4, height=14).pack(side="left", padx=(0, 8))
         tk.Label(editor_header, text="Message",
@@ -521,7 +577,7 @@ class UniversalEmailDialog:
 
         # ---- Toolbar (two rows for a responsive, tidy layout) ----
         toolbar = tk.Frame(editor_inner, bg=self._card_bg)
-        toolbar.pack(fill="x", pady=(6, 6))
+        toolbar.pack(fill="x", pady=(4, 4))
 
         row1 = tk.Frame(toolbar, bg=self._card_bg)
         row1.pack(fill="x", pady=1)
@@ -584,7 +640,7 @@ class UniversalEmailDialog:
                                  relief="solid", bd=1, wrap="word", undo=True,
                                  maxundo=-1, autoseparators=True,
                                  yscrollcommand=scrollbar.set,
-                                 bg="white", fg=self._text_primary,
+                                 bg=self._card_bg, fg=self._text_primary,
                                  insertbackground=self._text_primary,
                                  highlightthickness=1,
                                  highlightbackground=self._border,
@@ -593,11 +649,11 @@ class UniversalEmailDialog:
         scrollbar.config(command=self._msg_text.yview)
 
         # ==== Right: Attachments (add files) ====
-        attach_bar_card = self._card(right_col)
-        attach_bar_card.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        attach_bar_cv, attach_bar_card = self._rounded_card(right_col)
+        attach_bar_cv.grid(row=2, column=0, sticky="ew", pady=(10, 0))
 
         attach_bar_inner = tk.Frame(attach_bar_card, bg=self._card_bg)
-        attach_bar_inner.pack(fill="x", padx=16, pady=12)
+        attach_bar_inner.pack(fill="x", padx=16, pady=10)
 
         tk.Frame(attach_bar_inner, bg=self._primary, width=4, height=14).pack(side="left", padx=(0, 8))
         tk.Label(attach_bar_inner, text="Attachments",
@@ -609,7 +665,7 @@ class UniversalEmailDialog:
                      padx=12, pady=5).pack(side="right")
 
         hint_row = tk.Frame(attach_bar_inner, bg=self._card_bg)
-        hint_row.pack(fill="x", pady=(6, 0))
+        hint_row.pack(fill="x", pady=(4, 0))
         tk.Label(hint_row,
                  text=f"Up to {MAX_ATTACHMENTS} files · {MAX_FILE_SIZE // (1024 * 1024)} MB max each",
                  font=("Segoe UI", 7),
@@ -672,7 +728,7 @@ class UniversalEmailDialog:
                            activebackground=self._text_primary, activeforeground="white")
             else:
                 btn.config(bg=self._card_bg, fg=self._text_secondary,
-                           activebackground="#e5e7eb", activeforeground=self._text_primary)
+                           activebackground=self._tool_active, activeforeground=self._text_primary)
         self._refresh_active_formatting()
 
     def _refresh_active_formatting(self):
@@ -775,7 +831,7 @@ class UniversalEmailDialog:
                          (self._underline_on, self._btn_underline)):
             var.set(False)
             btn.config(bg=self._card_bg, fg=self._text_secondary,
-                       activebackground="#e5e7eb", activeforeground=self._text_primary)
+                       activebackground=self._tool_active, activeforeground=self._text_primary)
         self._font_family_var.set(FONT_FAMILIES[0])
         self._font_size_var.set("10")
         self._font_family_dropdown.configure(text=f"{FONT_FAMILIES[0]}  ▾")
@@ -909,7 +965,7 @@ class UniversalEmailDialog:
         tk.Frame(body, bg=self._border, height=1).pack(fill="x", pady=(8, 10))
 
         preview_text = tk.Text(body, font=("Segoe UI", 10),
-                               bg="#ffffff", fg=self._text_primary,
+                               bg=self._card_bg, fg=self._text_primary,
                                relief="solid", bd=1, wrap="word",
                                highlightthickness=1, highlightbackground=self._border)
         preview_text.pack(fill="both", expand=True)
