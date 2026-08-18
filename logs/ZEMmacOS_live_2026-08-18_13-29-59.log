@@ -1,0 +1,31 @@
+ZEMmacOS Live Log - Started 2026-08-18T13:29:59.123113
+================================================================================
+[2026-08-18 13:29:59] [STARTUP   ] [INFO   ] LiveLog system initialized
+[2026-08-18 13:29:59] [STARTUP   ] [INFO   ] Log file: D:\ZEMmacOS\logs\ZEMmacOS_live_2026-08-18_13-29-59.log
+[2026-08-18 13:29:59] [STARTUP   ] [INFO   ] Application started
+[2026-08-18 13:29:59] [STARTUP   ] [INFO   ] Configuration loaded
+[2026-08-18 13:29:59] [STARTUP   ] [INFO   ] Theme loaded
+[2026-08-18 13:29:59] [STARTUP   ] [INFO   ] Starting SDK initialization sequence
+[2026-08-18 13:29:59] [SDK       ] [INFO   ] Initializing license engine
+[2026-08-18 13:29:59] [UI        ] [INFO   ] UI locked
+[2026-08-18 13:29:59] [SDK       ] [INFO   ] Loading SDK config
+[2026-08-18 13:29:59] [SDK       ] [INFO   ] Detecting hardware
+[2026-08-18 13:29:59] [SDK       ] [INFO   ] Running decision engine
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] Decision engine result: no_license
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] State: no_license — showing Universal License Center
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] Opening Universal License Center
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] ulc.opened | Universal License Center opened.
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] [SDK] [INFO] Using pre-initialised status: no_license
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] Using pre-initialised status: no_license
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] ULC using status | Status: no_license
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] [SDK] [INFO] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-18 13:30:04] [SDK       ] [INFO   ] Opening Universal License Center | Status: no_license, trial_consumed=False
+[2026-08-18 13:30:06] [SDK       ] [INFO   ] Opening sales enquiry | Showing sales dialog
+[2026-08-18 13:30:58] [SDK       ] [INFO   ] Sending sales request | Category: sales
+[2026-08-18 13:31:01] [SDK       ] [INFO   ] sales request sent | Conversation: CONV-MSYDIGTG-7GKC
+[2026-08-18 13:31:04] [SDK       ] [INFO   ] ULC closed | Application locked - exiting process
+[2026-08-18 13:31:04] [SDK       ] [WARNING] ULC closed without resolving license — exiting
+[2026-08-18 13:31:04] [STARTUP   ] [WARNING] Application shutdown due to incomplete license flow
+[2026-08-18 13:31:04] [STARTUP   ] [INFO   ] LiveLog system stopped
