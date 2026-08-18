@@ -511,6 +511,15 @@ class ActivationDialog:
             lic = result.get("license") or {}
             cust = result.get("customer") or {}
             err = result.get("error") or {}
+            # Rule 5: pass through the server-provided message verbatim when the
+            # backend supplied one (it is the source of truth for the failure).
+            server_msg = result.get("message")
+            if not server_msg and isinstance(err, dict):
+                server_msg = err.get("message")
+            if isinstance(server_msg, dict):
+                server_msg = server_msg.get("message")
+            if server_msg:
+                return str(server_msg)
             if result.get("new_customer") or not lic:
                 if not cust.get("email"):
                     return GlobalMessage.get("ui_customer_not_found")

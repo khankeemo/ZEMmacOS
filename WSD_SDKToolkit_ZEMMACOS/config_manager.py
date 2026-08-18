@@ -75,16 +75,30 @@ class ConfigManager:
         return self.company().get("website_url", "")
 
     def emails(self) -> Dict[str, Any]:
-        return self._raw.get("emails", {}) or {}
+        """Email account configuration (branding section; no IMAP/inbound in SDKs).
 
-    def get_support_email(self) -> str:
-        return self.emails().get("support", "")
-
-    def get_sales_email(self) -> str:
-        return self.emails().get("sales", "")
+        Account roles (strict): no_reply = ONE-WAY (outbound only, never a reply
+        channel), support/sales = TWO-WAY (contact channels the SDK offers).
+        """
+        branding = self.branding()
+        emails = self._raw.get("emails", {}) or {}
+        return {
+            "no_reply": emails.get("no_reply") or branding.get("no_reply_email", ""),
+            "support": emails.get("support") or branding.get("support_email", ""),
+            "sales": emails.get("sales") or branding.get("sales_email", ""),
+        }
 
     def get_no_reply_email(self) -> str:
-        return self.emails().get("no_reply", "")
+        """ONE-WAY account — outbound automated mail only; never a reply channel."""
+        return (self.emails().get("no_reply") or "").strip()
+
+    def get_support_email(self) -> str:
+        """TWO-WAY account — support contact channel."""
+        return (self.emails().get("support") or "").strip()
+
+    def get_sales_email(self) -> str:
+        """TWO-WAY account — sales contact channel."""
+        return (self.emails().get("sales") or "").strip()
 
     def urls(self) -> Dict[str, Any]:
         return self._raw.get("urls", {}) or {}

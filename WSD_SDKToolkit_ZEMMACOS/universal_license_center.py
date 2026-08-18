@@ -981,7 +981,7 @@ class UniversalLicenseCenter:
 
         dialog = tk.Toplevel(self._root)
         dialog.title(title)
-        dialog.geometry("500x600")
+        dialog.geometry("520x660")
         dialog.configure(bg=COL["bg"])
         dialog.resizable(False, False)
         dialog.transient(self._root)
@@ -1028,7 +1028,7 @@ class UniversalLicenseCenter:
         progress.pack(fill="x", pady=(6, 0))
 
         details = Label(main, text="", justify="left", wraplength=430, size=9,
-                        color=COL["text_muted"])
+                        color=COL["text_muted"], height=6)
         details.pack(fill="x", pady=(6, 2))
 
         # ---- divider -----------------------------------------------------------
@@ -1055,7 +1055,7 @@ class UniversalLicenseCenter:
         final_btn.set_state("disabled")
 
         cancel_btn = _UVButton(main, "Cancel", kind="ghost", width=440)
-        cancel_btn.pack(fill="x", pady=(0, 0))
+        cancel_btn.pack(fill="x", pady=(0, 10))
 
         # ---- Shared state & controls ------------------------------------------
         state = {"validated": False, "otp_verified": False, "email": "",
@@ -1100,6 +1100,15 @@ class UniversalLicenseCenter:
             lic = result.get('license') or {}
             cust = result.get('customer') or {}
             err = result.get('error') or {}
+            # Rule 5: pass through the server-provided message verbatim when the
+            # backend supplied one (it is the source of truth for the failure).
+            server_msg = result.get('message')
+            if not server_msg and isinstance(err, dict):
+                server_msg = err.get('message')
+            if isinstance(server_msg, dict):
+                server_msg = server_msg.get('message')
+            if server_msg:
+                return str(server_msg)
             if result.get('new_customer') or not lic:
                 if not cust.get('email'):
                     return GlobalMessage.get("ui_customer_not_found")
@@ -1116,6 +1125,8 @@ class UniversalLicenseCenter:
             if msg:
                 return str(msg)  # server message verbatim (Rule 5)
             return GlobalMessage.get("validation_failed")
+
+        _resized = [False]
 
         def do_validate():
             key = key_entry.get().strip()
@@ -1214,6 +1225,15 @@ class UniversalLicenseCenter:
             if not lines:
                 lines.append(GlobalMessage.get("ui_license_active"))
             details.config(text="\n".join(lines))
+
+            if not _resized[0]:
+                _resized[0] = True
+                try:
+                    _x = dialog.winfo_x()
+                    _y = dialog.winfo_y()
+                    dialog.geometry("520x680+%d+%d" % (_x, _y))
+                except Exception:
+                    dialog.geometry("520x680")
 
             _set_status(GlobalMessage.get("ui_sending_otp"), "info")
             _set_phase("Validated", "success")

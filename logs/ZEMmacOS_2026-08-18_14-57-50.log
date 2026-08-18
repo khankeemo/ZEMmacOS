@@ -1,0 +1,28 @@
+2026-08-18 14:57:50 | INFO     | ============================================================
+2026-08-18 14:57:50 | INFO     | ZEMmacOS Application Started
+2026-08-18 14:57:50 | INFO     | Log file: D:\ZEMmacOS\logs\ZEMmacOS_2026-08-18_14-57-50.log
+2026-08-18 14:57:50 | INFO     | ============================================================
+2026-08-18 14:57:51 | INFO     | [SDK] Initializing license engine
+2026-08-18 14:57:51 | INFO     | [UI] UI locked
+2026-08-18 14:57:52 | INFO     | [SDK] Opening Universal License Center
+2026-08-18 14:57:52 | INFO     | [SDK] ulc.opened
+2026-08-18 14:57:52 | INFO     | [SDK] [SDK] [INFO] Using pre-initialised status: no_license
+2026-08-18 14:57:53 | INFO     | [SDK] Using pre-initialised status: no_license
+2026-08-18 14:57:53 | INFO     | [SDK] ULC using status
+2026-08-18 14:57:53 | INFO     | [SDK] [SDK] [INFO] Opening Universal License Center
+2026-08-18 14:57:53 | INFO     | [SDK] Opening Universal License Center
+2026-08-18 14:57:53 | INFO     | [SDK] Opening Universal License Center
+2026-08-18 14:57:53 | INFO     | [SDK] Opening Universal License Center
+2026-08-18 14:57:55 | INFO     | [SDK] Opening sales enquiry
+2026-08-18 14:58:22 | INFO     | [SDK] Sending sales request
+2026-08-18 14:58:23 | INFO     | [SDK] sales request sent
+2026-08-18 14:58:27 | INFO     | [SDK] Opening support request
+2026-08-18 14:59:02 | INFO     | [SDK] Sending support request
+2026-08-18 14:59:04 | INFO     | [SDK] [ATTACHMENT] [WARNING] Attachment API.txt upload failed
+2026-08-18 14:59:04 | INFO     | [SDK] [ATTACHMENT] [WARNING] Attachment API.txt upload failed
+2026-08-18 14:59:04 | WARNING  | [ATTACHMENT] Attachment API.txt upload failed
+2026-08-18 14:59:04 | INFO     | [SDK] support request sent
+2026-08-18 15:01:42 | INFO     | [SDK] ULC closed
+2026-08-18 15:01:42 | WARNING  | [SDK] ULC closed without resolving license — exiting
+2026-08-18 15:01:42 | ERROR    | License flow incomplete — shutting down
+2026-08-18 15:01:42 | INFO     | Logger stopped
